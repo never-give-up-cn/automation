@@ -8,13 +8,13 @@ import org.springframework.stereotype.Component;
  * 定时全量同步设备状态调度器
  * 负责定期从Home Assistant拉取所有设备状态，更新本地缓存
  */
-@Component
+//@Component
 public class StateSyncScheduler {
 
     private final HomeAssistantService homeAssistantService;
 
-    // 刷新间隔（毫秒）：30分钟 = 1800000毫秒
-    private static final long REFRESH_INTERVAL = 1800;
+    // 刷新间隔（毫秒）：6秒 = 6000毫秒
+    private static final long REFRESH_INTERVAL = 6000;
 
     public StateSyncScheduler(HomeAssistantService homeAssistantService) {
         this.homeAssistantService = homeAssistantService;

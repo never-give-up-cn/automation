@@ -52,7 +52,7 @@ public class HomeAssistantService {
      * 同步全量设备状态（连接成功后首次拉取时调用）
      */
     public void setAllEntityStates(List<HaEntityState> allStates) {
-        entityStateMap.clear(); // 清空旧数据
+//        entityStateMap.clear(); // 清空旧数据
         allStates.forEach(state -> entityStateMap.put(state.getEntity_id(), state));
         System.out.println("全量状态已同步到服务类，共 " + entityStateMap.size() + " 个设备");
     }
@@ -64,6 +64,7 @@ public class HomeAssistantService {
     public void updateEntityState(HaEntityState newState) {
         if (newState != null && newState.getEntity_id() != null) {
             entityStateMap.put(newState.getEntity_id(), newState);
+            System.out.println("entityStateMap：" + entityStateMap);
         }
     }
 
@@ -279,4 +280,19 @@ public class HomeAssistantService {
         return true;
     }
 
+    /**
+     * 带参数的服务调用（供内部或外部调用）
+     * @param domain 服务域（如"climate"）
+     * @param service 服务名称（如"set_fan_mode"）
+     * @param entityId 设备ID
+     * @param data 额外参数
+     */
+    public void callServiceWithData(String domain, String service, String entityId, Map<String, Object> data) {
+        if (isConnected) {
+            webSocketClient.callServiceWithData(domain, service, entityId, data);
+        } else {
+            System.err.println("未连接到Home Assistant，无法调用服务：" + domain + "." + service);
+            reconnect();
+        }
+    }
 }
