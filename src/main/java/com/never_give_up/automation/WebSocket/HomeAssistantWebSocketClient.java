@@ -152,6 +152,11 @@ public class HomeAssistantWebSocketClient extends WebSocketClient {
                                 .filter(state -> state != null && state.getEntity_id() != null)
                                 .collect(Collectors.toList());
 
+                        // 关键修复：调用服务类的方法同步全量状态到本地缓存
+                        if (service != null) {
+                            service.setAllEntityStates(validStates); // 这里是核心调用
+                        }
+
                         // 示例1：筛选温湿度传感器
                         List<HaEntityState> sensorStates = validStates.stream()
                                 .filter(state -> state.getEntity_id().matches(".*(temp|temperature|humid|humidity).*"))

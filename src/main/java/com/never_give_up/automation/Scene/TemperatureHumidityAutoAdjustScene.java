@@ -17,8 +17,8 @@ public class TemperatureHumidityAutoAdjustScene {
     private final HomeAssistantService homeAssistantService;
 
     // 配置参数 - 可根据需求调整
-    private static final String TEMPERATURE_SENSOR_ID = "sensor.xiaomi_cn_blt_3_1mggp6l144g01_mini_temperature1"; // 温度传感器ID
-    private static final String HUMIDITY_SENSOR_ID = "sensor.xiaomi_cn_blt_3_1mggdb23g4g00_mini_relative_humidity1"; // 湿度传感器ID
+    private static final String TEMPERATURE_SENSOR_ID = "sensor.xiaomi_cn_blt_3_1mggp6l144g01_mini_temperature_p_2_1001"; // 温度传感器ID
+    private static final String HUMIDITY_SENSOR_ID = "sensor.xiaomi_cn_blt_3_1mggp6l144g01_mini_relative_humidity_p_2_1002"; // 湿度传感器ID
     private static final String AC_ENTITY_ID = "climate.hzyk_cn_2003157372_kt5s011"; // 空调设备ID
 
     // 温度阈值配置
@@ -36,9 +36,9 @@ public class TemperatureHumidityAutoAdjustScene {
     }
 
     /**
-     * 定时执行场景逻辑（每3分钟检查一次）
+     * 定时执行场景逻辑（每6秒检查一次）
      */
-    @Scheduled(fixedRate = 180000) // 180000毫秒 = 3分钟
+    @Scheduled(fixedRate = 6000) // 6000毫秒 = 6秒
     public void executeScene() {
         // 检查连接状态
         if (!homeAssistantService.isConnected()) {
