@@ -19,7 +19,7 @@ public class TemperatureHumidityAutoAdjustScene {
     // 配置参数 - 可根据需求调整
     private static final String TEMPERATURE_SENSOR_ID = "sensor.xiaomi_cn_blt_3_1mggp6l144g01_mini_temperature_p_2_1001"; // 温度传感器ID
     private static final String HUMIDITY_SENSOR_ID = "sensor.xiaomi_cn_blt_3_1mggp6l144g01_mini_relative_humidity_p_2_1002"; // 湿度传感器ID
-    private static final String AC_ENTITY_ID = "climate.hzyk_cn_2003157372_kt5s011"; // 空调设备ID
+    private static final String AC_ENTITY_ID = "climate.hzyk_cn_2003157372_kt5s01"; // 空调设备ID
 
     // 温度阈值配置
     private static final double HIGH_TEMP_THRESHOLD = 28.0; // 高温阈值，超过则降温
@@ -71,7 +71,7 @@ public class TemperatureHumidityAutoAdjustScene {
             System.out.println("空调当前模式：" + currentAcMode);
 
             // 根据温湿度执行调节逻辑
-            adjustAcBasedOnEnvironment(temperature, humidity, currentAcMode,acState);
+            adjustAcBasedOnEnvironment(temperature, humidity, currentAcMode, acState);
 
         } catch (Exception e) {
             System.err.println("场景执行异常：" + e.getMessage());
@@ -108,7 +108,7 @@ public class TemperatureHumidityAutoAdjustScene {
             }
         } else {
             // 空调处于关闭状态，但温度过高时自动开启
-            if (temperature > HIGH_TEMP_THRESHOLD + 2) {
+            if (temperature > HIGH_TEMP_THRESHOLD) {
                 System.out.println("温度过高且空调关闭，自动开启空调并调节至" + TARGET_TEMP_HIGH + "°C");
                 homeAssistantService.controlAcPower(AC_ENTITY_ID, true);
                 // 延迟一小段时间确保空调开启
@@ -142,14 +142,33 @@ public class TemperatureHumidityAutoAdjustScene {
 
     /**
      * 检查空调当前温度是否已为目标温度
+     * 兼容Integer（如26）和Double（如26.0）两种数值类型
      */
     private boolean isTargetTemp(HaEntityState acState, double targetTemp) {
         Map<String, Object> attributes = acState.getAttributes();
         if (attributes.containsKey("temperature")) {
-            double currentTemp = (Double) attributes.get("temperature");
+            Object tempObj = attributes.get("temperature");
+            double currentTemp;
+
+            // 处理整数和浮点数两种情况
+            if (tempObj instanceof Integer) {
+                currentTemp = ((Integer) tempObj).doubleValue(); // 整数转double
+            } else if (tempObj instanceof Double) {
+                currentTemp = (Double) tempObj; // 直接使用double
+            } else {
+                // 其他类型（如String）尝试转换
+                try {
+                    currentTemp = Double.parseDouble(tempObj.toString());
+                } catch (NumberFormatException e) {
+                    System.err.println("温度值格式异常：" + tempObj);
+                    return false;
+                }
+            }
+
             return Math.abs(currentTemp - targetTemp) < 0.5; // 允许±0.5°C的误差
         }
         return false;
     }
+
 }
 

@@ -183,7 +183,23 @@ public class HomeAssistantService {
         );
         System.out.println("已发送空调" + (turnOn ? "开启" : "关闭") + "指令：" + acEntityId);
     }
-
+// 提取为独立方法，便于复用
+    private double getTemperatureAttribute(Map<String, Object> attributes, String key, double defaultValue) {
+        Object value = attributes.getOrDefault(key, defaultValue);
+        if (value instanceof Integer) {
+            return ((Integer) value).doubleValue();
+        } else if (value instanceof Double) {
+            return (Double) value;
+        } else {
+            // 处理字符串或其他类型
+            try {
+                return Double.parseDouble(value.toString());
+            } catch (NumberFormatException e) {
+                System.err.println("温度属性[" + key + "]格式异常：" + value + "，使用默认值：" + defaultValue);
+                return defaultValue;
+            }
+        }
+    }
     /**
      * 调节空调温度
      * @param acEntityId 空调设备ID
@@ -197,8 +213,8 @@ public class HomeAssistantService {
 
         // 检查设备支持的温度范围
         Map<String, Object> attributes = state.getAttributes();
-        double minTemp = (Double) attributes.getOrDefault("min_temp", 16.0);
-        double maxTemp = (Double) attributes.getOrDefault("max_temp", 30.0);
+        double minTemp = getTemperatureAttribute(attributes, "min_temp", 16.0);
+        double maxTemp = getTemperatureAttribute(attributes, "max_temp", 30.0);
 
         if (temperature < minTemp || temperature > maxTemp) {
             System.err.println("温度超出范围[" + minTemp + "-" + maxTemp + "°C]：" + temperature);
