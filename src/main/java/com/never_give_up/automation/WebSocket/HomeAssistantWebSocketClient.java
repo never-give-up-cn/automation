@@ -3,6 +3,7 @@ package com.never_give_up.automation.WebSocket;
 import cn.hutool.json.JSONUtil;
 import com.never_give_up.automation.Entity.*;
 import com.never_give_up.automation.Service.HomeAssistantService;
+import lombok.Setter;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
 import org.json.JSONObject;
@@ -15,6 +16,8 @@ import java.util.stream.Collectors;
 public class HomeAssistantWebSocketClient extends WebSocketClient {
     private static final String HASS_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJhN2IyNDA4NjhmYzc0YjVjYTYzZDRlOTIxN2U4YmQwNyIsImlhdCI6MTc1ODI0ODMwOCwiZXhwIjoyMDczNjA4MzA4fQ.o49-lqV9HMCD9KJRfi4d_0w0c8yUSpmyPDiyoeMAxNk";
     private int messageId = 1;
+    // 设置服务引用
+    @Setter
     private HomeAssistantService service;
 
     // 构造函数，接收URI和头信息
@@ -94,6 +97,7 @@ public class HomeAssistantWebSocketClient extends WebSocketClient {
     }
 
     // -------------------------- 新增：处理实时事件推送 --------------------------
+
     /**
      * 处理 Home Assistant 推送的实时事件（如设备状态变更）
      */
@@ -113,11 +117,12 @@ public class HomeAssistantWebSocketClient extends WebSocketClient {
                 // 打印实时变更信息（可替换为业务逻辑，如存储到数据库、触发告警等）
                 System.out.println("\n=== 设备状态实时变更 ===");
                 System.out.println("设备ID：" + newState.getEntity_id());
+                System.out.println("设备属性：" + newState.getAttributes());
                 System.out.println("旧状态：" + (data.getOld_state() != null ? data.getOld_state().getState() : "无"));
                 System.out.println("新状态：" + newState.getState());
                 System.out.println("变更时间：" + newState.getLast_changed());
                 System.out.println("=======================\n");
-                service.turnOffDevice("switch.cuco_cn_944233652_v3_on_p_2_1");
+//                service.turnOffDevice("switch.cuco_cn_944233652_v3_on_p_2_1");
                 // 可选：将实时状态同步到服务类（供外部调用）
                 if (service != null) {
                     service.updateEntityState(newState);
@@ -257,8 +262,45 @@ public class HomeAssistantWebSocketClient extends WebSocketClient {
         System.out.println("Sent call_service request: " + domain + "." + service + " for " + entityId);
     }
 
-    // 设置服务引用
-    public void setService(HomeAssistantService service) {
-        this.service = service;
+    // -------------------------- 新增：带参数的服务调用方法 --------------------------
+
+    /**
+     * 调用Home Assistant服务并传递参数（支持空调温度调节、模式切换等）
+     *
+     * @param domain   服务域（如 "climate"、"switch"）
+     * @param service  服务名称（如 "set_temperature"、"set_hvac_mode"）
+     * @param entityId 设备ID
+     * @param data     额外参数（如温度、模式等）
+     */
+    public void callServiceWithData(String domain, String service, String entityId, Map<String, Object> data) {
+        try {
+            JSONObject message = new JSONObject();
+            message.put("id", messageId++); // 递增的消息ID
+            message.put("type", "call_service");
+            message.put("domain", domain);
+            message.put("service", service);
+
+            // 构建服务参数（包含设备ID和其他参数）
+            JSONObject serviceData = new JSONObject();
+            serviceData.put("entity_id", entityId); // 必须包含设备ID
+
+            // 添加额外参数（如温度、模式）
+            if (data != null && !data.isEmpty()) {
+                for (Map.Entry<String, Object> entry : data.entrySet()) {
+                    serviceData.put(entry.getKey(), entry.getValue());
+                }
+            }
+
+            message.put("service_data", serviceData);
+
+            // 发送消息
+            String jsonStr = message.toString();
+            System.out.println("发送带参数的服务调用：" + jsonStr);
+            send(jsonStr);
+        } catch (Exception e) {
+            System.err.println("构建服务调用消息失败：" + e.getMessage());
+            e.printStackTrace();
+        }
     }
+
 }

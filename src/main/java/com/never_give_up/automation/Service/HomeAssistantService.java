@@ -152,4 +152,115 @@ public class HomeAssistantService {
         // 仅在设备在线且状态为on时发送指令
         webSocketClient.callService("switch", "turn_off", entityId);
     }
+
+    // -------------------------- 新增：空调控制方法 --------------------------
+
+    /**
+     * 控制空调开关（打开/关闭）
+     * @param acEntityId 空调设备ID（如 "climate.hzyk_cn_2003157372_kt5s01"）
+     * @param turnOn 是否打开（true-打开，false-关闭）
+     */
+    public void controlAcPower(String acEntityId, boolean turnOn) {
+        HaEntityState state = getEntityState(acEntityId);
+        if (!checkAcAvailability(state, acEntityId)) {
+            return;
+        }
+
+        String targetMode = turnOn ? "cool" : "off"; // 打开默认制冷模式，可根据需求修改
+        String currentMode = state.getState();
+
+        if (currentMode.equals(targetMode)) {
+            System.out.println("空调已" + (turnOn ? "开启" : "关闭") + "，无需操作：" + acEntityId);
+            return;
+        }
+
+        // 调用Home Assistant的set_hvac_mode服务切换模式（off即为关闭）
+        webSocketClient.callServiceWithData(
+                "climate",
+                "set_hvac_mode",
+                acEntityId,
+                Map.of("hvac_mode", targetMode)
+        );
+        System.out.println("已发送空调" + (turnOn ? "开启" : "关闭") + "指令：" + acEntityId);
+    }
+
+    /**
+     * 调节空调温度
+     * @param acEntityId 空调设备ID
+     * @param temperature 目标温度（需在设备支持的范围内，如16-30°C）
+     */
+    public void setAcTemperature(String acEntityId, double temperature) {
+        HaEntityState state = getEntityState(acEntityId);
+        if (!checkAcAvailability(state, acEntityId)) {
+            return;
+        }
+
+        // 检查设备支持的温度范围
+        Map<String, Object> attributes = state.getAttributes();
+        double minTemp = (Double) attributes.getOrDefault("min_temp", 16.0);
+        double maxTemp = (Double) attributes.getOrDefault("max_temp", 30.0);
+
+        if (temperature < minTemp || temperature > maxTemp) {
+            System.err.println("温度超出范围[" + minTemp + "-" + maxTemp + "°C]：" + temperature);
+            return;
+        }
+
+        // 调用set_temperature服务
+        webSocketClient.callServiceWithData(
+                "climate",
+                "set_temperature",
+                acEntityId,
+                Map.of("temperature", temperature)
+        );
+        System.out.println("已发送空调调温指令：" + acEntityId + " -> " + temperature + "°C");
+    }
+
+    /**
+     * 切换空调运行模式（制冷/制热/自动等）
+     * @param acEntityId 空调设备ID
+     * @param mode 目标模式（需在设备支持的hvac_modes中，如"cool"、"heat"、"auto"）
+     */
+    public void setAcMode(String acEntityId, String mode) {
+        HaEntityState state = getEntityState(acEntityId);
+        if (!checkAcAvailability(state, acEntityId)) {
+            return;
+        }
+
+        // 检查模式是否在设备支持的列表中
+        Map<String, Object> attributes = state.getAttributes();
+        List<String> supportedModes = (List<String>) attributes.getOrDefault("hvac_modes", List.of());
+        if (!supportedModes.contains(mode)) {
+            System.err.println("设备不支持模式[" + mode + "]，支持的模式：" + supportedModes);
+            return;
+        }
+
+        // 调用set_hvac_mode服务
+        webSocketClient.callServiceWithData(
+                "climate",
+                "set_hvac_mode",
+                acEntityId,
+                Map.of("hvac_mode", mode)
+        );
+        System.out.println("已发送空调模式切换指令：" + acEntityId + " -> " + mode);
+    }
+
+    /**
+     * 检查空调是否可用（辅助方法）
+     */
+    private boolean checkAcAvailability(HaEntityState state, String entityId) {
+        if (state == null) {
+            System.err.println("空调设备不存在：" + entityId);
+            return false;
+        }
+        if ("unavailable".equals(state.getState())) {
+            System.err.println("空调设备离线：" + entityId);
+            return false;
+        }
+        if (!entityId.startsWith("climate.")) {
+            System.err.println("设备ID不是空调类型：" + entityId);
+            return false;
+        }
+        return true;
+    }
+
 }
