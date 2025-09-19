@@ -72,7 +72,6 @@ public class HomeAssistantWebSocketClient extends WebSocketClient {
                     break;
             }
         } catch (Exception e) {
-            System.err.println("消息解析失败，原始消息：" + message);
             e.printStackTrace();
         }
     }
