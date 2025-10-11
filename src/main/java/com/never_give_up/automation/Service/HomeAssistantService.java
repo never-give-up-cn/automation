@@ -112,22 +112,61 @@ public class HomeAssistantService {
 
     // 重连方法
     public void reconnect() {
-        try {
-            if (webSocketClient.isOpen()) {
-                webSocketClient.close();
+        // 避免并发重连，加锁保护
+        synchronized (this) {
+            if (isReconnecting) {
+                System.out.println("已在重连中，跳过本次请求");
+                return;
             }
-            webSocketClient.connect();
+            isReconnecting = true;
+        }
 
-            // 等待重连
-            int retryCount = 0;
-            while (!isConnected && retryCount < 10) {
-                Thread.sleep(500);
-                retryCount++;
+        try {
+            // 关闭旧连接（若存在）
+            if (webSocketClient.isOpen()) {
+                System.out.println("关闭现有连接...");
+                webSocketClient.close(1000, "主动重连"); // 正常关闭码
             }
+
+            // 指数退避重连（避免频繁重试导致服务器拒绝）
+            int maxRetries = 5;
+            long baseDelay = 1000; // 初始延迟1秒
+            for (int i = 0; i < maxRetries; i++) {
+                try {
+                    System.out.println("第" + (i+1) + "次重连...");
+                    webSocketClient.connect();
+
+                    // 等待连接成功（最多5秒）
+                    int waitCount = 0;
+                    while (!isConnected && waitCount < 10) {
+                        Thread.sleep(500);
+                        waitCount++;
+                    }
+                    if (isConnected) {
+                        System.out.println("重连成功！");
+                        // 重连后主动拉取一次全量状态
+                        getStates();
+                        return;
+                    }
+                } catch (Exception e) {
+                    System.err.println("第" + (i+1) + "次重连失败：" + e.getMessage());
+                }
+
+                // 指数退避延迟（1s → 2s → 4s → ...）
+                long delay = baseDelay * (1 << i);
+                Thread.sleep(delay);
+            }
+
+            System.err.println("达到最大重连次数（" + maxRetries + "次），请检查连接配置");
         } catch (Exception e) {
-            System.err.println("重连Home Assistant失败: " + e.getMessage());
+            System.err.println("重连过程异常：" + e.getMessage());
+        } finally {
+            isReconnecting = false;
         }
     }
+
+    // 新增：标记是否正在重连，避免并发问题
+    private volatile boolean isReconnecting = false;
 
     // 供WebSocket客户端回调更新连接状态
     public void setConnected(boolean connected) {
