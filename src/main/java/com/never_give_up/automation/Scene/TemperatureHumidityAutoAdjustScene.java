@@ -5,13 +5,16 @@ import com.never_give_up.automation.Service.HomeAssistantService;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
 import java.time.LocalTime;
+import java.time.ZonedDateTime;
 import java.util.Map;
 
 /**
  * 场景1：根据温湿度和使用习惯自动调整空调
  * 核心规则：仅定时开启(晚18:40)→预冷(16度最大风)→维持(26度最小风)→仅定时关闭(早7:50)
  * 其他时间：不主动开启空调，不关闭已运行的空调，仅维持已开启状态的温湿度调节
+ * 新增规则：门窗传感器未关闭状态持续超过10分钟，自动关闭空调
  */
 @Component
 public class TemperatureHumidityAutoAdjustScene {
@@ -23,6 +26,7 @@ public class TemperatureHumidityAutoAdjustScene {
     private static final String HUMIDITY_SENSOR_ID = "sensor.xiaomi_cn_blt_3_1mggp6l144g01_mini_relative_humidity_p_2_1002";
     private static final String AC_ENTITY_ID = "climate.hzyk_cn_2003157372_kt5s01";
     private static final String OCCUPANCY_SENSOR_ID = "binary_sensor.presence_sensor"; // 占位符
+    private static final String DOOR_WINDOW_SENSOR_ID = "binary_sensor.isa_cn_blt_3_1muf5m5bg4s00_dw2hl_contact_state_p_2_2"; // 新增：门窗传感器ID
 
     // 温度配置
     private static final double PRECOOL_TEMP = 16.0;        // 预冷温度
@@ -41,7 +45,12 @@ public class TemperatureHumidityAutoAdjustScene {
     private static final String MIN_FAN_MODE = "低风";   // 最小风力
     private static final String DEHUMIDIFY_MODE = "dry"; // 除湿模式
 
-    // 状态标记（防止定时时段重复执行）
+    // 新增：门窗监控配置
+    private static final long DOOR_WINDOW_OPEN_DURATION_THRESHOLD = 10; // 门窗开启超时阈值（分钟）
+    private ZonedDateTime doorWindowOpenStartTime; // 记录门窗开始开启的时间戳
+    private boolean hasDoorWindowTimeoutTriggered = false; // 标记门窗超时关闭是否已触发（避免重复执行）
+
+    // 原有状态标记
     private boolean isPrecoolComplete = false; // 预冷是否完成
     private boolean hasEveningOnTriggered = false; // 晚间开启是否已触发
     private boolean hasMorningOffTriggered = false; // 晨间关闭是否已触发
@@ -51,7 +60,7 @@ public class TemperatureHumidityAutoAdjustScene {
     }
 
     /**
-     * 定时执行场景逻辑（每6秒检查一次，但仅在特定时段执行开/关，其他时间仅维持）
+     * 定时执行场景逻辑（每6秒检查一次，优先处理紧急关闭逻辑，再处理定时和维持逻辑）
      */
     @Scheduled(fixedRate = CHECK_INTERVAL)
     public void executeScene() {
@@ -63,7 +72,10 @@ public class TemperatureHumidityAutoAdjustScene {
         }
 
         try {
-            // 1. 优先处理【唯一】定时逻辑（仅这两个时段允许开/关）
+            // 新增：1. 优先处理门窗超时关闭逻辑（紧急节能场景，优先级最高）
+            handleDoorWindowTimeoutShutdown();
+
+            // 原有：2. 处理定时启停逻辑
             // 晨间7:50关闭逻辑（仅在时间窗口内且未触发过时执行）
             if (shouldTurnOffInMorning() && !hasMorningOffTriggered) {
                 turnOffAcInMorning();
@@ -75,10 +87,10 @@ public class TemperatureHumidityAutoAdjustScene {
                 return;
             }
 
-            // 2. 重置定时标记（非时间窗口时重置，确保次日可重新触发）
+            // 原有：3. 重置定时标记
             resetDailyFlags();
 
-            // 3. 获取空调当前状态（核心：先判断空调是否已开启，未开启则直接退出，不主动开启）
+            // 原有：4. 获取空调当前状态，非开启状态则退出
             HaEntityState acState = homeAssistantService.getEntityState(AC_ENTITY_ID);
             if (acState == null) {
                 System.err.println("未找到空调设备，场景执行终止");
@@ -92,7 +104,7 @@ public class TemperatureHumidityAutoAdjustScene {
                 return;
             }
 
-            // 4. 空调已开启时，才获取温湿度并执行维持逻辑（不关闭已运行空调）
+            // 原有：5. 空调已开启时，执行温湿度维持逻辑
             double temperature = getSensorValue(TEMPERATURE_SENSOR_ID);
             double humidity = getSensorValue(HUMIDITY_SENSOR_ID);
             if (temperature == -1 || humidity == -1) {
@@ -106,7 +118,7 @@ public class TemperatureHumidityAutoAdjustScene {
             System.out.println("预冷状态：" + (isPrecoolComplete ? "已完成" : "进行中"));
             System.out.println("空调当前模式：" + currentAcMode);
 
-            // 5. 根据温湿度执行维持调节（不涉及关闭操作）
+            // 原有：6. 温湿度调节逻辑
             adjustAcBasedOnHabit(temperature, humidity, currentAcMode, acState);
 
         } catch (Exception e) {
@@ -115,6 +127,74 @@ public class TemperatureHumidityAutoAdjustScene {
         }
     }
 
+    // ------------------------------ 新增：门窗超时关闭逻辑 ------------------------------
+    /**
+     * 处理门窗未关闭超时自动关闭空调逻辑
+     */
+    private void handleDoorWindowTimeoutShutdown() {
+        System.out.println("处理门窗超时关闭逻辑...");
+        // 1. 获取门窗传感器状态
+        HaEntityState doorWindowState = homeAssistantService.getEntityState(DOOR_WINDOW_SENSOR_ID);
+        System.out.println("门窗传感器原始状态：" + doorWindowState);
+        if (doorWindowState == null || "unavailable".equals(doorWindowState.getState())) {
+            System.err.println("门窗传感器" + DOOR_WINDOW_SENSOR_ID + "离线或不存在，跳过门窗监控逻辑");
+            return;
+        }
+
+        // 2. 获取空调状态（仅空调开启时才需要监控）
+        HaEntityState acState = homeAssistantService.getEntityState(AC_ENTITY_ID);
+        if (acState == null || "off".equals(acState.getState())) {
+            System.out.println("空调当前未开启，重置门窗监控状态");
+            // 空调已关闭时，重置门窗监控状态
+            resetDoorWindowMonitorState();
+            return;
+        }
+
+        String doorWindowStateStr = doorWindowState.getState();
+        System.out.println("当前门窗状态：" + doorWindowStateStr + "（on=开启，off=关闭）");
+        // 3. 适配实际传感器状态：state=on 表示开启，state=off 表示关闭
+        boolean isDoorWindowOpen = "on".equals(doorWindowStateStr);
+
+        if (isDoorWindowOpen) {
+            // 门窗开启状态：记录开始时间或检查超时
+            if (doorWindowOpenStartTime == null) {
+                // 首次检测到开启，记录时间戳
+                doorWindowOpenStartTime = ZonedDateTime.now();
+                System.out.println("检测到门窗开启，开始计时：" + doorWindowOpenStartTime);
+                hasDoorWindowTimeoutTriggered = false; // 重置触发标记
+            } else {
+                // 计算开启时长
+                long openMinutes = Duration.between(doorWindowOpenStartTime, ZonedDateTime.now()).toMinutes();
+                System.out.println("门窗已开启时长：" + openMinutes + "分钟（阈值：" + DOOR_WINDOW_OPEN_DURATION_THRESHOLD + "分钟）");
+
+                // 超时且未触发过关闭操作，执行关闭
+                if (openMinutes >= DOOR_WINDOW_OPEN_DURATION_THRESHOLD && !hasDoorWindowTimeoutTriggered) {
+                    System.out.println("===== 门窗开启超时" + openMinutes + "分钟，自动关闭空调 =====");
+                    homeAssistantService.controlAcPower(AC_ENTITY_ID, false);
+                    hasDoorWindowTimeoutTriggered = true; // 标记已触发，避免重复关闭
+                    isPrecoolComplete = false; // 重置预冷状态（为下次开启做准备）
+                    // 同时重置定时开启标记（避免当天重复触发定时开启）
+                    hasEveningOnTriggered = true;
+                }
+            }
+        } else {
+            // 门窗已关闭，重置监控状态
+            resetDoorWindowMonitorState();
+        }
+    }
+
+    /**
+     * 重置门窗监控状态（门窗关闭或空调关闭时调用）
+     */
+    private void resetDoorWindowMonitorState() {
+        if (doorWindowOpenStartTime != null) {
+            System.out.println("门窗已关闭或空调已关闭，重置门窗监控计时");
+            doorWindowOpenStartTime = null;
+            hasDoorWindowTimeoutTriggered = false;
+        }
+    }
+
+    // ------------------------------ 原有逻辑保持不变 ------------------------------
     /**
      * 空调已开启时的调节逻辑（预冷→维持，不包含关闭逻辑）
      */
@@ -140,7 +220,6 @@ public class TemperatureHumidityAutoAdjustScene {
         }
     }
 
-    // ------------------------------ 定时核心逻辑（仅这两个时段执行开/关） ------------------------------
     /**
      * 判断是否处于晨间关闭时间窗口（7:49-7:51）且空调已开启
      */
@@ -162,6 +241,7 @@ public class TemperatureHumidityAutoAdjustScene {
         homeAssistantService.controlAcPower(AC_ENTITY_ID, false);
         isPrecoolComplete = false; // 重置预冷状态（为次日开启做准备）
         hasMorningOffTriggered = true; // 标记已触发，避免1分钟内重复关闭
+        resetDoorWindowMonitorState(); // 同步重置门窗监控状态
     }
 
     /**
@@ -193,6 +273,7 @@ public class TemperatureHumidityAutoAdjustScene {
         setFanMode(MAX_FAN_MODE);
         isPrecoolComplete = false; // 标记预冷未完成
         hasEveningOnTriggered = true; // 标记已触发，避免1分钟内重复开启
+        resetDoorWindowMonitorState(); // 同步重置门窗监控状态
     }
 
     /**
@@ -212,7 +293,6 @@ public class TemperatureHumidityAutoAdjustScene {
         }
     }
 
-    // ------------------------------ 维持调节逻辑（仅空调已开启时执行） ------------------------------
     /**
      * 湿度超标时切换除湿模式
      */
@@ -259,7 +339,6 @@ public class TemperatureHumidityAutoAdjustScene {
         checkAndSetFanMode(acState, MIN_FAN_MODE);
     }
 
-    // ------------------------------ 工具方法（状态检查、指令发送） ------------------------------
     /**
      * 检查并设置风力模式（仅在当前模式与目标模式不一致时发送指令）
      */
