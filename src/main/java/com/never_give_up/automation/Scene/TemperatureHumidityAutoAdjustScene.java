@@ -46,7 +46,7 @@ public class TemperatureHumidityAutoAdjustScene {
     private static final String DEHUMIDIFY_MODE = "dry"; // 除湿模式
 
     // 新增：门窗监控配置
-    private static final long DOOR_WINDOW_OPEN_DURATION_THRESHOLD = 10; // 门窗开启超时阈值（分钟）
+    private static final long DOOR_WINDOW_OPEN_DURATION_THRESHOLD = 2; // 门窗开启超时阈值（分钟）
     private ZonedDateTime doorWindowOpenStartTime; // 记录门窗开始开启的时间戳
     private boolean hasDoorWindowTimeoutTriggered = false; // 标记门窗超时关闭是否已触发（避免重复执行）
 
