@@ -91,6 +91,11 @@ public class DataCartFactoryGame extends JFrame {
     private boolean dhcpInProgress = false;
     private int dhcpStep = 0;
 
+    // Traceroute 状态
+    private boolean tracerouteActive = false;
+    private boolean tracerouteWaitReply = false;
+    private int tracerouteNextTTL = 1;
+
     private String selectedBuilding = "NONE";
     private final int PRICE_MINER = 30;
     private final int PRICE_MACHINE = 20;
@@ -124,7 +129,7 @@ public class DataCartFactoryGame extends JFrame {
     private Set<Integer> sentSeq = ConcurrentHashMap.newKeySet();
 
     public DataCartFactoryGame() {
-        setTitle("🌐 全协议栈网络可视化模拟器 (DHCP + TCP连接表 + TTL递减)");
+        setTitle("🌐 全协议栈网络可视化模拟器 (DHCP + TCP连接表 + ICMP Ping/Traceroute)");
         setSize(2000, 1050);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
@@ -229,10 +234,18 @@ public class DataCartFactoryGame extends JFrame {
         clearDnsButton.addActionListener(e -> { dnsCache.clear(); updateDnsDisplay(); });
         JButton clearConsoleButton = new JButton("🗑️ 清空控制台");
         clearConsoleButton.addActionListener(e -> txtHexDisplay.setText(""));
+
+        JButton pingButton = new JButton("📡 PING");
+        pingButton.addActionListener(e -> sendPing());
+        JButton tracerouteButton = new JButton("🔎 TRACEROUTE");
+        tracerouteButton.addActionListener(e -> startTraceroute());
+
         btnPanel.add(resetButton);
         btnPanel.add(clearArpButton);
         btnPanel.add(clearDnsButton);
         btnPanel.add(clearConsoleButton);
+        btnPanel.add(pingButton);
+        btnPanel.add(tracerouteButton);
         bottomPanel.add(btnPanel, BorderLayout.SOUTH);
         add(bottomPanel, BorderLayout.SOUTH);
 
@@ -439,6 +452,44 @@ public class DataCartFactoryGame extends JFrame {
         buildingLayout[receiveRow][38] = "RX_IP";
         buildingLayout[receiveRow][40] = "RX_TCP";
         buildingLayout[receiveRow][42] = "RX_APP";
+    }
+
+    private void sendPing() {
+        if (!pcIpAssigned) {
+            appendToConsole("【⚠️ PING 失败】: PC 尚未获取 IP 地址，请等待 DHCP 完成");
+            return;
+        }
+        DataCart pingReq = new DataCart(pcFactory.x, pcFactory.y, "ICMP_ECHO_REQ", 0);
+        pingReq.echoSendTimestamp = System.currentTimeMillis();
+        pingReq.ttl = 64;
+        pendingDataCarts.add(pingReq);
+        appendToConsole("【📡 PING】: 发送 ICMP Echo Request (TTL=64) 到 " + targetDomain);
+    }
+
+    private void startTraceroute() {
+        if (!pcIpAssigned) {
+            appendToConsole("【⚠️ TRACEROUTE 失败】: PC 尚未获取 IP 地址");
+            return;
+        }
+        if (tracerouteActive) {
+            appendToConsole("【⚠️ TRACEROUTE】: 上一次追踪仍在进行中");
+            return;
+        }
+        tracerouteActive = true;
+        tracerouteNextTTL = 1;
+        tracerouteWaitReply = false;
+        appendToConsole("【🔎 TRACEROUTE】: 开始追踪路由到 " + targetDomain);
+        sendNextTracerouteProbe();
+    }
+
+    private void sendNextTracerouteProbe() {
+        if (!tracerouteActive) return;
+        DataCart probe = new DataCart(pcFactory.x, pcFactory.y, "ICMP_ECHO_REQ", 0);
+        probe.echoSendTimestamp = System.currentTimeMillis();
+        probe.ttl = tracerouteNextTTL;
+        pendingDataCarts.add(probe);
+        tracerouteWaitReply = true;
+        appendToConsole(String.format("【🔎 Traceroute】: 发送探测包 TTL=%d", tracerouteNextTTL));
     }
 
     private void startDhcpIfNeeded() {
@@ -650,6 +701,21 @@ public class DataCartFactoryGame extends JFrame {
                 updateTopLabel();
             }
         }
+
+        // 为 TTL 归零的数据包生成 ICMP Time Exceeded 小车
+        for (DataCart cart : toRemoveCarts) {
+            if (cart.droppedAtRouterTag != null && cart.droppedAtPosition != null) {
+                DataCart icmpTE = new DataCart(cart.droppedAtPosition.x, cart.droppedAtPosition.y, "ICMP_TIMEEXCEEDED", 0);
+                icmpTE.droppedAtRouterTag = cart.droppedAtRouterTag;
+                icmpTE.echoSendTimestamp = cart.echoSendTimestamp;
+                icmpTE.isReturnTrip = true;
+                icmpTE.stage = -1; // 直接返回 PC
+                icmpTE.ttl = 64;
+                pendingDataCarts.add(icmpTE);
+                appendToConsole("【⏱️ ICMP】: 生成 Time Exceeded 来自 " + cart.droppedAtRouterTag);
+            }
+        }
+
         dataCarts.removeAll(toRemoveCarts);
 
         if (!pendingDataCarts.isEmpty()) {
@@ -724,6 +790,50 @@ public class DataCartFactoryGame extends JFrame {
                     appendToConsole("【🌐 网络就绪】: PC IP = " + pcIpAddress);
                     break;
             }
+        }
+
+        // ICMP 处理
+        if (cart.cartType.equals("ICMP_ECHO_REQ") && !cart.isReturnTrip && cart.isArrived) {
+            appendToConsole("【📥 ICMP】: 服务器收到 Echo Request，回复 Echo Reply");
+            DataCart echoReply = new DataCart(serverPos.x, serverPos.y, "ICMP_ECHO_REPLY", 0);
+            echoReply.isReturnTrip = true;
+            echoReply.echoSendTimestamp = cart.echoSendTimestamp;
+            echoReply.ttl = 64;   // 服务器发回 TTL 64
+            echoReply.stage = -1;  // 直接返回
+            pendingDataCarts.add(echoReply);
+            return;
+        }
+
+        if (cart.cartType.equals("ICMP_ECHO_REPLY") && cart.isReturnTrip) {
+            long rtt = System.currentTimeMillis() - cart.echoSendTimestamp;
+            int finalTtl = cart.ttl - 3; // 模拟经过 3 个路由器后的 TTL
+            appendToConsole(String.format("【📥 ICMP】: 收到 Echo Reply, time=%dms, TTL=%d", rtt, finalTtl));
+
+            if (tracerouteActive) {
+                appendToConsole("【🏁 Traceroute 完成】: 到达目标服务器");
+                tracerouteActive = false;
+                tracerouteWaitReply = false;
+            }
+            return;
+        }
+
+        if (cart.cartType.equals("ICMP_TIMEEXCEEDED") && cart.isReturnTrip) {
+            long rtt = System.currentTimeMillis() - cart.echoSendTimestamp;
+            String router = cart.droppedAtRouterTag != null ? cart.droppedAtRouterTag : "Unknown";
+            appendToConsole(String.format("【⏱️ ICMP Time Exceeded】: 来自 %s, time=%dms", router, rtt));
+
+            if (tracerouteActive && tracerouteWaitReply) {
+                appendToConsole(String.format("  %d  %s  time=%dms", tracerouteNextTTL, router, rtt));
+                tracerouteWaitReply = false;
+                tracerouteNextTTL++;
+                if (tracerouteNextTTL <= 30) {
+                    sendNextTracerouteProbe();
+                } else {
+                    appendToConsole("【⚠️ Traceroute】: 超过最大跳数，停止追踪");
+                    tracerouteActive = false;
+                }
+            }
+            return;
         }
 
         // 原有协议处理
@@ -894,6 +1004,8 @@ public class DataCartFactoryGame extends JFrame {
         isDnsResolving = false;
         isDnsResolved = false;
         resolvedServerIp = null;
+        tracerouteActive = false;
+        tracerouteWaitReply = false;
         updateTopLabel();
         canvas.repaint();
     }
@@ -903,11 +1015,12 @@ public class DataCartFactoryGame extends JFrame {
         String ipStatus = pcIpAssigned ? pcIpAddress : "未分配";
         lblDashboard.setText(String.format(
                 "💰 资金:%d | 🏷️ TCP:%s | 🌐 IP:%s | 🚩 cwnd:%d | 🎯 ssthresh:%d | 📥 rwnd:%d | 🎛️ 有效窗口:%d | " +
-                        "📦 仓储:%d/%d | ✅ 达成:%d/%d | 🔍 ARP:%d | 📚 DNS:%d | 🌐 域名:%s → %s",
+                        "📦 仓储:%d/%d | ✅ 达成:%d/%d | 🔍 ARP:%d | 📚 DNS:%d | 🌐 域名:%s → %s | 🔎 Trace:%s",
                 funds, currentTcpState, ipStatus, cwnd, ssthresh, rwnd, effectiveWin,
                 serverBufferCount, SERVER_BUFFER_MAX, serverReceivedCount, totalDataToTransmit,
                 arpCache.size(), dnsCache.size(), targetDomain,
-                resolvedServerIp == null ? "未解析" : resolvedServerIp));
+                resolvedServerIp == null ? "未解析" : resolvedServerIp,
+                tracerouteActive ? ("TTL=" + tracerouteNextTTL) : "空闲"));
     }
 
     private Point findBuildingCoords(String tag) {
@@ -945,14 +1058,25 @@ public class DataCartFactoryGame extends JFrame {
         String domain;
         String resolvedIp;
 
+        // ICMP & TTL 相关
+        long echoSendTimestamp = 0;
+        String droppedAtRouterTag = null;
+        Point droppedAtPosition = null;
+
         boolean hasPayload = true;
         boolean hasApp = false, hasTcp = false, hasIp = false, hasEther = false, hasLlc = false, hasFcs = false;
         boolean c_Payload=false, c_SP=false, c_DP=false, c_SEQ=false, c_ACK=false, c_CTL=false, c_WIN=false, c_CHK=false;
 
         public DataCart(double sx, double sy, String type, int seq) {
             this.x = sx; this.y = sy; this.cartType = type; this.sequenceNumber = seq;
-            if (isControlFrame(type)) { this.stage = 2; }
-            else { this.stage = 1; }
+            if (type.equals("ICMP_TIMEEXCEEDED") || type.equals("ICMP_ECHO_REPLY")) {
+                this.isReturnTrip = true;
+                this.stage = -1;  // 直接返回，不经过流水线
+            } else if (isControlFrame(type)) {
+                this.stage = 2;
+            } else {
+                this.stage = 1;
+            }
         }
 
         public boolean isControlFrame(String type) {
@@ -967,6 +1091,22 @@ public class DataCartFactoryGame extends JFrame {
         public void update() {
             if (timer > 0) { timer--; return; }
             Point target;
+
+            // 直接返回的小车 (ICMP Time Exceeded / Echo Reply)
+            if (stage == -1) {
+                target = pcFactory;
+                double dx = target.x - x;
+                double dy = target.y - y;
+                double dist = Math.sqrt(dx*dx+dy*dy);
+                if (dist <= speed) {
+                    x = target.x; y = target.y;
+                    isArrived = true;
+                } else {
+                    x += (dx/dist)*speed;
+                    y += (dy/dist)*speed;
+                }
+                return;
+            }
 
             if (isDHCP()) {
                 target = findTargetMachine(stage, cartType);
@@ -989,6 +1129,11 @@ public class DataCartFactoryGame extends JFrame {
                         ttl--;
                         if (ttl <= 0) {
                             isDropped = true;
+                            // 记录 TTL 耗尽的路由器信息
+                            if (stage == 26) droppedAtRouterTag = "ROUTER1";
+                            else if (stage == 27) droppedAtRouterTag = "ROUTER2";
+                            else if (stage == 28) droppedAtRouterTag = "ROUTER3";
+                            droppedAtPosition = new Point((int)x, (int)y);
                             appendToConsole(String.format("【⚠️ ICMP Time Exceeded】: %s (SEQ=%d) TTL 降为 0，数据包被丢弃",
                                     cartType, sequenceNumber));
                             return;
@@ -1227,6 +1372,9 @@ public class DataCartFactoryGame extends JFrame {
                 int cx = (int)cart.x, cy = (int)cart.y;
 
                 if (cart.waitInQueueTimer > 0) g2.setColor(Color.RED);
+                else if (cart.cartType.equals("ICMP_TIMEEXCEEDED")) g2.setColor(new Color(200, 50, 50));
+                else if (cart.cartType.equals("ICMP_ECHO_REQ")) g2.setColor(new Color(100, 100, 255));
+                else if (cart.cartType.equals("ICMP_ECHO_REPLY")) g2.setColor(new Color(50, 200, 50));
                 else if (cart.cartType.startsWith("DHCP")) g2.setColor(Color.MAGENTA);
                 else if (cart.cartType.equals("ZWP")) g2.setColor(Color.YELLOW);
                 else if (cart.cartType.startsWith("SYN")) g2.setColor(Color.CYAN);
@@ -1249,9 +1397,13 @@ public class DataCartFactoryGame extends JFrame {
                 String direction = cart.isReturnTrip ? "◀ 回传" : (cart.waitInQueueTimer > 0 ? "⚠️ 排队" : "▶ 发送");
                 String nameTag = cart.cartType;
                 if (cart.isRetransmission && cart.cartType.equals("DATA")) nameTag = "重传-" + cart.sequenceNumber;
+                if (cart.cartType.equals("ICMP_TIMEEXCEEDED")) nameTag = "⏱️ ICMP TE";
+                else if (cart.cartType.equals("ICMP_ECHO_REQ")) nameTag = "📡 Ping";
+                else if (cart.cartType.equals("ICMP_ECHO_REPLY")) nameTag = "📥 Pong";
                 String label = String.format("%s %s TTL:%d", nameTag, direction, cart.ttl);
                 if (cart.domain != null && !cart.domain.isEmpty()) label += " [" + cart.domain + "]";
                 if (cart.resolvedIp != null) label += " → " + cart.resolvedIp;
+                if (cart.droppedAtRouterTag != null) label += " @" + cart.droppedAtRouterTag;
 
                 g2.setColor(new Color(0, 0, 0, 180));
                 g2.fillRect(cx - 55, cy - 25, g2.getFontMetrics().stringWidth(label) + 8, 16);
