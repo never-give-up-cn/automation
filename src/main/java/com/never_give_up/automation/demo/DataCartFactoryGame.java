@@ -10,12 +10,17 @@ import java.util.*;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class DataCartFactoryGame extends JFrame {
 
     enum TcpState {
         CLOSED, SYN_SENT, ESTABLISHED,
         FIN_WAIT_1, FIN_WAIT_2, CLOSE_WAIT, LAST_ACK, TIME_WAIT
+    }
+
+    enum TlsState {
+        IDLE, CLIENT_HELLO_SENT, SERVER_HELLO_RCVD, FINISHED
     }
 
     private static class DnsEntry {
@@ -30,6 +35,7 @@ public class DataCartFactoryGame extends JFrame {
             this.createTime = System.currentTimeMillis();
         }
         public boolean isExpired() { return System.currentTimeMillis() - createTime > ttl; }
+        public long getRemainingMs() { return ttl - (System.currentTimeMillis() - createTime); }
     }
 
     private static class ArpEntry {
@@ -40,6 +46,19 @@ public class DataCartFactoryGame extends JFrame {
             this.ipAddress = ip;
             this.macAddress = mac;
             this.lastSeen = System.currentTimeMillis();
+        }
+    }
+
+    private static class NatEntry {
+        String insideIp;
+        int insidePort;
+        String publicIp;
+        int publicPort;
+        public NatEntry(String insideIp, int insidePort, String publicIp, int publicPort) {
+            this.insideIp = insideIp;
+            this.insidePort = insidePort;
+            this.publicIp = publicIp;
+            this.publicPort = publicPort;
         }
     }
 
@@ -78,20 +97,20 @@ public class DataCartFactoryGame extends JFrame {
     private List<RetransmissionTask> activeTimers = new CopyOnWriteArrayList<>();
     private Map<String, ArpEntry> arpCache = new ConcurrentHashMap<>();
     private Map<String, DnsEntry> dnsCache = new ConcurrentHashMap<>();
+    private Map<String, NatEntry> natTable = new ConcurrentHashMap<>();
     private Set<Integer> ackedSeq = ConcurrentHashMap.newKeySet();
+    private AtomicInteger natPortCounter = new AtomicInteger(50001);
 
     private String targetDomain = "www.demo.com";
     private String resolvedServerIp = null;
     private boolean isDnsResolving = false;
     private boolean isDnsResolved = false;
 
-    // DHCP 相关
     private boolean pcIpAssigned = false;
     private String pcIpAddress = null;
     private boolean dhcpInProgress = false;
     private int dhcpStep = 0;
 
-    // Traceroute 状态
     private boolean tracerouteActive = false;
     private boolean tracerouteWaitReply = false;
     private int tracerouteNextTTL = 1;
@@ -121,12 +140,22 @@ public class DataCartFactoryGame extends JFrame {
     private JTextArea txtNatDisplay;
     private JTextArea txtDnsDisplay;
 
-    // TCP 连接表
     private JTable tcpConnTable;
     private DefaultTableModel tableModel;
 
     private int packetsAckedSinceLastIncrease = 0;
     private Set<Integer> sentSeq = ConcurrentHashMap.newKeySet();
+
+    private boolean useUdp = false;
+    private boolean httpDemoEnabled = false;
+    private boolean tlsEnabled = false;
+    private TlsState tlsState = TlsState.IDLE;
+    private boolean udpActive = false;
+    private int udpSeqToSend = 0;
+    private long lastUdpSendTime = 0;
+
+    private boolean httpSent = false;
+    private String httpResponseContent = "";
 
     public DataCartFactoryGame() {
         setTitle("🌐 全协议栈网络可视化模拟器 (DHCP + TCP连接表 + ICMP Ping/Traceroute)");
@@ -135,13 +164,12 @@ public class DataCartFactoryGame extends JFrame {
         setLocationRelativeTo(null);
         setLayout(new BorderLayout(10, 10));
 
-        stateTimerWatchdog = System.currentTimeMillis();  // 防止开局超时
+        stateTimerWatchdog = System.currentTimeMillis();
 
         initMap();
         initArpCache();
         initDnsCache();
 
-        // 顶部仪表盘
         JPanel topPanel = new JPanel(new BorderLayout());
         topPanel.setBorder(BorderFactory.createTitledBorder("📊 协议栈状态仪表盘"));
         lblDashboard = new JLabel("", JLabel.CENTER);
@@ -149,7 +177,6 @@ public class DataCartFactoryGame extends JFrame {
         topPanel.add(lblDashboard, BorderLayout.CENTER);
         add(topPanel, BorderLayout.NORTH);
 
-        // 左侧面板
         JPanel leftPanel = new JPanel(new BorderLayout());
         leftPanel.setPreferredSize(new Dimension(420, 0));
 
@@ -192,11 +219,9 @@ public class DataCartFactoryGame extends JFrame {
         leftPanel.add(mainLeft, BorderLayout.CENTER);
         add(leftPanel, BorderLayout.WEST);
 
-        // 画布
         canvas = new GameCanvas();
         add(canvas, BorderLayout.CENTER);
 
-        // 右侧 TCP 连接表
         JPanel rightPanel = new JPanel(new BorderLayout());
         rightPanel.setPreferredSize(new Dimension(280, 0));
         rightPanel.setBorder(BorderFactory.createTitledBorder("🌐 TCP 连接表 (netstat)"));
@@ -209,7 +234,6 @@ public class DataCartFactoryGame extends JFrame {
         rightPanel.add(tableScroll, BorderLayout.CENTER);
         add(rightPanel, BorderLayout.EAST);
 
-        // 底部控制台
         JPanel bottomPanel = new JPanel(new BorderLayout(5, 5));
         bottomPanel.setBorder(BorderFactory.createTitledBorder("📟 协议分析控制台"));
         prgNetwork = new JProgressBar(0, 100);
@@ -226,6 +250,31 @@ public class DataCartFactoryGame extends JFrame {
         bottomPanel.add(scrollPane, BorderLayout.CENTER);
 
         JPanel btnPanel = new JPanel(new FlowLayout());
+
+        JRadioButton rbTcp = new JRadioButton("TCP", true);
+        JRadioButton rbUdp = new JRadioButton("UDP", false);
+        ButtonGroup modeGroup = new ButtonGroup();
+        modeGroup.add(rbTcp);
+        modeGroup.add(rbUdp);
+        rbTcp.addActionListener(e -> { useUdp = false; resetTcpSession(); appendToConsole("【切换】: 使用 TCP 模式"); });
+        rbUdp.addActionListener(e -> { useUdp = true; resetTcpSession(); appendToConsole("【切换】: 使用 UDP 模式"); });
+
+        JCheckBox cbHttp = new JCheckBox("📡 HTTP 演示", false);
+        JCheckBox cbTls = new JCheckBox("🔒 启用 TLS", false);
+        cbHttp.addActionListener(e -> {
+            httpDemoEnabled = cbHttp.isSelected();
+            cbTls.setEnabled(httpDemoEnabled);
+            if (!httpDemoEnabled) cbTls.setSelected(false);
+            tlsEnabled = cbTls.isSelected();
+            resetTcpSession();
+            appendToConsole(httpDemoEnabled ? "【启用 HTTP 演示】" : "【关闭 HTTP 演示】");
+        });
+        cbTls.addActionListener(e -> {
+            tlsEnabled = cbTls.isSelected();
+            resetTcpSession();
+            appendToConsole(tlsEnabled ? "【启用 TLS】" : "【关闭 TLS】");
+        });
+
         JButton resetButton = new JButton("🔄 重置会话");
         resetButton.addActionListener(e -> resetTcpSession());
         JButton clearArpButton = new JButton("🗑️ 清空 ARP 缓存");
@@ -246,6 +295,10 @@ public class DataCartFactoryGame extends JFrame {
         btnPanel.add(clearConsoleButton);
         btnPanel.add(pingButton);
         btnPanel.add(tracerouteButton);
+        btnPanel.add(rbTcp);
+        btnPanel.add(rbUdp);
+        btnPanel.add(cbHttp);
+        btnPanel.add(cbTls);
         bottomPanel.add(btnPanel, BorderLayout.SOUTH);
         add(bottomPanel, BorderLayout.SOUTH);
 
@@ -254,6 +307,9 @@ public class DataCartFactoryGame extends JFrame {
         canvas.addMouseListener(new MouseAdapter() {
             @Override
             public void mousePressed(MouseEvent e) {
+                Point p = e.getPoint();
+                if (getDataCartAtPoint(p) != null) return;
+
                 int col = e.getX() / TILE_SIZE;
                 int row = e.getY() / TILE_SIZE;
                 if (row >= MAP_ROWS || col >= MAP_COLS) return;
@@ -263,7 +319,8 @@ public class DataCartFactoryGame extends JFrame {
                     if (existing.equals("NONE") || existing.equals("PC_FACTORY") || existing.equals("RX_ST")) return;
                     funds += existing.startsWith("MINER") ? PRICE_MINER / 2 : PRICE_MACHINE / 2;
                     buildingLayout[row][col] = "NONE";
-                    canvas.repaint(); updateTopLabel(); return;
+                    canvas.repaint(); updateTopLabel();
+                    return;
                 }
 
                 if (!buildingLayout[row][col].equals("NONE") || mapLayout[row][col] == 9) return;
@@ -282,6 +339,16 @@ public class DataCartFactoryGame extends JFrame {
                 }
                 updateTopLabel(); canvas.repaint();
             }
+
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2) {
+                    DataCart cart = getDataCartAtPoint(e.getPoint());
+                    if (cart != null) {
+                        showPacketDetails(cart);
+                    }
+                }
+            }
         });
 
         updateTopLabel();
@@ -289,6 +356,7 @@ public class DataCartFactoryGame extends JFrame {
         new Timer(1000, e -> {
             updateArpDisplay();
             updateDnsDisplay();
+            updateNatDisplay();
             updateTcpConnTable();
         }).start();
     }
@@ -322,20 +390,32 @@ public class DataCartFactoryGame extends JFrame {
     private void updateDnsDisplay() {
         StringBuilder dnsSb = new StringBuilder();
         for (DnsEntry entry : dnsCache.values()) {
-            dnsSb.append(String.format("%s → %s (TTL:%ds)\n", entry.domain, entry.ipAddress, entry.ttl/1000));
+            long remainingSec = Math.max(0, entry.getRemainingMs() / 1000);
+            dnsSb.append(String.format("%s → %s (TTL:%ds)\n", entry.domain, entry.ipAddress, remainingSec));
         }
         txtDnsDisplay.setText(dnsSb.toString());
+    }
+
+    private void updateNatDisplay() {
+        StringBuilder natSb = new StringBuilder();
+        for (NatEntry entry : natTable.values()) {
+            natSb.append(String.format("%s:%d → %s:%d\n",
+                    entry.insideIp, entry.insidePort, entry.publicIp, entry.publicPort));
+        }
+        txtNatDisplay.setText(natSb.toString());
     }
 
     private void updateTcpConnTable() {
         SwingUtilities.invokeLater(() -> {
             tableModel.setRowCount(0);
-            if (!pcIpAssigned || resolvedServerIp == null || currentTcpState == TcpState.CLOSED) {
+            if (!pcIpAssigned || resolvedServerIp == null || (currentTcpState == TcpState.CLOSED && !udpActive)) {
                 return;
             }
             String localAddr = pcIpAddress + ":80";
             String remoteAddr = resolvedServerIp + ":443";
-            tableModel.addRow(new Object[]{"TCP", localAddr, remoteAddr, currentTcpState.toString()});
+            String proto = useUdp ? "UDP" : "TCP";
+            String state = useUdp ? "ACTIVE" : currentTcpState.toString();
+            tableModel.addRow(new Object[]{proto, localAddr, remoteAddr, state});
         });
     }
 
@@ -407,7 +487,6 @@ public class DataCartFactoryGame extends JFrame {
 
         int startRow = MAP_ROWS / 2 - 3;
 
-        // DNS 行
         buildingLayout[startRow][4] = "DNS_CLIENT";
         buildingLayout[startRow][5] = "DNS_LOCAL";
         buildingLayout[startRow][6] = "DNS_ROOT";
@@ -430,7 +509,6 @@ public class DataCartFactoryGame extends JFrame {
         buildingLayout[startRow][23] = "TX_LLC";
         buildingLayout[startRow][24] = "TX_FCS";
 
-        // DHCP 行
         int dhcpRow = MAP_ROWS / 2 - 4;
         buildingLayout[dhcpRow][4] = "DHCP_DISC";
         buildingLayout[dhcpRow][5] = "DHCP_SERVER";
@@ -520,7 +598,8 @@ public class DataCartFactoryGame extends JFrame {
             isDnsResolving = false;
             appendToConsole("【📚 DNS 缓存命中】: " + targetDomain + " → " + resolvedServerIp);
             performArpResolution(resolvedServerIp);
-            startTcpHandshake();
+            if (!useUdp) startTcpHandshake();
+            else startUdpTransmission();
             return;
         }
 
@@ -557,6 +636,15 @@ public class DataCartFactoryGame extends JFrame {
         updateTopLabel();
     }
 
+    private void startUdpTransmission() {
+        udpActive = true;
+        udpSeqToSend = 0;
+        lastUdpSendTime = 0;
+        serverReceivedCount = 0;
+        serverBufferCount = 0;
+        appendToConsole("【🚀 UDP 模式】: 跳过握手，直接发送数据");
+    }
+
     private long lastResourceTick = 0;
 
     private void gameTick() {
@@ -564,7 +652,7 @@ public class DataCartFactoryGame extends JFrame {
 
         startDhcpIfNeeded();
 
-        if (now - stateTimerWatchdog > 60000) {
+        if (!useUdp && now - stateTimerWatchdog > 60000) {
             appendToConsole("【⏰ 超时】: 连接超时，重置会话");
             resetTcpSession();
         }
@@ -578,7 +666,7 @@ public class DataCartFactoryGame extends JFrame {
             appendToConsole(String.format("【📥 服务器处理】: 已处理 %d/%d 个数据包", serverReceivedCount, totalDataToTransmit));
         }
 
-        if (currentTcpState == TcpState.ESTABLISHED) {
+        if (!useUdp && currentTcpState == TcpState.ESTABLISHED) {
             List<RetransmissionTask> toRemove = new ArrayList<>();
             for (RetransmissionTask task : activeTimers) if (task.isAcked) toRemove.add(task);
             activeTimers.removeAll(toRemove);
@@ -625,41 +713,87 @@ public class DataCartFactoryGame extends JFrame {
                 }
             }
 
+            // 修复后的启动逻辑，支持所有模式
             if (pcIpAssigned) {
-                if (currentTcpState == TcpState.CLOSED) {
-                    if (helloStock >= 2 && sayStock >= 1) {
+                if (!useUdp) {
+                    // TCP 模式（包含普通TCP和HTTP演示）
+                    if (currentTcpState == TcpState.CLOSED) {
+                        if (httpDemoEnabled) {
+                            // HTTP 演示模式：无需资源，直接启动
+                            if (!isDnsResolved && !isDnsResolving) startDnsResolution();
+                            else if (isDnsResolved) startDnsResolution();
+                        } else {
+                            // 普通 TCP 模式：需要采矿资源
+                            if (helloStock >= 2 && sayStock >= 1) {
+                                if (!isDnsResolved && !isDnsResolving) startDnsResolution();
+                                else if (isDnsResolved) startDnsResolution();
+                            }
+                        }
+                    } else if (currentTcpState == TcpState.ESTABLISHED) {
+                        if (!httpDemoEnabled) {
+                            // 只有普通 TCP 才发送数据包
+                            int effectiveWindow = Math.min(cwnd, rwnd);
+                            while (effectiveWindow > 0 && helloStock >= 2 && sayStock >= 1 && serverReceivedCount < totalDataToTransmit) {
+                                helloStock -= 2; sayStock -= 1;
+                                int currentSeq = nextSeqNum++;
+                                activeTimers.add(new RetransmissionTask(currentSeq, now));
+                                DataCart dataPkt = new DataCart(pcFactory.x, pcFactory.y, "DATA", currentSeq);
+                                dataPkt.ttl = 64;
+                                pendingDataCarts.add(dataPkt);
+                                sentSeq.add(currentSeq);
+                                appendToConsole(String.format("【📤 发送数据】: SEQ=%d, cwnd=%d, rwnd=%d, TTL=%d", currentSeq, cwnd, rwnd, 64));
+                            }
+                        }
+                    }
+                } else {
+                    // UDP 模式：直接启动（无需资源）
+                    if (!udpActive) {
                         if (!isDnsResolved && !isDnsResolving) startDnsResolution();
                         else if (isDnsResolved) startDnsResolution();
                     }
-                } else if (currentTcpState == TcpState.ESTABLISHED) {
-                    int effectiveWindow = Math.min(cwnd, rwnd);
-                    appendToConsole(String.format("【📊 库存】: helloStock=%d, sayStock=%d, 有效窗口=%d",
-                            helloStock, sayStock, effectiveWindow));
-                    while (effectiveWindow > 0 && helloStock >= 2 && sayStock >= 1 && serverReceivedCount < totalDataToTransmit) {
-                        helloStock -= 2; sayStock -= 1;
-                        int currentSeq = nextSeqNum++;
-                        activeTimers.add(new RetransmissionTask(currentSeq, now));
-                        DataCart dataPkt = new DataCart(pcFactory.x, pcFactory.y, "DATA", currentSeq);
-                        dataPkt.ttl = 64;
-                        pendingDataCarts.add(dataPkt);
-                        sentSeq.add(currentSeq);
-                        appendToConsole(String.format("【📤 发送数据】: SEQ=%d, cwnd=%d, rwnd=%d, TTL=%d", currentSeq, cwnd, rwnd, 64));
-                    }
-                    if (serverReceivedCount >= totalDataToTransmit && activeTimers.isEmpty() && serverBufferCount == 0) {
-                        currentTcpState = TcpState.FIN_WAIT_1;
-                        stateTimerWatchdog = now;
-                        DataCart fin = new DataCart(pcFactory.x, pcFactory.y, "FIN_PC", 0);
-                        fin.ttl = 64;
-                        pendingDataCarts.add(fin);
-                        appendToConsole("【🏁 数据传输完成】: 发送 FIN，开始四次挥手");
-                    }
                 }
             }
+
+            // HTTP / TLS 专用逻辑（仅在 TCP 且 HTTP 演示启用时）
+            if (httpDemoEnabled && pcIpAssigned && !useUdp && currentTcpState == TcpState.ESTABLISHED && !httpSent) {
+                if (tlsEnabled && tlsState == TlsState.IDLE) {
+                    tlsState = TlsState.CLIENT_HELLO_SENT;
+                    DataCart hello = new DataCart(pcFactory.x, pcFactory.y, "TLS_CLIENT_HELLO", 0);
+                    hello.stage = 5;
+                    pendingDataCarts.add(hello);
+                    appendToConsole("【🔒 TLS】: 发送 Client Hello");
+                } else if (!tlsEnabled) {
+                    sendHttpGet();
+                }
+            }
+
+            // UDP 数据发送
+            if (udpActive && serverReceivedCount < totalDataToTransmit) {
+                if (now - lastUdpSendTime > 200) {
+                    DataCart udpData = new DataCart(pcFactory.x, pcFactory.y, "UDP_DATA", udpSeqToSend++);
+                    udpData.stage = 5;
+                    udpData.ttl = 64;
+                    pendingDataCarts.add(udpData);
+                    lastUdpSendTime = now;
+                    appendToConsole(String.format("【📤 UDP 发送】: SEQ=%d (无 ACK)", udpData.sequenceNumber));
+                }
+            }
+
+            // 普通 TCP 完成传输
+            if (serverReceivedCount >= totalDataToTransmit && !useUdp && !httpDemoEnabled && activeTimers.isEmpty() && serverBufferCount == 0) {
+                currentTcpState = TcpState.FIN_WAIT_1;
+                stateTimerWatchdog = now;
+                DataCart fin = new DataCart(pcFactory.x, pcFactory.y, "FIN_PC", 0);
+                fin.ttl = 64;
+                pendingDataCarts.add(fin);
+                appendToConsole("【🏁 数据传输完成】: 发送 FIN，开始四次挥手");
+            }
+
             lastResourceTick = now;
             updateTopLabel();
         }
 
-        if (currentTcpState == TcpState.ESTABLISHED && Math.min(cwnd, rwnd) == 0 && rwnd == 0) {
+        if (!useUdp && currentTcpState == TcpState.ESTABLISHED && Math.min(cwnd, rwnd) == 0 && rwnd == 0) {
             if (now - lastProbeTime >= PROBE_INTERVAL) {
                 lastProbeTime = now;
                 DataCart zwp = new DataCart(pcFactory.x, pcFactory.y, "ZWP", 0);
@@ -702,14 +836,13 @@ public class DataCartFactoryGame extends JFrame {
             }
         }
 
-        // 为 TTL 归零的数据包生成 ICMP Time Exceeded 小车
         for (DataCart cart : toRemoveCarts) {
             if (cart.droppedAtRouterTag != null && cart.droppedAtPosition != null) {
                 DataCart icmpTE = new DataCart(cart.droppedAtPosition.x, cart.droppedAtPosition.y, "ICMP_TIMEEXCEEDED", 0);
                 icmpTE.droppedAtRouterTag = cart.droppedAtRouterTag;
                 icmpTE.echoSendTimestamp = cart.echoSendTimestamp;
                 icmpTE.isReturnTrip = true;
-                icmpTE.stage = -1; // 直接返回 PC
+                icmpTE.stage = -1;
                 icmpTE.ttl = 64;
                 pendingDataCarts.add(icmpTE);
                 appendToConsole("【⏱️ ICMP】: 生成 Time Exceeded 来自 " + cart.droppedAtRouterTag);
@@ -740,12 +873,19 @@ public class DataCartFactoryGame extends JFrame {
         return foremost == null || foremost == target;
     }
 
+    private void sendHttpGet() {
+        httpSent = true;
+        DataCart get = new DataCart(pcFactory.x, pcFactory.y, "HTTP_GET", 0);
+        get.stage = 5;
+        pendingDataCarts.add(get);
+        appendToConsole("【📡 HTTP】: 发送 GET /index.html HTTP/1.1");
+    }
+
     private void handleCartArrival(DataCart cart) {
         Point serverPos = findBuildingCoords("RX_ST");
         Point dhcpServerPos = findBuildingCoords("DHCP_SERVER");
         long now = System.currentTimeMillis();
 
-        // DHCP 处理
         if (!cart.isReturnTrip) {
             switch (cart.cartType) {
                 case "DHCP_DISCOVER":
@@ -792,21 +932,20 @@ public class DataCartFactoryGame extends JFrame {
             }
         }
 
-        // ICMP 处理
         if (cart.cartType.equals("ICMP_ECHO_REQ") && !cart.isReturnTrip && cart.isArrived) {
             appendToConsole("【📥 ICMP】: 服务器收到 Echo Request，回复 Echo Reply");
             DataCart echoReply = new DataCart(serverPos.x, serverPos.y, "ICMP_ECHO_REPLY", 0);
             echoReply.isReturnTrip = true;
             echoReply.echoSendTimestamp = cart.echoSendTimestamp;
-            echoReply.ttl = 64;   // 服务器发回 TTL 64
-            echoReply.stage = -1;  // 直接返回
+            echoReply.ttl = 64;
+            echoReply.stage = -1;
             pendingDataCarts.add(echoReply);
             return;
         }
 
         if (cart.cartType.equals("ICMP_ECHO_REPLY") && cart.isReturnTrip) {
             long rtt = System.currentTimeMillis() - cart.echoSendTimestamp;
-            int finalTtl = cart.ttl - 3; // 模拟经过 3 个路由器后的 TTL
+            int finalTtl = cart.ttl - 3;
             appendToConsole(String.format("【📥 ICMP】: 收到 Echo Reply, time=%dms, TTL=%d", rtt, finalTtl));
 
             if (tracerouteActive) {
@@ -836,7 +975,19 @@ public class DataCartFactoryGame extends JFrame {
             return;
         }
 
-        // 原有协议处理
+        if (cart.cartType.equals("UDP_DATA") && !cart.isReturnTrip && cart.isArrived) {
+            if (serverBufferCount < SERVER_BUFFER_MAX) {
+                serverBufferCount++;
+                if (serverBufferCount == 1) lastServerConsumeTime = now;
+                rwnd = SERVER_BUFFER_MAX - serverBufferCount;
+                funds += 500;
+                appendToConsole(String.format("【📦 UDP 数据】: SEQ=%d 已接收（无 ACK）", cart.sequenceNumber));
+            } else {
+                appendToConsole(String.format("【💥 缓冲区溢出】: UDP SEQ=%d 丢失", cart.sequenceNumber));
+            }
+            return;
+        }
+
         if (!cart.isReturnTrip) {
             switch(cart.cartType) {
                 case "DNS_QUERY":
@@ -855,7 +1006,8 @@ public class DataCartFactoryGame extends JFrame {
                     updateDnsDisplay();
                     appendToConsole("【🌐 DNS 解析成功】: " + targetDomain + " → " + resolvedServerIp);
                     performArpResolution(resolvedServerIp);
-                    startTcpHandshake();
+                    if (!useUdp) startTcpHandshake();
+                    else startUdpTransmission();
                     break;
                 case "SYN":
                 case "DATA":
@@ -869,10 +1021,36 @@ public class DataCartFactoryGame extends JFrame {
                                     cart.cartType, cart.sequenceNumber));
                             return;
                         }
-                        appendToConsole(String.format("【📡 路由器】: %s 经过 %s，TTL=%d",
-                                cart.cartType, cart.currentLayerStatus, cart.ttl));
                     }
                     break;
+                case "TLS_CLIENT_HELLO":
+                    if (cart.isArrived) {
+                        DataCart sh = new DataCart(serverPos.x, serverPos.y, "TLS_SERVER_HELLO_CERT", 0);
+                        sh.isReturnTrip = true;
+                        sh.stage = -1;
+                        pendingDataCarts.add(sh);
+                        appendToConsole("【🔒 TLS】: 服务器收到 Client Hello，回复 Server Hello + Certificate");
+                    }
+                    return;
+                case "TLS_CLIENT_FINISHED":
+                    if (cart.isArrived) {
+                        DataCart sf = new DataCart(serverPos.x, serverPos.y, "TLS_SERVER_FINISHED", 0);
+                        sf.isReturnTrip = true;
+                        sf.stage = -1;
+                        pendingDataCarts.add(sf);
+                        appendToConsole("【🔒 TLS】: 服务器收到 Finished，回复 ChangeCipherSpec + Finished");
+                    }
+                    return;
+                case "HTTP_GET":
+                    if (cart.isArrived) {
+                        DataCart httpOk = new DataCart(serverPos.x, serverPos.y, "HTTP_200_OK", 0);
+                        httpOk.isReturnTrip = true;
+                        httpOk.stage = -1;
+                        httpOk.httpBody = "Hello World";
+                        pendingDataCarts.add(httpOk);
+                        appendToConsole("【📡 HTTP】: 服务器收到 GET，回复 200 OK");
+                    }
+                    return;
             }
             if (cart.cartType.equals("SYN") && !cart.isReturnTrip && cart.isArrived) {
                 DataCart synAck = new DataCart(serverPos.x, serverPos.y, "SYN_ACK", 0);
@@ -985,6 +1163,27 @@ public class DataCartFactoryGame extends JFrame {
                     timer.setRepeats(false);
                     timer.start();
                     break;
+                case "TLS_SERVER_HELLO_CERT":
+                    if (tlsState == TlsState.CLIENT_HELLO_SENT) {
+                        tlsState = TlsState.SERVER_HELLO_RCVD;
+                        DataCart cf = new DataCart(pcFactory.x, pcFactory.y, "TLS_CLIENT_FINISHED", 0);
+                        cf.stage = 5;
+                        pendingDataCarts.add(cf);
+                        appendToConsole("【🔒 TLS】: 收到 Server Hello，发送 Client Finished");
+                    }
+                    break;
+                case "TLS_SERVER_FINISHED":
+                    if (tlsState == TlsState.SERVER_HELLO_RCVD) {
+                        tlsState = TlsState.FINISHED;
+                        appendToConsole("【🔒 TLS】: 握手完成，开始 HTTP 通信");
+                        sendHttpGet();
+                    }
+                    break;
+                case "HTTP_200_OK":
+                    httpResponseContent = cart.httpBody;
+                    appendToConsole("【📡 HTTP】: 收到 200 OK, 内容: " + httpResponseContent);
+                    JOptionPane.showMessageDialog(this, "HTTP 200 OK\n\n" + httpResponseContent, "HTTP 响应", JOptionPane.INFORMATION_MESSAGE);
+                    break;
             }
         }
     }
@@ -1006,6 +1205,11 @@ public class DataCartFactoryGame extends JFrame {
         resolvedServerIp = null;
         tracerouteActive = false;
         tracerouteWaitReply = false;
+        udpActive = false;
+        udpSeqToSend = 0;
+        tlsState = TlsState.IDLE;
+        httpSent = false;
+        httpResponseContent = "";
         updateTopLabel();
         canvas.repaint();
     }
@@ -1013,14 +1217,16 @@ public class DataCartFactoryGame extends JFrame {
     private void updateTopLabel() {
         int effectiveWin = Math.min(cwnd, rwnd);
         String ipStatus = pcIpAssigned ? pcIpAddress : "未分配";
+        String modeStr = useUdp ? "UDP" : "TCP";
         lblDashboard.setText(String.format(
-                "💰 资金:%d | 🏷️ TCP:%s | 🌐 IP:%s | 🚩 cwnd:%d | 🎯 ssthresh:%d | 📥 rwnd:%d | 🎛️ 有效窗口:%d | " +
-                        "📦 仓储:%d/%d | ✅ 达成:%d/%d | 🔍 ARP:%d | 📚 DNS:%d | 🌐 域名:%s → %s | 🔎 Trace:%s",
-                funds, currentTcpState, ipStatus, cwnd, ssthresh, rwnd, effectiveWin,
+                "💰 资金:%d | 🏷️ %s:%s | 🌐 IP:%s | 🚩 cwnd:%d | 🎯 ssthresh:%d | 📥 rwnd:%d | 🎛️ 有效窗口:%d | " +
+                        "📦 仓储:%d/%d | ✅ 达成:%d/%d | 🔍 ARP:%d | 📚 DNS:%d | 🌐 域名:%s → %s | 🔎 Trace:%s | TLS:%s",
+                funds, modeStr, currentTcpState, ipStatus, cwnd, ssthresh, rwnd, effectiveWin,
                 serverBufferCount, SERVER_BUFFER_MAX, serverReceivedCount, totalDataToTransmit,
                 arpCache.size(), dnsCache.size(), targetDomain,
                 resolvedServerIp == null ? "未解析" : resolvedServerIp,
-                tracerouteActive ? ("TTL=" + tracerouteNextTTL) : "空闲"));
+                tracerouteActive ? ("TTL=" + tracerouteNextTTL) : "空闲",
+                tlsState));
     }
 
     private Point findBuildingCoords(String tag) {
@@ -1031,6 +1237,73 @@ public class DataCartFactoryGame extends JFrame {
             }
         }
         return null;
+    }
+
+    private DataCart getDataCartAtPoint(Point p) {
+        for (DataCart cart : dataCarts) {
+            double dx = cart.x - p.x;
+            double dy = cart.y - p.y;
+            if (Math.sqrt(dx*dx + dy*dy) < 12) return cart;
+        }
+        return null;
+    }
+
+    private void showPacketDetails(DataCart cart) {
+        JDialog dialog = new JDialog(this, "🔍 协议栈详细信息 (Wireshark)", true);
+        dialog.setSize(500, 400);
+        dialog.setLocationRelativeTo(this);
+        JTextArea details = new JTextArea();
+        details.setEditable(false);
+        details.setFont(new Font("Consolas", Font.PLAIN, 13));
+        details.setBackground(new Color(30, 30, 30));
+        details.setForeground(Color.WHITE);
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("═════════ Ethernet II ═════════\n");
+        String dstMac = (resolvedServerIp != null && arpCache.containsKey(resolvedServerIp)) ?
+                arpCache.get(resolvedServerIp).macAddress : "??:??:??:??:??:??";
+        String srcMac = (pcIpAddress != null && arpCache.containsKey(pcIpAddress)) ?
+                arpCache.get(pcIpAddress).macAddress : "00:1A:2B:3C:4D:5F";
+        sb.append(String.format("Dst MAC: %s\n", dstMac));
+        sb.append(String.format("Src MAC: %s\n", srcMac));
+        sb.append("Type: 0x0800 (IPv4)\n\n");
+
+        sb.append("═════════ IP Header ═════════\n");
+        String srcIp = pcIpAssigned ? pcIpAddress : "0.0.0.0";
+        String dstIp = resolvedServerIp != null ? resolvedServerIp : "?.?.?.?";
+        if (cart.isNatted) {
+            srcIp = cart.natPublicIp + ":" + cart.natPublicPort;
+        }
+        sb.append(String.format("Src IP: %s\n", srcIp));
+        sb.append(String.format("Dst IP: %s\n", dstIp));
+        sb.append(String.format("TTL: %d\n", cart.ttl));
+        sb.append("Protocol: " + (useUdp ? "UDP" : "TCP") + "\n\n");
+
+        if (!useUdp) {
+            sb.append("═════════ TCP Header ═════════\n");
+            sb.append("Src Port: 1234\n");
+            sb.append("Dst Port: 443\n");
+            sb.append(String.format("SEQ: %d\n", cart.sequenceNumber));
+            sb.append(String.format("ACK: %d\n", cart.ackNumber));
+            sb.append("Flags: [" + cart.cartType + "]\n");
+            sb.append(String.format("Window: %d\n", cart.advertisedWindow));
+        } else {
+            sb.append("═════════ UDP Header ═════════\n");
+            sb.append("Src Port: 1234\n");
+            sb.append("Dst Port: 443\n");
+            sb.append("Length: 8\n");
+            sb.append("Checksum: 0x0000\n");
+        }
+
+        if (cart.httpBody != null && !cart.httpBody.isEmpty()) {
+            sb.append("\n═════════ HTTP Payload ═════════\n");
+            sb.append(cart.httpBody);
+        }
+
+        details.setText(sb.toString());
+        JScrollPane scroll = new JScrollPane(details);
+        dialog.add(scroll);
+        dialog.setVisible(true);
     }
 
     private class OreCart {
@@ -1058,7 +1331,6 @@ public class DataCartFactoryGame extends JFrame {
         String domain;
         String resolvedIp;
 
-        // ICMP & TTL 相关
         long echoSendTimestamp = 0;
         String droppedAtRouterTag = null;
         Point droppedAtPosition = null;
@@ -1067,13 +1339,21 @@ public class DataCartFactoryGame extends JFrame {
         boolean hasApp = false, hasTcp = false, hasIp = false, hasEther = false, hasLlc = false, hasFcs = false;
         boolean c_Payload=false, c_SP=false, c_DP=false, c_SEQ=false, c_ACK=false, c_CTL=false, c_WIN=false, c_CHK=false;
 
+        boolean isNatted = false;
+        String natPublicIp = null;
+        int natPublicPort = 0;
+
+        String httpBody = null;
+
         public DataCart(double sx, double sy, String type, int seq) {
             this.x = sx; this.y = sy; this.cartType = type; this.sequenceNumber = seq;
-            if (type.equals("ICMP_TIMEEXCEEDED") || type.equals("ICMP_ECHO_REPLY")) {
+            if (type.equals("ICMP_TIMEEXCEEDED") || type.equals("ICMP_ECHO_REPLY") || type.equals("HTTP_200_OK")) {
                 this.isReturnTrip = true;
-                this.stage = -1;  // 直接返回，不经过流水线
+                this.stage = -1;
             } else if (isControlFrame(type)) {
                 this.stage = 2;
+            } else if (type.startsWith("TLS_") || type.equals("HTTP_GET") || type.equals("UDP_DATA")) {
+                this.stage = 5;
             } else {
                 this.stage = 1;
             }
@@ -1092,7 +1372,6 @@ public class DataCartFactoryGame extends JFrame {
             if (timer > 0) { timer--; return; }
             Point target;
 
-            // 直接返回的小车 (ICMP Time Exceeded / Echo Reply)
             if (stage == -1) {
                 target = pcFactory;
                 double dx = target.x - x;
@@ -1125,28 +1404,24 @@ public class DataCartFactoryGame extends JFrame {
                 x = target.x; y = target.y;
                 if (!isReturnTrip || isDHCP()) {
                     processStageCraft();
+                    if (stage == 24 && !isNatted && !isReturnTrip) {
+                        applyNatMapping();
+                    }
                     if (stage >= 26 && stage <= 28) {
                         ttl--;
                         if (ttl <= 0) {
                             isDropped = true;
-                            // 记录 TTL 耗尽的路由器信息
                             if (stage == 26) droppedAtRouterTag = "ROUTER1";
                             else if (stage == 27) droppedAtRouterTag = "ROUTER2";
                             else if (stage == 28) droppedAtRouterTag = "ROUTER3";
                             droppedAtPosition = new Point((int)x, (int)y);
-                            appendToConsole(String.format("【⚠️ ICMP Time Exceeded】: %s (SEQ=%d) TTL 降为 0，数据包被丢弃",
-                                    cartType, sequenceNumber));
                             return;
                         }
-                        appendToConsole(String.format("【📡 路由器】: %s 经过 %s，TTL=%d",
-                                cartType, currentLayerStatus, ttl));
                     }
                     if (!isDHCP()) {
                         if (stage < 32) {
                             timer = 1;
                             stage++;
-                            appendToConsole(String.format("【🚚 数据包】: %s 到达 %s，下一站 stage=%d, TTL=%d",
-                                    cartType, currentLayerStatus, stage, ttl));
                         } else {
                             isArrived = true;
                         }
@@ -1155,7 +1430,6 @@ public class DataCartFactoryGame extends JFrame {
                         if (stage < maxStage) {
                             timer = 1;
                             stage++;
-                            appendToConsole(String.format("【🚚 DHCP】: %s stage=%d", cartType, stage));
                         } else {
                             isArrived = true;
                         }
@@ -1167,6 +1441,22 @@ public class DataCartFactoryGame extends JFrame {
                 x += (dx/dist)*speed;
                 y += (dy/dist)*speed;
             }
+        }
+
+        private void applyNatMapping() {
+            String insideIp = pcIpAddress != null ? pcIpAddress : "192.168.1.100";
+            int insidePort = 1234;
+            String key = insideIp + ":" + insidePort;
+            NatEntry entry = natTable.get(key);
+            if (entry == null) {
+                String pubIp = "8.8.8.8";
+                int pubPort = natPortCounter.getAndIncrement();
+                entry = new NatEntry(insideIp, insidePort, pubIp, pubPort);
+                natTable.put(key, entry);
+            }
+            this.isNatted = true;
+            this.natPublicIp = entry.publicIp;
+            this.natPublicPort = entry.publicPort;
         }
 
         private boolean isDHCP() {
@@ -1211,10 +1501,6 @@ public class DataCartFactoryGame extends JFrame {
         }
 
         private void processStageCraft() {
-            switch(stage) {
-                case 1: if (cartType.equals("DHCP_DISCOVER")) currentLayerStatus = "🔎 DHCP Discover"; break;
-                case 2: if (cartType.equals("DHCP_OFFER")) currentLayerStatus = "📥 DHCP Offer"; break;
-            }
             if (cartType.startsWith("DHCP")) return;
             switch(stage) {
                 case 1: currentLayerStatus = "🔍 DNS 查询 (" + domain + ")"; break;
@@ -1382,6 +1668,9 @@ public class DataCartFactoryGame extends JFrame {
                 else if (cart.cartType.contains("ACK")) g2.setColor(Color.GREEN);
                 else if (cart.cartType.startsWith("DNS")) g2.setColor(new Color(0, 200, 200));
                 else if (cart.isRetransmission) g2.setColor(Color.ORANGE);
+                else if (cart.cartType.startsWith("TLS_")) g2.setColor(new Color(255, 165, 0));
+                else if (cart.cartType.equals("HTTP_GET") || cart.cartType.equals("HTTP_200_OK")) g2.setColor(new Color(150, 0, 200));
+                else if (cart.cartType.equals("UDP_DATA")) g2.setColor(new Color(50, 150, 255));
                 else g2.setColor(Color.LIGHT_GRAY);
                 g2.fillOval(cx-7, cy-7, 14, 14);
 
@@ -1397,13 +1686,9 @@ public class DataCartFactoryGame extends JFrame {
                 String direction = cart.isReturnTrip ? "◀ 回传" : (cart.waitInQueueTimer > 0 ? "⚠️ 排队" : "▶ 发送");
                 String nameTag = cart.cartType;
                 if (cart.isRetransmission && cart.cartType.equals("DATA")) nameTag = "重传-" + cart.sequenceNumber;
-                if (cart.cartType.equals("ICMP_TIMEEXCEEDED")) nameTag = "⏱️ ICMP TE";
-                else if (cart.cartType.equals("ICMP_ECHO_REQ")) nameTag = "📡 Ping";
-                else if (cart.cartType.equals("ICMP_ECHO_REPLY")) nameTag = "📥 Pong";
                 String label = String.format("%s %s TTL:%d", nameTag, direction, cart.ttl);
                 if (cart.domain != null && !cart.domain.isEmpty()) label += " [" + cart.domain + "]";
                 if (cart.resolvedIp != null) label += " → " + cart.resolvedIp;
-                if (cart.droppedAtRouterTag != null) label += " @" + cart.droppedAtRouterTag;
 
                 g2.setColor(new Color(0, 0, 0, 180));
                 g2.fillRect(cx - 55, cy - 25, g2.getFontMetrics().stringWidth(label) + 8, 16);
