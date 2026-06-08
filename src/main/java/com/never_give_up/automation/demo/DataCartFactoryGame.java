@@ -1,9 +1,11 @@
 package com.never_give_up.automation.demo;
 
 import javax.swing.*;
+import javax.swing.Timer;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.util.*;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -31,26 +33,26 @@ public class DataCartFactoryGame extends JFrame {
     private int helloStock = 0;
     private int sayStock = 0;
     private int serverReceivedCount = 0;
-    private final int totalDataToTransmit = 15; // 调高总量以便完整观察慢启动与线性增长
+    private final int totalDataToTransmit = 15;
 
     private TcpState currentTcpState = TcpState.CLOSED;
 
     // 🔥 流量控制与拥塞控制核心变量
-    private int rwnd = 3;                     // 接收端通告窗口 (Receiver Window)
-    private int cwnd = 1;                     // 拥塞窗口 (Congestion Window), 初始为1
-    private int ssthresh = 8;                 // 慢启动阈值 (Slow Start Threshold), 初始为8
+    private int rwnd = 3;
+    private int cwnd = 1;
+    private int ssthresh = 8;
 
-    private int serverBufferCount = 0;       // 服务器接收缓冲区堆积量
-    private final int SERVER_BUFFER_MAX = 5; // 服务器缓冲区上限
-    private long lastServerConsumeTime = 0;  // 服务器上次解包时间
-    private int serverDecodeDelay = 1200;    // 服务器解包延迟 (1200ms)
+    private int serverBufferCount = 0;
+    private final int SERVER_BUFFER_MAX = 5;
+    private long lastServerConsumeTime = 0;
+    private int serverDecodeDelay = 1200;
 
     // 瓶颈物理参数
-    private final int WAN_BOTTLE_NECK_MAX = 2; // 公网区域最大同时容纳2辆车，超过则进入排队
+    private final int WAN_BOTTLE_NECK_MAX = 2;
 
     private int inFlightCount = 0;
     private long stateTimerWatchdog = 0;
-    private final long RTO_TIMEOUT = 4000;   // 4秒超时重传
+    private final long RTO_TIMEOUT = 4000;
     private int nextSeqNum = 100;
 
     // 零窗口探测
@@ -81,6 +83,8 @@ public class DataCartFactoryGame extends JFrame {
     private JTextArea txtHexDisplay;
     private JProgressBar prgNetwork;
     private JPanel shopPanel;
+
+    private int packetsAckedSinceLastIncrease = 0;
 
     public DataCartFactoryGame() {
         setTitle("异星数据工厂 v5.3 终极 TCP 拥塞控制(慢启动/拥塞避免)与公网物理排队版");
@@ -122,6 +126,10 @@ public class DataCartFactoryGame extends JFrame {
         bottomPanel.add(new JScrollPane(txtHexDisplay), BorderLayout.CENTER);
         add(bottomPanel, BorderLayout.SOUTH);
 
+        JButton resetButton = new JButton("🔄 重置会话");
+        resetButton.addActionListener(e -> resetTcpSession());
+        bottomPanel.add(resetButton, BorderLayout.SOUTH);
+
         canvas.addMouseListener(new MouseAdapter() {
             @Override
             public void mousePressed(MouseEvent e) {
@@ -160,17 +168,15 @@ public class DataCartFactoryGame extends JFrame {
     }
 
     private void buildShopUI() {
-        // 🔥 修复：确保 group 变量在方法最顶部声明，以便下方所有循环都能正确访问
         ButtonGroup group = new ButtonGroup();
 
-        // 增加升级服务器解包效率的操作按钮
-        JButton btnUpgradeServer = new JButton("🚀 超频接收端 CPU [清理rwnd] (花费 $400)");
+        JButton btnUpgradeServer = new JButton("🚀 超频接收端 CPU (加快解包速度) 花费 $400");
         btnUpgradeServer.setAlignmentX(Component.CENTER_ALIGNMENT);
         btnUpgradeServer.addActionListener(e -> {
             if (funds >= PRICE_UPGRADE_SERVER && serverDecodeDelay > 200) {
                 funds -= PRICE_UPGRADE_SERVER;
                 serverDecodeDelay = Math.max(200, serverDecodeDelay - 300);
-                txtHexDisplay.setText("【⚡ 硬件升级】: 服务器超频成功！应用层处理延迟降至 " + serverDecodeDelay + "ms！\n接收窗口(rwnd)将能更快腾出空位！");
+                txtHexDisplay.setText("【⚡ 硬件升级】: 服务器超频成功！应用层处理延迟降至 " + serverDecodeDelay + "ms！");
                 updateTopLabel();
             }
         });
@@ -205,7 +211,7 @@ public class DataCartFactoryGame extends JFrame {
         for (int r = 0; r < MAP_ROWS; r++) {
             for (int c = 0; c < MAP_COLS; c++) {
                 buildingLayout[r][c] = "NONE";
-                if (c == 13 || c == 24) mapLayout[r][c] = 9; // 公网边界黑色防护墙
+                if (c == 13 || c == 24) mapLayout[r][c] = 9;
             }
         }
 
@@ -268,35 +274,47 @@ public class DataCartFactoryGame extends JFrame {
             serverBufferCount--;
             serverReceivedCount++;
             lastServerConsumeTime = now;
-            rwnd = SERVER_BUFFER_MAX - serverBufferCount; // 动态刷新通告接收窗口
+            rwnd = SERVER_BUFFER_MAX - serverBufferCount;
             updateTopLabel();
         }
 
-        // 🔥 拥塞控制：ARQ 超时重传主控扫描
+        // 🔥 拥塞控制：ARQ 超时重传主控扫描（使用 removeIf 安全删除）
         if (currentTcpState == TcpState.ESTABLISHED) {
+            // 先收集需要删除的已确认任务
+            List<RetransmissionTask> toRemoveTimers = new ArrayList<>();
             for (RetransmissionTask task : activeTimers) {
                 if (task.isAcked) {
-                    activeTimers.remove(task);
-                } else if (now - task.sendTime > RTO_TIMEOUT) {
+                    toRemoveTimers.add(task);
+                }
+            }
+            activeTimers.removeAll(toRemoveTimers);
+
+            // 处理超时重传
+            for (RetransmissionTask task : activeTimers) {
+                if (!task.isAcked && (now - task.sendTime > RTO_TIMEOUT)) {
                     task.retryCount++;
+                    if (task.retryCount >= 5) {
+                        txtHexDisplay.setText(String.format("【💀 连接崩溃】: 数据包 SEQ=%d 重传 %d 次仍然失败，网络瘫痪！重置会话。", task.seqNum, task.retryCount));
+                        resetTcpSession();
+                        return;
+                    }
                     task.sendTime = now;
 
-                    // 💥 触发超时重传算法的核心惩罚：网路极度拥堵！
-                    ssthresh = Math.max(2, cwnd / 2); // 慢启动阈值砍半
-                    cwnd = 1;                        // 拥塞窗口瞬间跌落深渊，归为1！
+                    ssthresh = Math.max(2, cwnd / 2);
+                    cwnd = 1;
+                    packetsAckedSinceLastIncrease = 0;
 
-                    // 重新发射被丢弃的业务车
                     DataCart retransmitCart = new DataCart(pcFactory.x, pcFactory.y, "DATA", task.seqNum);
                     pendingDataCarts.add(retransmitCart);
+                    inFlightCount++;
 
-                    txtHexDisplay.setText(String.format("【💥 TCP 拥塞控制机制严重警报】:\n业务包 [SEQ: %d] 在公网瓶颈堆积坠毁(超时)！\n🚨 算法介入执行最高惩罚：ssthresh骤降至 %d，cwnd重设为 1！全线熄火，重新进入慢启动试探！",
-                            task.seqNum, ssthresh));
+                    txtHexDisplay.setText(String.format("【💥 TCP 拥塞控制机制严重警报】:\n业务包 [SEQ: %d] 超时！\n惩罚：ssthresh=%d, cwnd=1", task.seqNum, ssthresh));
                     updateTopLabel();
                 }
             }
         }
 
-        // 统计当前公网物理带宽的占有量 (13到24列之间)
+        // 统计当前公网物理带宽的占有量
         int currentCartsInWan = 0;
         for (DataCart c : dataCarts) {
             int currentCol = (int)(c.x / TILE_SIZE);
@@ -320,21 +338,18 @@ public class DataCartFactoryGame extends JFrame {
                 }
             }
             else if (currentTcpState == TcpState.ESTABLISHED) {
-                // 🔥 决定弹射上限的终极公式：Effective Window = min(cwnd, rwnd)
                 int effectiveWindow = Math.min(cwnd, rwnd);
+                while (effectiveWindow > 0 && inFlightCount < effectiveWindow
+                        && helloStock >= 2 && sayStock >= 1
+                        && serverReceivedCount + serverBufferCount < totalDataToTransmit) {
+                    helloStock -= 2;
+                    sayStock -= 1;
+                    inFlightCount++;
 
-                if (effectiveWindow > 0) {
-                    if (helloStock >= 2 && sayStock >= 1 && serverReceivedCount + serverBufferCount < totalDataToTransmit && inFlightCount < effectiveWindow) {
-                        helloStock -= 2; sayStock -= 1;
-                        inFlightCount++;
-
-                        int currentSeq = nextSeqNum++;
-                        activeTimers.add(new RetransmissionTask(currentSeq, now));
-                        pendingDataCarts.add(new DataCart(pcFactory.x, pcFactory.y, "DATA", currentSeq));
-                    }
+                    int currentSeq = nextSeqNum++;
+                    activeTimers.add(new RetransmissionTask(currentSeq, now));
+                    pendingDataCarts.add(new DataCart(pcFactory.x, pcFactory.y, "DATA", currentSeq));
                 }
-
-                // 完工及断开逻辑
                 if (serverReceivedCount >= totalDataToTransmit && inFlightCount == 0 && activeTimers.isEmpty() && serverBufferCount == 0) {
                     currentTcpState = TcpState.FIN_WAIT_1;
                     stateTimerWatchdog = now;
@@ -342,7 +357,8 @@ public class DataCartFactoryGame extends JFrame {
                     txtHexDisplay.setText("【🛑 生产达成】：定量契约履行完毕，弹射 [FIN] 释放网路空间。");
                 }
             }
-            lastResourceTick = now; updateTopLabel();
+            lastResourceTick = now;
+            updateTopLabel();
         }
 
         // 零窗口探测
@@ -355,27 +371,26 @@ public class DataCartFactoryGame extends JFrame {
         }
 
         // 2. 原矿车移动
-        for (OreCart c : oreCarts) {
+        oreCarts.removeIf(c -> {
             c.update();
             if (c.isArrived) {
                 if (c.oreType.equals("HELLO")) helloStock++; else sayStock++;
-                oreCarts.remove(c);
+                return true;
             }
-        }
+            return false;
+        });
 
-        // 3. 数据长车移动与物理瓶颈拥堵判定
+        // 3. 数据长车移动（收集待删除元素）
+        List<DataCart> toRemove = new ArrayList<>();
         for (DataCart cart : dataCarts) {
             int currentCol = (int)(cart.x / TILE_SIZE);
 
-            // 🔥 公网物理排队拥堵控制机制
             if (currentCol >= 13 && currentCol <= 24 && !cart.isReturnTrip) {
-                // 如果当前公网已经堆积了太多小车，且该小车不是最前面的小车，强行锁死其 timer 造成排队滞留！
                 if (currentCartsInWan > WAN_BOTTLE_NECK_MAX && !isForemostCartInWan(cart)) {
                     cart.waitInQueueTimer++;
-                    if (cart.waitInQueueTimer > 120) { // 排队超时（大概4秒），承受不住过高拥堵，直接坠毁！
+                    if (cart.waitInQueueTimer > 120) {
                         cart.isDropped = true;
                     }
-                    // 跳过位置更新，使其原地卡死，实现物理传送带排队奇观
                     continue;
                 }
             }
@@ -386,15 +401,17 @@ public class DataCartFactoryGame extends JFrame {
                     inFlightCount = Math.max(0, inFlightCount - 1);
                 } else {
                     resetTcpSession();
+                    return;
                 }
-                dataCarts.remove(cart);
+                toRemove.add(cart);
                 updateTopLabel();
             } else if (cart.isArrived) {
                 handleCartArrival(cart);
-                dataCarts.remove(cart);
+                toRemove.add(cart);
                 updateTopLabel();
             }
         }
+        dataCarts.removeAll(toRemove);
 
         if (!pendingDataCarts.isEmpty()) {
             dataCarts.addAll(pendingDataCarts);
@@ -405,7 +422,6 @@ public class DataCartFactoryGame extends JFrame {
         canvas.repaint();
     }
 
-    // 辅助方法：判定是否是公网里走在最前面的先锋车
     private boolean isForemostCartInWan(DataCart target) {
         double maxProgressX = 0;
         DataCart foremost = null;
@@ -433,8 +449,9 @@ public class DataCartFactoryGame extends JFrame {
             else if (cart.cartType.equals("ACK_PC")) {
                 if (currentTcpState == TcpState.SYN_SENT) {
                     currentTcpState = TcpState.ESTABLISHED;
-                    cwnd = 1; ssthresh = 8; // 初始化拥塞控制参数
-                    txtHexDisplay.setText("【🤝 三次握手完全建立！】: 初始化拥塞算法状态 -> cwnd=1, ssthresh=8。业务线进入慢启动阶段！");
+                    cwnd = 1; ssthresh = 8;
+                    packetsAckedSinceLastIncrease = 0;
+                    txtHexDisplay.setText("【🤝 三次握手完全建立！】: cwnd=1, ssthresh=8");
                 }
             }
             else if (cart.cartType.equals("DATA")) {
@@ -450,8 +467,7 @@ public class DataCartFactoryGame extends JFrame {
 
                     funds += 500;
                 } else {
-                    // 溢出直接丢弃（不发回执），等待发送端重传
-                    txtHexDisplay.setText("【🚨 接收端缓冲区溢出丢包】: 接收仓库打满，包 [SEQ: " + cart.sequenceNumber + "] 坠毁！");
+                    txtHexDisplay.setText("【🚨 接收端缓冲区溢出丢包】: 包 [SEQ: " + cart.sequenceNumber + "] 坠毁！");
                 }
             }
             else if (cart.cartType.equals("ZWP")) {
@@ -474,25 +490,27 @@ public class DataCartFactoryGame extends JFrame {
                 pendingDataCarts.add(finalAck); stateTimerWatchdog = now;
             }
             else if (cart.cartType.equals("DATA_ACK")) {
-                this.rwnd = cart.advertisedWindow; // 同步接收通告窗口
+                this.rwnd = cart.advertisedWindow;
 
-                // 🔥 拥塞控制核心算法：成功接收确认回执后的滑窗演变机制
-                if (cart.sequenceNumber > 0) { // 排除探测车
+                if (cart.sequenceNumber > 0) {
                     if (cwnd < ssthresh) {
-                        // 1. 慢启动阶段 (Slow Start): 指数膨胀
                         cwnd++;
-                        txtHexDisplay.setText(String.format("【📈 TCP 慢启动运作中】: 收到回执，拥塞窗口 [cwnd] 指数膨胀至: %d (阈值 ssthresh: %d)", cwnd, ssthresh));
+                        txtHexDisplay.setText(String.format("【📈 慢启动】: cwnd=%d (阈值=%d)", cwnd, ssthresh));
                     } else {
-                        // 2. 拥塞避免阶段 (Congestion Avoidance): 线性缓慢爬升 (每轮全收到才+1，这里用轮次均摊近似模拟)
-                        if (Math.random() < (1.0 / cwnd)) {
+                        packetsAckedSinceLastIncrease++;
+                        if (packetsAckedSinceLastIncrease >= cwnd) {
                             cwnd++;
+                            packetsAckedSinceLastIncrease = 0;
+                            txtHexDisplay.setText(String.format("【🐌 拥塞避免】: cwnd=%d", cwnd));
                         }
-                        txtHexDisplay.setText(String.format("【🐌 TCP 拥塞避免运作中】: 越过阈值，窗口 [cwnd] 进入高空稳健线性爬升: %d", cwnd));
                     }
                 }
 
                 for (RetransmissionTask task : activeTimers) {
-                    if (task.seqNum == cart.sequenceNumber) task.isAcked = true;
+                    if (task.seqNum == cart.sequenceNumber) {
+                        task.isAcked = true;
+                        break;
+                    }
                 }
                 if (cart.sequenceNumber > 0) inFlightCount = Math.max(0, inFlightCount - 1);
             }
@@ -505,10 +523,14 @@ public class DataCartFactoryGame extends JFrame {
                 currentTcpState = TcpState.TIME_WAIT;
                 DataCart lastAck = new DataCart(pcFactory.x, pcFactory.y, "LAST_ACK_PC", 0);
                 pendingDataCarts.add(lastAck);
-                new Thread(() -> {
-                    try { Thread.sleep(1500); } catch (InterruptedException ignored) {}
-                    SwingUtilities.invokeLater(() -> { if (currentTcpState == TcpState.TIME_WAIT) resetTcpSession(); });
-                }).start();
+                Timer timer = new Timer(1500, e -> {
+                    if (currentTcpState == TcpState.TIME_WAIT) {
+                        resetTcpSession();
+                        JOptionPane.showMessageDialog(this, "🎉 数据传输完成！会话已正常关闭。", "胜利", JOptionPane.INFORMATION_MESSAGE);
+                    }
+                });
+                timer.setRepeats(false);
+                timer.start();
             }
         }
     }
@@ -517,15 +539,17 @@ public class DataCartFactoryGame extends JFrame {
         currentTcpState = TcpState.CLOSED;
         serverReceivedCount = 0; inFlightCount = 0; serverBufferCount = 0;
         cwnd = 1; ssthresh = 8; rwnd = 3;
+        packetsAckedSinceLastIncrease = 0;
         nextSeqNum = 100;
         dataCarts.clear(); pendingDataCarts.clear(); activeTimers.clear();
         updateTopLabel();
+        canvas.repaint();
     }
 
     private void updateTopLabel() {
         int effectiveWin = Math.min(cwnd, rwnd);
         StringBuilder sb = new StringBuilder();
-        sb.append(String.format("💰 资金: %d | 🌐 状态: [%s] | 🚩 cwnd: %d | 🎯 ssthresh: %d | 📥 rwnd: %d | 🎛️ 有效滑窗[min]: %d | 📥 仓储: %d/%d | 📦 达成: %d/%d",
+        sb.append(String.format("💰 资金: %d | 🌐 状态: [%s] | 🚩 cwnd: %d | 🎯 ssthresh: %d | 📥 rwnd: %d | 🎛️ 有效滑窗: %d | 📥 仓储: %d/%d | 📦 达成: %d/%d",
                 funds, currentTcpState.toString(), cwnd, ssthresh, rwnd, effectiveWin, serverBufferCount, SERVER_BUFFER_MAX, serverReceivedCount, totalDataToTransmit));
         lblDashboard.setText(sb.toString());
     }
@@ -554,7 +578,7 @@ public class DataCartFactoryGame extends JFrame {
         String cartType; String currentLayerStatus = "";
         int sequenceNumber;
         int advertisedWindow = 3;
-        int waitInQueueTimer = 0; // 如果在公网瓶颈被卡住，用于累加排队时间
+        int waitInQueueTimer = 0;
 
         boolean c_Payload=false, c_SP=false, c_DP=false, c_SEQ=false, c_ACK=false, c_CTL=false, c_WIN=false, c_CHK=false;
         boolean hasTcp=false, hasIp=false, hasLlc=false, hasFcs=false, isRouterTranslated=false;
@@ -652,9 +676,17 @@ public class DataCartFactoryGame extends JFrame {
                 }
             }
 
-            // 渲染网关公网物理限制区高亮提示（13到24列）
             g2.setColor(new Color(255, 100, 0, 15));
             g2.fillRect(13 * TILE_SIZE, 0, (24 - 13 + 1) * TILE_SIZE, MAP_ROWS * TILE_SIZE);
+
+            int wanCarCount = 0;
+            for (DataCart c : dataCarts) {
+                int col = (int)(c.x / TILE_SIZE);
+                if (col >= 13 && col <= 24 && !c.isReturnTrip) wanCarCount++;
+            }
+            g2.setColor(Color.WHITE);
+            g2.setFont(new Font("微软雅黑", Font.BOLD, 14));
+            g2.drawString("🚦 公网车辆: " + wanCarCount + "/" + WAN_BOTTLE_NECK_MAX, 14 * TILE_SIZE, 30);
 
             for (int r = 0; r < MAP_ROWS; r++) {
                 for (int c = 0; c < MAP_COLS; c++) {
@@ -683,7 +715,7 @@ public class DataCartFactoryGame extends JFrame {
             for (DataCart cart : dataCarts) {
                 int cx = (int)cart.x; int cy = (int)cart.y; int bx = cx - 22;
 
-                if (cart.waitInQueueTimer > 0) g2.setColor(Color.RED); // 排队车辆高亮红色警报
+                if (cart.waitInQueueTimer > 0) g2.setColor(Color.RED);
                 else if (cart.cartType.equals("ZWP")) g2.setColor(Color.YELLOW);
                 else if (cart.cartType.startsWith("SYN")) g2.setColor(Color.CYAN);
                 else if (cart.cartType.startsWith("FIN")) g2.setColor(Color.PINK);
