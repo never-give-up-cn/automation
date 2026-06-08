@@ -72,9 +72,9 @@ public class DataCartFactoryGame extends JFrame {
     private long lastServerConsumeTime = 0;
     private int serverDecodeDelay = 600;
 
-    private final int WAN_BOTTLE_NECK_MAX = 3;
+    private final int WAN_BOTTLE_NECK_MAX = 10;
     private long stateTimerWatchdog = 0;
-    private final long RTO_TIMEOUT = 5000;   // 恢复正常超时
+    private final long RTO_TIMEOUT = 50000;   // 恢复正常超时
     private int nextSeqNum = 100;
     private long lastProbeTime = 0;
     private final long PROBE_INTERVAL = 3000;
@@ -834,12 +834,18 @@ public class DataCartFactoryGame extends JFrame {
                     || type.equals("DNS_QUERY") || type.equals("DNS_RESPONSE");
         }
 
+        // 在 DataCart.update() 方法中，修改如下：
         public void update() {
             if (timer > 0) { timer--; return; }
             Point target = isReturnTrip ? pcFactory : findBuildingCoords("RX_ST");
             if (target == null) target = pcFactory;
 
             if (!isReturnTrip) {
+                // 如果已经达到最终交付阶段（stage >= 26），直接标记到达
+                if (stage >= 26) {
+                    isArrived = true;
+                    return;
+                }
                 Point machine = findTargetMachine(stage);
                 if (machine != null) target = machine;
                 else {
@@ -855,7 +861,7 @@ public class DataCartFactoryGame extends JFrame {
                 x = target.x; y = target.y;
                 if (!isReturnTrip) {
                     processStageCraft();
-                    if (stage < 27) {
+                    if (stage < 26) {
                         timer = 1;
                         stage++;
                         appendToConsole(String.format("【🚚 数据包】: %s 到达 %s，下一站 stage=%d",
