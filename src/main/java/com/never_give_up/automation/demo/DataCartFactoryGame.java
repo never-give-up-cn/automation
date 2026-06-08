@@ -169,7 +169,7 @@ public class DataCartFactoryGame extends JFrame {
         // ARP 显示面板
         txtArpDisplay = new JTextArea(8, 30);
         txtArpDisplay.setEditable(false);
-        txtArpDisplay.setFont(new Font("Consolas", Font.PLAIN, 11));
+        txtArpDisplay.setFont(new Font("微软雅黑", Font.PLAIN, 11));
         txtArpDisplay.setBackground(new Color(20, 25, 35));
         txtArpDisplay.setForeground(new Color(100, 200, 255));
         JScrollPane arpScroll = new JScrollPane(txtArpDisplay);
@@ -178,7 +178,7 @@ public class DataCartFactoryGame extends JFrame {
         // NAT 显示面板
         txtNatDisplay = new JTextArea(6, 30);
         txtNatDisplay.setEditable(false);
-        txtNatDisplay.setFont(new Font("Consolas", Font.PLAIN, 11));
+        txtNatDisplay.setFont(new Font("微软雅黑", Font.PLAIN, 11));
         txtNatDisplay.setBackground(new Color(20, 25, 35));
         txtNatDisplay.setForeground(new Color(255, 200, 100));
         JScrollPane natScroll = new JScrollPane(txtNatDisplay);
@@ -193,7 +193,7 @@ public class DataCartFactoryGame extends JFrame {
         canvas = new GameCanvas();
         add(canvas, BorderLayout.CENTER);
 
-        // 底部控制台
+        // 底部控制台 - 修复中文乱码
         JPanel bottomPanel = new JPanel(new BorderLayout(5, 5));
         bottomPanel.setBorder(BorderFactory.createTitledBorder("📟 协议分析控制台"));
         prgNetwork = new JProgressBar(0, 100);
@@ -204,16 +204,25 @@ public class DataCartFactoryGame extends JFrame {
         txtHexDisplay.setEditable(false);
         txtHexDisplay.setBackground(new Color(10, 12, 16));
         txtHexDisplay.setForeground(new Color(50, 255, 120));
-        txtHexDisplay.setFont(new Font("Consolas", Font.PLAIN, 11));
-        bottomPanel.add(new JScrollPane(txtHexDisplay), BorderLayout.CENTER);
+        // 🔥 修复中文乱码：使用支持中文的字体，并设置默认字体
+        Font chineseFont = new Font("微软雅黑", Font.PLAIN, 12);
+        txtHexDisplay.setFont(chineseFont);
+        // 确保 TextArea 使用正确的字符编码
+        txtHexDisplay.putClientProperty("JTextArea.font", chineseFont);
+        JScrollPane scrollPane = new JScrollPane(txtHexDisplay);
+        scrollPane.getViewport().setBackground(new Color(10, 12, 16));
+        bottomPanel.add(scrollPane, BorderLayout.CENTER);
 
         JPanel btnPanel = new JPanel(new FlowLayout());
         JButton resetButton = new JButton("🔄 重置会话");
         resetButton.addActionListener(e -> resetTcpSession());
         JButton clearArpButton = new JButton("🗑️ 清空 ARP 缓存");
         clearArpButton.addActionListener(e -> { arpCache.clear(); updateArpAndNatDisplay(); });
+        JButton clearConsoleButton = new JButton("🗑️ 清空控制台");
+        clearConsoleButton.addActionListener(e -> txtHexDisplay.setText(""));
         btnPanel.add(resetButton);
         btnPanel.add(clearArpButton);
+        btnPanel.add(clearConsoleButton);
         bottomPanel.add(btnPanel, BorderLayout.SOUTH);
         add(bottomPanel, BorderLayout.SOUTH);
 
@@ -257,6 +266,15 @@ public class DataCartFactoryGame extends JFrame {
         new Timer(1000, e -> updateArpAndNatDisplay()).start();
     }
 
+    // 控制台输出方法（自动换行）
+    private void appendToConsole(String text) {
+        SwingUtilities.invokeLater(() -> {
+            txtHexDisplay.append(text + "\n");
+            // 自动滚动到底部
+            txtHexDisplay.setCaretPosition(txtHexDisplay.getDocument().getLength());
+        });
+    }
+
     private void initArpCache() {
         arpCache.put("192.168.1.1", new ArpEntry("192.168.1.1", "00:1A:2B:3C:4D:5E"));
         arpCache.put("192.168.1.2", new ArpEntry("192.168.1.2", "00:1A:2B:3C:4D:5F"));
@@ -288,7 +306,7 @@ public class DataCartFactoryGame extends JFrame {
             if (funds >= PRICE_UPGRADE_SERVER && serverDecodeDelay > 200) {
                 funds -= PRICE_UPGRADE_SERVER;
                 serverDecodeDelay = Math.max(200, serverDecodeDelay - 300);
-                txtHexDisplay.setText("【⚡ 硬件升级】: 服务器超频成功！解包延迟降至 " + serverDecodeDelay + "ms");
+                appendToConsole("【⚡ 硬件升级】: 服务器超频成功！解包延迟降至 " + serverDecodeDelay + "ms");
                 updateTopLabel();
             }
         });
@@ -383,20 +401,20 @@ public class DataCartFactoryGame extends JFrame {
         DataCart syn = new DataCart(pcFactory.x, pcFactory.y, "SYN", 0);
         syn.sequenceNumber = 100;
         pendingDataCarts.add(syn);
-        txtHexDisplay.setText("【🤝 三次握手开始】: 发送 SYN (seq=100)，同时触发 ARP 解析目标 MAC");
+        appendToConsole("【🤝 三次握手开始】: 发送 SYN (seq=100)，同时触发 ARP 解析目标 MAC");
         updateTopLabel();
     }
 
     private void performArpResolution(String targetIp) {
         if (!arpCache.containsKey(targetIp)) {
-            txtHexDisplay.append("\n【🔍 ARP 请求】: 谁拥有 " + targetIp + "？广播发送 ARP 请求");
+            appendToConsole("【🔍 ARP 请求】: 谁拥有 " + targetIp + "？广播发送 ARP 请求");
             String mac = String.format("00:1A:2B:%02X:%02X:%02X",
                     new Random().nextInt(256), new Random().nextInt(256), new Random().nextInt(256));
             arpCache.put(targetIp, new ArpEntry(targetIp, mac));
-            txtHexDisplay.append("\n【📥 ARP 响应】: " + targetIp + " 的 MAC 地址是 " + mac);
+            appendToConsole("【📥 ARP 响应】: " + targetIp + " 的 MAC 地址是 " + mac);
             updateArpAndNatDisplay();
         } else {
-            txtHexDisplay.append("\n【✅ ARP 缓存命中】: " + targetIp + " → " + arpCache.get(targetIp).macAddress);
+            appendToConsole("【✅ ARP 缓存命中】: " + targetIp + " → " + arpCache.get(targetIp).macAddress);
         }
     }
 
@@ -407,7 +425,7 @@ public class DataCartFactoryGame extends JFrame {
 
         if (currentTcpState != TcpState.CLOSED && currentTcpState != TcpState.ESTABLISHED) {
             if (now - stateTimerWatchdog > 20000) {
-                txtHexDisplay.setText("【⏰ 超时】: 连接超时，重置会话");
+                appendToConsole("【⏰ 超时】: 连接超时，重置会话");
                 resetTcpSession();
             }
         }
@@ -431,7 +449,7 @@ public class DataCartFactoryGame extends JFrame {
                 if (!task.isAcked && (now - task.sendTime > RTO_TIMEOUT)) {
                     task.retryCount++;
                     if (task.retryCount >= 5) {
-                        txtHexDisplay.setText(String.format("【💀 连接崩溃】: SEQ=%d 重传失败", task.seqNum));
+                        appendToConsole(String.format("【💀 连接崩溃】: SEQ=%d 重传失败", task.seqNum));
                         resetTcpSession();
                         return;
                     }
@@ -441,7 +459,7 @@ public class DataCartFactoryGame extends JFrame {
                     packetsAckedSinceLastIncrease = 0;
                     pendingDataCarts.add(new DataCart(pcFactory.x, pcFactory.y, "DATA", task.seqNum));
                     inFlightCount++;
-                    txtHexDisplay.setText(String.format("【⚠️ 超时重传】: SEQ=%d, ssthresh=%d, cwnd=1", task.seqNum, ssthresh));
+                    appendToConsole(String.format("【⚠️ 超时重传】: SEQ=%d, ssthresh=%d, cwnd=1", task.seqNum, ssthresh));
                     updateTopLabel();
                 }
             }
@@ -480,7 +498,7 @@ public class DataCartFactoryGame extends JFrame {
                     currentTcpState = TcpState.FIN_WAIT_1;
                     stateTimerWatchdog = now;
                     pendingDataCarts.add(new DataCart(pcFactory.x, pcFactory.y, "FIN_PC", 0));
-                    txtHexDisplay.setText("【🏁 数据传输完成】: 发送 FIN，开始四次挥手");
+                    appendToConsole("【🏁 数据传输完成】: 发送 FIN，开始四次挥手");
                 }
             }
             lastResourceTick = now;
@@ -491,7 +509,7 @@ public class DataCartFactoryGame extends JFrame {
             if (now - lastProbeTime >= PROBE_INTERVAL) {
                 lastProbeTime = now;
                 pendingDataCarts.add(new DataCart(pcFactory.x, pcFactory.y, "ZWP", 0));
-                txtHexDisplay.setText("【🔍 零窗口探测】: 发送 ZWP 探测包");
+                appendToConsole("【🔍 零窗口探测】: 发送 ZWP 探测包");
             }
         }
 
@@ -578,7 +596,7 @@ public class DataCartFactoryGame extends JFrame {
         }
 
         if (fragment.isLastFragment) {
-            txtHexDisplay.append(String.format("\n【🔧 IP 重组】: 数据包 ID=%d 所有分片已收齐，开始重组", packetId));
+            appendToConsole(String.format("【🔧 IP 重组】: 数据包 ID=%d 所有分片已收齐，开始重组", packetId));
             fragmentBuffer.remove(packetId);
             return true;
         }
@@ -591,7 +609,7 @@ public class DataCartFactoryGame extends JFrame {
                 if (entry.publicPort == cart.natPort) {
                     cart.destIp = entry.privateIp;
                     cart.destPort = entry.privatePort;
-                    txtHexDisplay.append(String.format("\n【🌍 NAT 入向转换】: %s:%d → %s:%d",
+                    appendToConsole(String.format("【🌍 NAT 入向转换】: %s:%d → %s:%d",
                             entry.publicIp, entry.publicPort, entry.privateIp, entry.privatePort));
                     return;
                 }
@@ -607,7 +625,7 @@ public class DataCartFactoryGame extends JFrame {
             cart.srcIp = publicIp;
             cart.srcPort = publicPort;
             cart.hasNat = true;
-            txtHexDisplay.append(String.format("\n【🌍 NAT 出向转换】: %s:%d → %s:%d",
+            appendToConsole(String.format("【🌍 NAT 出向转换】: %s:%d → %s:%d",
                     privateIp, privatePort, publicIp, publicPort));
             updateArpAndNatDisplay();
         }
@@ -626,7 +644,7 @@ public class DataCartFactoryGame extends JFrame {
                     synAck.ackNumber = cart.sequenceNumber + 1;
                     synAck.sequenceNumber = 200;
                     pendingDataCarts.add(synAck);
-                    txtHexDisplay.setText("【🤝 三次握手】: 收到 SYN，回复 SYN-ACK (seq=200, ack=" + (cart.sequenceNumber+1) + ")");
+                    appendToConsole("【🤝 三次握手】: 收到 SYN，回复 SYN-ACK (seq=200, ack=" + (cart.sequenceNumber+1) + ")");
                     stateTimerWatchdog = now;
                     break;
 
@@ -635,7 +653,7 @@ public class DataCartFactoryGame extends JFrame {
                         currentTcpState = TcpState.ESTABLISHED;
                         cwnd = 1; ssthresh = 8;
                         packetsAckedSinceLastIncrease = 0;
-                        txtHexDisplay.setText("【🤝 三次握手完成】: 收到 ACK，连接建立！cwnd=1, ssthresh=8");
+                        appendToConsole("【🤝 三次握手完成】: 收到 ACK，连接建立！cwnd=1, ssthresh=8");
                     }
                     break;
 
@@ -645,7 +663,7 @@ public class DataCartFactoryGame extends JFrame {
                         for (DataCart frag : fragments) {
                             pendingDataCarts.add(frag);
                         }
-                        txtHexDisplay.append(String.format("\n【✂️ IP 分片】: 数据包 SEQ=%d 被分片为 %d 个片段",
+                        appendToConsole(String.format("【✂️ IP 分片】: 数据包 SEQ=%d 被分片为 %d 个片段",
                                 cart.sequenceNumber, fragments.size()));
                         return;
                     }
@@ -669,10 +687,10 @@ public class DataCartFactoryGame extends JFrame {
                         dataAck.isReturnTrip = true;
                         pendingDataCarts.add(dataAck);
                         funds += 500;
-                        txtHexDisplay.append(String.format("\n【📦 数据交付】: SEQ=%d 已接收，回复 ACK (rwnd=%d)",
+                        appendToConsole(String.format("【📦 数据交付】: SEQ=%d 已接收，回复 ACK (rwnd=%d)",
                                 cart.sequenceNumber, rwnd));
                     } else {
-                        txtHexDisplay.append(String.format("\n【💥 缓冲区溢出】: SEQ=%d 丢失", cart.sequenceNumber));
+                        appendToConsole(String.format("【💥 缓冲区溢出】: SEQ=%d 丢失", cart.sequenceNumber));
                     }
                     break;
 
@@ -681,7 +699,7 @@ public class DataCartFactoryGame extends JFrame {
                     probeAck.advertisedWindow = SERVER_BUFFER_MAX - serverBufferCount;
                     probeAck.isReturnTrip = true;
                     pendingDataCarts.add(probeAck);
-                    txtHexDisplay.setText("【🔍 零窗口探测响应】: 当前 rwnd=" + (SERVER_BUFFER_MAX - serverBufferCount));
+                    appendToConsole("【🔍 零窗口探测响应】: 当前 rwnd=" + (SERVER_BUFFER_MAX - serverBufferCount));
                     break;
 
                 case "FIN_PC":
@@ -691,7 +709,7 @@ public class DataCartFactoryGame extends JFrame {
                     DataCart srvFin = new DataCart(serverPos.x, serverPos.y, "FIN_SRV", 0);
                     srvFin.isReturnTrip = true;
                     pendingDataCarts.add(srvFin);
-                    txtHexDisplay.setText("【👋 四次挥手】: 收到 FIN，回复 FIN-ACK，发送 FIN");
+                    appendToConsole("【👋 四次挥手】: 收到 FIN，回复 FIN-ACK，发送 FIN");
                     stateTimerWatchdog = now;
                     break;
             }
@@ -701,7 +719,7 @@ public class DataCartFactoryGame extends JFrame {
                     DataCart finalAck = new DataCart(pcFactory.x, pcFactory.y, "ACK_PC", 0);
                     finalAck.ackNumber = cart.sequenceNumber + 1;
                     pendingDataCarts.add(finalAck);
-                    txtHexDisplay.setText("【🤝 三次握手】: 收到 SYN-ACK，回复 ACK (ack=" + (cart.sequenceNumber+1) + ")");
+                    appendToConsole("【🤝 三次握手】: 收到 SYN-ACK，回复 ACK (ack=" + (cart.sequenceNumber+1) + ")");
                     stateTimerWatchdog = now;
                     break;
 
@@ -710,13 +728,13 @@ public class DataCartFactoryGame extends JFrame {
                     if (cart.sequenceNumber > 0) {
                         if (cwnd < ssthresh) {
                             cwnd++;
-                            txtHexDisplay.setText(String.format("【📈 慢启动】: cwnd=%d, ssthresh=%d", cwnd, ssthresh));
+                            appendToConsole(String.format("【📈 慢启动】: cwnd=%d, ssthresh=%d", cwnd, ssthresh));
                         } else {
                             packetsAckedSinceLastIncrease++;
                             if (packetsAckedSinceLastIncrease >= cwnd) {
                                 cwnd++;
                                 packetsAckedSinceLastIncrease = 0;
-                                txtHexDisplay.setText(String.format("【🐌 拥塞避免】: cwnd=%d", cwnd));
+                                appendToConsole(String.format("【🐌 拥塞避免】: cwnd=%d", cwnd));
                             }
                         }
                     }
@@ -732,7 +750,7 @@ public class DataCartFactoryGame extends JFrame {
                 case "FIN_ACK_SRV":
                     if (currentTcpState == TcpState.FIN_WAIT_1) {
                         currentTcpState = TcpState.FIN_WAIT_2;
-                        txtHexDisplay.setText("【👋 四次挥手】: 收到 FIN-ACK，进入 FIN-WAIT-2");
+                        appendToConsole("【👋 四次挥手】: 收到 FIN-ACK，进入 FIN-WAIT-2");
                         stateTimerWatchdog = now;
                     }
                     break;
@@ -741,7 +759,7 @@ public class DataCartFactoryGame extends JFrame {
                     currentTcpState = TcpState.TIME_WAIT;
                     DataCart lastAck = new DataCart(pcFactory.x, pcFactory.y, "LAST_ACK_PC", 0);
                     pendingDataCarts.add(lastAck);
-                    txtHexDisplay.setText("【👋 四次挥手】: 收到 FIN，回复 ACK，进入 TIME-WAIT");
+                    appendToConsole("【👋 四次挥手】: 收到 FIN，回复 ACK，进入 TIME-WAIT");
                     Timer timer = new Timer(1500, e -> {
                         if (currentTcpState == TcpState.TIME_WAIT) {
                             resetTcpSession();
@@ -1059,6 +1077,8 @@ public class DataCartFactoryGame extends JFrame {
     }
 
     public static void main(String[] args) {
+        // 设置默认字体和编码
+        System.setProperty("file.encoding", "UTF-8");
         SwingUtilities.invokeLater(() -> new DataCartFactoryGame().setVisible(true));
     }
 }
