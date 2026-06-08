@@ -2,6 +2,7 @@ package com.never_give_up.automation.demo;
 
 import javax.swing.*;
 import javax.swing.Timer;
+import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -88,7 +89,7 @@ public class DataCartFactoryGame extends JFrame {
     private boolean pcIpAssigned = false;
     private String pcIpAddress = null;
     private boolean dhcpInProgress = false;
-    private int dhcpStep = 0; // 0=未开始,1=Discover已发,2=Offer收到,3=Request已发,4=ACK收到完成
+    private int dhcpStep = 0;
 
     private String selectedBuilding = "NONE";
     private final int PRICE_MINER = 30;
@@ -115,20 +116,27 @@ public class DataCartFactoryGame extends JFrame {
     private JTextArea txtNatDisplay;
     private JTextArea txtDnsDisplay;
 
+    // TCP 连接表
+    private JTable tcpConnTable;
+    private DefaultTableModel tableModel;
+
     private int packetsAckedSinceLastIncrease = 0;
     private Set<Integer> sentSeq = ConcurrentHashMap.newKeySet();
 
     public DataCartFactoryGame() {
-        setTitle("🌐 全协议栈网络可视化模拟器 (DHCP + TTL 递减 + 多路由器)");
+        setTitle("🌐 全协议栈网络可视化模拟器 (DHCP + TCP连接表 + TTL递减)");
         setSize(2000, 1050);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         setLayout(new BorderLayout(10, 10));
 
+        stateTimerWatchdog = System.currentTimeMillis();  // 防止开局超时
+
         initMap();
         initArpCache();
         initDnsCache();
 
+        // 顶部仪表盘
         JPanel topPanel = new JPanel(new BorderLayout());
         topPanel.setBorder(BorderFactory.createTitledBorder("📊 协议栈状态仪表盘"));
         lblDashboard = new JLabel("", JLabel.CENTER);
@@ -136,6 +144,7 @@ public class DataCartFactoryGame extends JFrame {
         topPanel.add(lblDashboard, BorderLayout.CENTER);
         add(topPanel, BorderLayout.NORTH);
 
+        // 左侧面板
         JPanel leftPanel = new JPanel(new BorderLayout());
         leftPanel.setPreferredSize(new Dimension(420, 0));
 
@@ -178,9 +187,24 @@ public class DataCartFactoryGame extends JFrame {
         leftPanel.add(mainLeft, BorderLayout.CENTER);
         add(leftPanel, BorderLayout.WEST);
 
+        // 画布
         canvas = new GameCanvas();
         add(canvas, BorderLayout.CENTER);
 
+        // 右侧 TCP 连接表
+        JPanel rightPanel = new JPanel(new BorderLayout());
+        rightPanel.setPreferredSize(new Dimension(280, 0));
+        rightPanel.setBorder(BorderFactory.createTitledBorder("🌐 TCP 连接表 (netstat)"));
+        tableModel = new DefaultTableModel(new String[]{"Proto", "Local Address", "Remote Address", "State"}, 0);
+        tcpConnTable = new JTable(tableModel);
+        tcpConnTable.setFont(new Font("Consolas", Font.PLAIN, 12));
+        tcpConnTable.getTableHeader().setFont(new Font("微软雅黑", Font.BOLD, 12));
+        tcpConnTable.setRowHeight(22);
+        JScrollPane tableScroll = new JScrollPane(tcpConnTable);
+        rightPanel.add(tableScroll, BorderLayout.CENTER);
+        add(rightPanel, BorderLayout.EAST);
+
+        // 底部控制台
         JPanel bottomPanel = new JPanel(new BorderLayout(5, 5));
         bottomPanel.setBorder(BorderFactory.createTitledBorder("📟 协议分析控制台"));
         prgNetwork = new JProgressBar(0, 100);
@@ -246,10 +270,14 @@ public class DataCartFactoryGame extends JFrame {
                 updateTopLabel(); canvas.repaint();
             }
         });
-        stateTimerWatchdog = System.currentTimeMillis();  // 添加这一行
+
         updateTopLabel();
         new Timer(30, e -> gameTick()).start();
-        new Timer(1000, e -> { updateArpDisplay(); updateDnsDisplay(); }).start();
+        new Timer(1000, e -> {
+            updateArpDisplay();
+            updateDnsDisplay();
+            updateTcpConnTable();
+        }).start();
     }
 
     private void appendToConsole(String text) {
@@ -284,6 +312,18 @@ public class DataCartFactoryGame extends JFrame {
             dnsSb.append(String.format("%s → %s (TTL:%ds)\n", entry.domain, entry.ipAddress, entry.ttl/1000));
         }
         txtDnsDisplay.setText(dnsSb.toString());
+    }
+
+    private void updateTcpConnTable() {
+        SwingUtilities.invokeLater(() -> {
+            tableModel.setRowCount(0);
+            if (!pcIpAssigned || resolvedServerIp == null || currentTcpState == TcpState.CLOSED) {
+                return;
+            }
+            String localAddr = pcIpAddress + ":80";
+            String remoteAddr = resolvedServerIp + ":443";
+            tableModel.addRow(new Object[]{"TCP", localAddr, remoteAddr, currentTcpState.toString()});
+        });
     }
 
     private void buildShopUI() {
@@ -377,7 +417,7 @@ public class DataCartFactoryGame extends JFrame {
         buildingLayout[startRow][23] = "TX_LLC";
         buildingLayout[startRow][24] = "TX_FCS";
 
-        // DHCP 行 (在 DNS 上方)
+        // DHCP 行
         int dhcpRow = MAP_ROWS / 2 - 4;
         buildingLayout[dhcpRow][4] = "DHCP_DISC";
         buildingLayout[dhcpRow][5] = "DHCP_SERVER";
@@ -401,13 +441,12 @@ public class DataCartFactoryGame extends JFrame {
         buildingLayout[receiveRow][42] = "RX_APP";
     }
 
-    // ----- DHCP 触发 -----
     private void startDhcpIfNeeded() {
         if (!pcIpAssigned && !dhcpInProgress) {
             dhcpInProgress = true;
             dhcpStep = 0;
             DataCart discover = new DataCart(pcFactory.x, pcFactory.y, "DHCP_DISCOVER", 0);
-            discover.stage = 1; // 目标：DHCP_DISC
+            discover.stage = 1;
             pendingDataCarts.add(discover);
             appendToConsole("【🔎 DHCP】: 发送 DHCP Discover (PC 尚无 IP)");
             updateTopLabel();
@@ -415,7 +454,7 @@ public class DataCartFactoryGame extends JFrame {
     }
 
     private void startDnsResolution() {
-        if (!pcIpAssigned) {   // 没有 IP 无法上网
+        if (!pcIpAssigned) {
             appendToConsole("【⛔ DNS 阻断】: PC 未获取 IP，等待 DHCP 完成...");
             return;
         }
@@ -472,7 +511,6 @@ public class DataCartFactoryGame extends JFrame {
     private void gameTick() {
         long now = System.currentTimeMillis();
 
-        // 1. DHCP 自动触发
         startDhcpIfNeeded();
 
         if (now - stateTimerWatchdog > 60000) {
@@ -536,7 +574,6 @@ public class DataCartFactoryGame extends JFrame {
                 }
             }
 
-            // 只有 DHCP 完成后才启动 TCP 传输
             if (pcIpAssigned) {
                 if (currentTcpState == TcpState.CLOSED) {
                     if (helloStock >= 2 && sayStock >= 1) {
@@ -642,21 +679,21 @@ public class DataCartFactoryGame extends JFrame {
         Point dhcpServerPos = findBuildingCoords("DHCP_SERVER");
         long now = System.currentTimeMillis();
 
-        // ---------- DHCP 处理 ----------
+        // DHCP 处理
         if (!cart.isReturnTrip) {
             switch (cart.cartType) {
                 case "DHCP_DISCOVER":
-                    if (cart.stage == 2) { // 到达 DHCP_SERVER
+                    if (cart.stage == 2) {
                         appendToConsole("【🔎 DHCP】: Discover 到达服务器");
                         DataCart offer = new DataCart(dhcpServerPos.x, dhcpServerPos.y, "DHCP_OFFER", 0);
                         offer.isReturnTrip = true;
-                        offer.stage = 1; // 回家路径：DHCP_OFFER -> PC_FACTORY
+                        offer.stage = 1;
                         pendingDataCarts.add(offer);
                         appendToConsole("【📥 DHCP】: 服务器回复 Offer (192.168.1.100)");
                     }
                     break;
                 case "DHCP_REQUEST":
-                    if (cart.stage == 2) { // 到达 DHCP_SERVER
+                    if (cart.stage == 2) {
                         appendToConsole("【📤 DHCP】: Request 到达服务器");
                         DataCart ack = new DataCart(dhcpServerPos.x, dhcpServerPos.y, "DHCP_ACK", 0);
                         ack.isReturnTrip = true;
@@ -666,14 +703,13 @@ public class DataCartFactoryGame extends JFrame {
                     }
                     break;
             }
-        } else { // 回程包
+        } else {
             switch (cart.cartType) {
                 case "DHCP_OFFER":
                     appendToConsole("【📥 DHCP】: Offer 到达客户端");
                     dhcpStep = 2;
-                    // 发送 Request
                     DataCart request = new DataCart(pcFactory.x, pcFactory.y, "DHCP_REQUEST", 0);
-                    request.stage = 1; // 目标：DHCP_REQ -> DHCP_SERVER
+                    request.stage = 1;
                     pendingDataCarts.add(request);
                     appendToConsole("【📤 DHCP】: 发送 Request");
                     break;
@@ -690,7 +726,7 @@ public class DataCartFactoryGame extends JFrame {
             }
         }
 
-        // ---------- 原有协议处理 ----------
+        // 原有协议处理
         if (!cart.isReturnTrip) {
             switch(cart.cartType) {
                 case "DNS_QUERY":
@@ -784,7 +820,6 @@ public class DataCartFactoryGame extends JFrame {
                     DataCart finalAck = new DataCart(pcFactory.x, pcFactory.y, "ACK_PC", 0);
                     finalAck.ackNumber = cart.sequenceNumber + 1;
                     pendingDataCarts.add(finalAck);
-                    // 修复：直接进入连接建立状态
                     currentTcpState = TcpState.ESTABLISHED;
                     cwnd = 1;
                     ssthresh = 12;
@@ -793,7 +828,6 @@ public class DataCartFactoryGame extends JFrame {
                     stateTimerWatchdog = now;
                     break;
                 case "ACK_PC":
-                    // 已通过 SYN_ACK 处理，此处保留但不会触发
                     break;
                 case "DATA_ACK":
                     rwnd = cart.advertisedWindow;
@@ -860,7 +894,6 @@ public class DataCartFactoryGame extends JFrame {
         isDnsResolving = false;
         isDnsResolved = false;
         resolvedServerIp = null;
-        // DHCP 状态保持不变（已获得IP）
         updateTopLabel();
         canvas.repaint();
     }
@@ -887,7 +920,6 @@ public class DataCartFactoryGame extends JFrame {
         return null;
     }
 
-    // ----- 内部类 OreCart -----
     private class OreCart {
         double x, y; double speed = 6.0; String oreType; boolean isArrived = false;
         public OreCart(double x, double y, String type) { this.x = x; this.y = y; this.oreType = type; }
@@ -899,7 +931,6 @@ public class DataCartFactoryGame extends JFrame {
         }
     }
 
-    // ----- 内部类 DataCart -----
     private class DataCart {
         double x, y; double speed = 12.0; int stage; int timer = 0;
         boolean isArrived = false; boolean isDropped = false; boolean isReturnTrip = false;
@@ -937,7 +968,6 @@ public class DataCartFactoryGame extends JFrame {
             if (timer > 0) { timer--; return; }
             Point target;
 
-            // DHCP 返回包或正向包都走自定义 stage 路径
             if (isDHCP()) {
                 target = findTargetMachine(stage, cartType);
                 if (target == null) target = isReturnTrip ? pcFactory : findBuildingCoords("DHCP_SERVER");
@@ -946,7 +976,7 @@ public class DataCartFactoryGame extends JFrame {
             }
 
             if (target == null) {
-                target = pcFactory; // fallback
+                target = pcFactory;
             }
 
             double dx = target.x - x; double dy = target.y - y;
@@ -976,7 +1006,6 @@ public class DataCartFactoryGame extends JFrame {
                             isArrived = true;
                         }
                     } else {
-                        // DHCP 包: stage 递增，到达终点时 isArrived
                         int maxStage = (cartType.equals("DHCP_DISCOVER") || cartType.equals("DHCP_REQUEST")) ? 2 : 2;
                         if (stage < maxStage) {
                             timer = 1;
@@ -1001,36 +1030,20 @@ public class DataCartFactoryGame extends JFrame {
         }
 
         private Point findTargetMachine(int s, String type) {
-            // DHCP 自定义路径
             if (type.equals("DHCP_DISCOVER")) {
-                switch(s) {
-                    case 1: return findBuildingCoords("DHCP_DISC");
-                    case 2: return findBuildingCoords("DHCP_SERVER");
-                }
+                switch(s) { case 1: return findBuildingCoords("DHCP_DISC"); case 2: return findBuildingCoords("DHCP_SERVER"); }
             } else if (type.equals("DHCP_OFFER")) {
-                switch(s) {
-                    case 1: return findBuildingCoords("DHCP_OFFER");
-                    case 2: return findBuildingCoords("PC_FACTORY");
-                }
+                switch(s) { case 1: return findBuildingCoords("DHCP_OFFER"); case 2: return findBuildingCoords("PC_FACTORY"); }
             } else if (type.equals("DHCP_REQUEST")) {
-                switch(s) {
-                    case 1: return findBuildingCoords("DHCP_REQ");
-                    case 2: return findBuildingCoords("DHCP_SERVER");
-                }
+                switch(s) { case 1: return findBuildingCoords("DHCP_REQ"); case 2: return findBuildingCoords("DHCP_SERVER"); }
             } else if (type.equals("DHCP_ACK")) {
-                switch(s) {
-                    case 1: return findBuildingCoords("DHCP_ACK");
-                    case 2: return findBuildingCoords("PC_FACTORY");
-                }
+                switch(s) { case 1: return findBuildingCoords("DHCP_ACK"); case 2: return findBuildingCoords("PC_FACTORY"); }
             }
 
-            // 原有路径
             String tag = "NONE";
             switch(s) {
-                case 1: tag = "DNS_CLIENT"; break;
-                case 2: tag = "DNS_LOCAL"; break;
-                case 3: tag = "DNS_ROOT"; break;
-                case 4: tag = "DNS_AUTH"; break;
+                case 1: tag = "DNS_CLIENT"; break; case 2: tag = "DNS_LOCAL"; break;
+                case 3: tag = "DNS_ROOT"; break; case 4: tag = "DNS_AUTH"; break;
                 case 5: tag = "TX_APP"; break;
                 case 6: tag = "T_SP"; break; case 7: tag = "T_DP"; break;
                 case 8: tag = "T_SEQ"; break; case 9: tag = "T_ACK"; break;
@@ -1038,22 +1051,15 @@ public class DataCartFactoryGame extends JFrame {
                 case 12: tag = "T_CHK"; break; case 13: tag = "T_CORE"; break;
                 case 14: tag = "TX_IPH"; break; case 15: tag = "TX_IP_FRAG"; break;
                 case 16: tag = "TX_ARP"; break;
-                case 17: tag = "ETH_DST"; break;
-                case 18: tag = "ETH_SRC"; break;
-                case 19: tag = "ETH_TYPE"; break;
-                case 20: tag = "TX_LLC"; break;
+                case 17: tag = "ETH_DST"; break; case 18: tag = "ETH_SRC"; break;
+                case 19: tag = "ETH_TYPE"; break; case 20: tag = "TX_LLC"; break;
                 case 21: tag = "TX_FCS"; break;
-                case 22: tag = "R_LAN"; break;
-                case 23: tag = "R_TAB"; break;
-                case 24: tag = "R_NAT"; break;
-                case 25: tag = "R_WAN"; break;
-                case 26: tag = "ROUTER1"; break;
-                case 27: tag = "ROUTER2"; break;
+                case 22: tag = "R_LAN"; break; case 23: tag = "R_TAB"; break;
+                case 24: tag = "R_NAT"; break; case 25: tag = "R_WAN"; break;
+                case 26: tag = "ROUTER1"; break; case 27: tag = "ROUTER2"; break;
                 case 28: tag = "ROUTER3"; break;
-                case 29: tag = "RX_LLC"; break;
-                case 30: tag = "RX_IP"; break;
-                case 31: tag = "RX_TCP"; break;
-                case 32: tag = "RX_APP"; break;
+                case 29: tag = "RX_LLC"; break; case 30: tag = "RX_IP"; break;
+                case 31: tag = "RX_TCP"; break; case 32: tag = "RX_APP"; break;
                 default: return null;
             }
             return findBuildingCoords(tag);
@@ -1063,9 +1069,7 @@ public class DataCartFactoryGame extends JFrame {
             switch(stage) {
                 case 1: if (cartType.equals("DHCP_DISCOVER")) currentLayerStatus = "🔎 DHCP Discover"; break;
                 case 2: if (cartType.equals("DHCP_OFFER")) currentLayerStatus = "📥 DHCP Offer"; break;
-                // ... 其他 stage 沿用原逻辑
             }
-            // 保留原有描述（简化，不影响）
             if (cartType.startsWith("DHCP")) return;
             switch(stage) {
                 case 1: currentLayerStatus = "🔍 DNS 查询 (" + domain + ")"; break;
@@ -1105,7 +1109,6 @@ public class DataCartFactoryGame extends JFrame {
         }
     }
 
-    // ----- 画布 -----
     private class GameCanvas extends JPanel {
         public GameCanvas() { setBackground(new Color(18, 20, 26)); }
 
