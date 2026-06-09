@@ -1285,6 +1285,27 @@ public class DataCartFactoryGame extends JFrame {
                         appendToConsole("【📡 HTTP】: 服务器收到 GET，回复 200 OK");
                     }
                     return;
+                case "TLS_CLIENT_KEY_EXCHANGE":
+                    if (cart.isArrived && tlsState == TlsState.CLIENT_KEY_EXCHANGE_SENT) {
+                        try {
+                            rsaCipher.init(Cipher.DECRYPT_MODE, serverRsaKeyPair.getPrivate());
+                            byte[] decryptedKey = rsaCipher.doFinal(cart.encryptedData);
+                            sessionKey = new SecretKeySpec(decryptedKey, "AES");
+                            aesCipher.init(Cipher.ENCRYPT_MODE, sessionKey);
+                            tlsCipherReady = true;
+                            appendToConsole("【🔒 TLS】: 服务器解密对称密钥成功，加密信道已建立");
+                        } catch (Exception ex) {
+                            appendToConsole("【❌ TLS】: 服务器解密失败");
+                            ex.printStackTrace();
+                            return;
+                        }
+                        DataCart sf = new DataCart(serverPos.x, serverPos.y, "TLS_SERVER_FINISHED", 0);
+                        sf.isReturnTrip = true;
+                        sf.stage = -1;
+                        pendingDataCarts.add(sf);
+                        appendToConsole("【🔒 TLS】: 服务器发送 ChangeCipherSpec + Finished");
+                    }
+                    return;
             }
             if (cart.cartType.equals("SYN") && !cart.isReturnTrip && cart.isArrived) {
                 DataCart synAck = new DataCart(serverPos.x, serverPos.y, "SYN_ACK", 0);
@@ -1419,28 +1440,6 @@ public class DataCartFactoryGame extends JFrame {
                     timer.setRepeats(false);
                     timer.start();
                     break;
-                case "TLS_CLIENT_KEY_EXCHANGE":
-                    if (cart.isArrived && tlsState == TlsState.CLIENT_KEY_EXCHANGE_SENT) {
-                        // 服务器解密对称密钥，然后发送 ChangeCipherSpec + Finished
-                        try {
-                            rsaCipher.init(Cipher.DECRYPT_MODE, serverRsaKeyPair.getPrivate());
-                            byte[] decryptedKey = rsaCipher.doFinal(cart.encryptedData);
-                            sessionKey = new SecretKeySpec(decryptedKey, "AES");
-                            aesCipher.init(Cipher.ENCRYPT_MODE, sessionKey);
-                            tlsCipherReady = true;
-                            appendToConsole("【🔒 TLS】: 服务器解密对称密钥成功，加密信道已建立");
-                        } catch (Exception ex) {
-                            appendToConsole("【❌ TLS】: 服务器解密失败");
-                            return;
-                        }
-                        // 发送 Server Finished（含 ChangeCipherSpec 语义）
-                        DataCart sf = new DataCart(serverPos.x, serverPos.y, "TLS_SERVER_FINISHED", 0);
-                        sf.isReturnTrip = true;
-                        sf.stage = -1;
-                        pendingDataCarts.add(sf);
-                        appendToConsole("【🔒 TLS】: 服务器发送 ChangeCipherSpec + Finished");
-                    }
-                    return;
                 case "TLS_SERVER_FINISHED":
                     if (tlsState == TlsState.CLIENT_KEY_EXCHANGE_SENT) {
                         tlsState = TlsState.FINISHED;
