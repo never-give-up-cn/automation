@@ -2,15 +2,32 @@ package com.never_give_up.automation.demo.model;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Data
 @AllArgsConstructor
+@NoArgsConstructor
 public class FiveTuple {
     private String sourceIp;
     private String destinationIp;
     private int sourcePort;
     private int destinationPort;
     private int protocol;
+
+    public String getProtocolName() {
+        switch (protocol) {
+            case 1: return "ICMP";
+            case 6: return "TCP";
+            case 17: return "UDP";
+            default: return "Unknown";
+        }
+    }
+
+    @Override
+    public String toString() {
+        return String.format("%s:%d -> %s:%d [%s]",
+                sourceIp, sourcePort, destinationIp, destinationPort, getProtocolName());
+    }
 
     @Override
     public boolean equals(Object o) {
