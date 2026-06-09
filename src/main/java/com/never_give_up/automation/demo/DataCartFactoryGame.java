@@ -95,6 +95,12 @@ public class DataCartFactoryGame extends JFrame {
     private FactoryManager factoryManager;
     private PacketAdapter packetAdapter;
 
+    // ========== 新增：各层工厂实例 ==========
+    private com.never_give_up.automation.demo.factory.transport.TcpPacketFactory tcpFactory;
+    private com.never_give_up.automation.demo.factory.network.IpPacketFactory ipFactory;
+    private com.never_give_up.automation.demo.factory.link.EthernetFactory ethernetFactory;
+    private com.never_give_up.automation.demo.factory.address.PortFactory portFactory;
+
     // ========== 新增字段（类成员） ==========
     private Map<IpFragmentKey, List<IpFragment>> fragmentBuffer = new HashMap<>();
     private int ipIdentifierCounter = 2000;
@@ -240,6 +246,11 @@ public class DataCartFactoryGame extends JFrame {
 
         factoryManager = new FactoryManager();
         packetAdapter = new PacketAdapter();
+        // 初始化各层工厂
+        tcpFactory = new com.never_give_up.automation.demo.factory.transport.TcpPacketFactory();
+        ipFactory = new com.never_give_up.automation.demo.factory.network.IpPacketFactory();
+        ethernetFactory = new com.never_give_up.automation.demo.factory.link.EthernetFactory();
+        portFactory = new com.never_give_up.automation.demo.factory.address.PortFactory();
 
         stateTimerWatchdog = System.currentTimeMillis();
         try {
@@ -357,6 +368,12 @@ public class DataCartFactoryGame extends JFrame {
             tlsEnabled = cbTls.isSelected();
             resetTcpSession();
             appendToConsole(httpDemoEnabled ? "【启用 HTTP 演示】" : "【关闭 HTTP 演示】");
+
+            // 如果已分配 IP 且启用 HTTP 演示，立即触发 DNS 解析
+            if (httpDemoEnabled && pcIpAssigned && !isDnsResolved && !isDnsResolving) {
+                appendToConsole("【🔄 HTTP 演示】: 检测到 IP 已分配，启动 DNS 解析");
+                startDnsResolution();
+            }
         });
         cbTls.addActionListener(e -> {
             tlsEnabled = cbTls.isSelected();
@@ -1635,12 +1652,15 @@ public class DataCartFactoryGame extends JFrame {
         tlsState = TlsState.IDLE;
         httpSent = false;
         httpResponseContent = "";
+        dhcpInProgress = false;
+        dhcpStep = 0;
 
         factoryManager.reset();
 
         updateTopLabel();
         canvas.repaint();
     }
+
     private void sendDataPackets() {
         // 普通 TCP 模式：发送 DATA 包
         int packetsToSend = Math.min(cwnd, totalDataToTransmit - serverReceivedCount);
@@ -2156,129 +2176,150 @@ public class DataCartFactoryGame extends JFrame {
 
         private void processStageCraft() {
             if (cartType.startsWith("DHCP")) return;
+            // ========== 添加各层工厂处理逻辑 ==========
             switch (stage) {
-                case 1:
-                    currentLayerStatus = "🔍 DNS 查询 (" + domain + ")";
+                case 5: // 应用层
+                    if (!hasApp && cartType.equals("HTTP_GET")) {
+                        hasApp = true;
+                        httpBody = "GET /index.html HTTP/1.1\r\nHost: www.demo.com\r\n\r\n";
+                    } else if (!hasApp && cartType.equals("TLS_CLIENT_HELLO")) {
+                        hasApp = true;
+                        httpBody = "TLS Client Hello (Cipher Suites: TLS_AES_128_GCM_SHA256)";
+                    }
                     break;
-                case 2:
-                    currentLayerStatus = "📡 本地 DNS";
+                case 6: // 源端口
+                    if (!c_SP) {
+                        c_SP = true;
+                        portFactory.allocateEphemeralPort();
+                    }
                     break;
-                case 3:
-                    currentLayerStatus = "🌐 根 DNS";
+                case 7: // 目的端口
+                    if (!c_DP) {
+                        c_DP = true;
+                        portFactory.reservePort(443);
+                    }
                     break;
-                case 4:
-                    currentLayerStatus = "🏢 权威 DNS → " + resolvedIp;
+                case 8: // SEQ
+                    if (!c_SEQ) {
+                        c_SEQ = true;
+                        tcpFactory.getNextSeq();
+                    }
                     break;
-                case 5:
-                    hasApp = true;
-                    currentLayerStatus = "💚 应用数据";
+                case 9: // ACK
+                    if (!c_ACK) {
+                        c_ACK = true;
+                    }
                     break;
-                case 6:
-                    c_SP = true;
-                    currentLayerStatus = "⚙️ 源端口";
+                case 10: // CTL
+                    if (!c_CTL) {
+                        c_CTL = true;
+                    }
                     break;
-                case 7:
-                    c_DP = true;
-                    currentLayerStatus = "🎯 目的端口";
+                case 11: // WIN
+                    if (!c_WIN) {
+                        c_WIN = true;
+                        tcpFactory.setWindowSize(advertisedWindow);
+                    }
                     break;
-                case 8:
-                    c_SEQ = true;
-                    currentLayerStatus = "🔢 SEQ:" + sequenceNumber;
+                case 12: // CHK
+                    if (!c_CHK) {
+                        c_CHK = true;
+                    }
                     break;
-                case 9:
-                    c_ACK = true;
-                    currentLayerStatus = "📜 ACK:" + ackNumber;
+                case 13: // TCP 段完成
+                    if (!hasTcp) {
+                        hasTcp = true;
+                        tcpFactory.produce();
+                    }
                     break;
-                case 10:
-                    c_CTL = true;
-                    currentLayerStatus = "🚩 [" + cartType + "]";
+                case 14: // IP 首部
+                    if (!hasIp) {
+                        hasIp = true;
+                        String srcIp = pcIpAddress != null ? pcIpAddress : "192.168.1.100";
+                        String dstIp = resolvedServerIp != null ? resolvedServerIp : "10.0.0.1";
+                        ipFactory.createTcpPacket(srcIp, dstIp, new byte[0]);
+                    }
                     break;
-                case 11:
-                    c_WIN = true;
-                    currentLayerStatus = "🌊 WIN:" + advertisedWindow;
+                case 15: // IP 分片（已在 update() 中处理）
                     break;
-                case 12:
-                    c_CHK = true;
-                    currentLayerStatus = "🔥 校验和";
+                case 16: // ARP 解析
+                    if (resolvedServerIp != null && pcIpAddress != null) {
+                        String mac = factoryManager.getArpCache().getMac(resolvedServerIp);
+                        if (mac == null) {
+                            appendToConsole("【🔍 ARP 请求】: 谁拥有 " + resolvedServerIp + "?");
+                            String newMac = String.format("00:1A:2B:%02X:%02X:%02X",
+                                    new Random().nextInt(256), new Random().nextInt(256), new Random().nextInt(256));
+                            factoryManager.getArpCache().addEntry(resolvedServerIp, newMac);
+                            appendToConsole("【📥 ARP 响应】: " + resolvedServerIp + " → " + newMac);
+                            updateArpDisplay();
+                        }
+                    }
                     break;
-                case 13:
-                    hasTcp = true;
-                    currentLayerStatus = "🧡 TCP 段";
+                case 17: // Ethernet DST MAC
+                case 18: // Ethernet SRC MAC
+                    if (!hasEther && pcIpAddress != null && resolvedServerIp != null) {
+                        hasEther = true;
+                        String srcMac = factoryManager.getArpCache().getMac(pcIpAddress);
+                        String dstMac = factoryManager.getArpCache().getMac(resolvedServerIp);
+                        ethernetFactory.createIpFrame(
+                                srcMac != null ? srcMac : "00:1A:2B:3C:4D:5F",
+                                dstMac != null ? dstMac : "00:1A:2B:3C:4D:60"
+                        );
+                    }
                     break;
-                case 14:
-                    hasIp = true;
-                    currentLayerStatus = "💛 IP 首部";
+                case 19: // EtherType
+                    // 已在 case 17-18 中设置
                     break;
-                case 15:
-                    currentLayerStatus = "✂️ IP 分片";
+                case 20: // LLC（可选）
+                    if (!hasLlc) {
+                        hasLlc = true;
+                        // factoryManager.getLinkLayerFactory().setLlcHeader();
+                    }
                     break;
-                case 16:
-                    currentLayerStatus = "🔍 ARP 解析";
+                case 21: // FCS 校验
+                    if (!hasFcs) {
+                        hasFcs = true;
+                        // factoryManager.getLinkLayerFactory().calculateFcs();
+                    }
                     break;
-                case 17:
-                    hasEther = true;
-                    currentLayerStatus = "🟦 目的 MAC (DST)";
-                    break;
-                case 18:
-                    hasEther = true;
-                    currentLayerStatus = "🟦 源 MAC (SRC)";
-                    break;
-                case 19:
-                    hasEther = true;
-                    currentLayerStatus = "🟦 EtherType (0x0800)";
-                    break;
-                case 20:
-                    hasLlc = true;
-                    currentLayerStatus = "🟩 LLC (可选)";
-                    break;
-                case 21:
-                    hasFcs = true;
-                    currentLayerStatus = "🟩 FCS";
-                    break;
-                case 22:
+                case 22: // LAN 拆包（接收端）
                     hasLlc = false;
                     hasFcs = false;
-                    currentLayerStatus = "🎛️ LAN 拆包";
+                    // factoryManager.getLinkLayerFactory().removeEthernetHeader();
                     break;
-                case 23:
-                    currentLayerStatus = "🔀 路由查表";
+                case 23: // 路由查表
+                    // factoryManager.getRouteTableFactory().lookupNextHop(resolvedServerIp);
                     break;
-                case 24:
-                    currentLayerStatus = "🌍 NAT 转换";
+                case 24: // NAT 转换
+                    if (!isNatted && !isReturnTrip) {
+                        applyNatMapping();
+                        // factoryManager.getNatFactory().translate(pcIpAddress, 1234);
+                        appendToConsole("【🌍 NAT 转换】: " + pcIpAddress + ":1234 → " + natPublicIp + ":" + natPublicPort);
+                        updateNatDisplay();
+                    }
                     break;
-                case 25:
-                    hasLlc = true;
-                    hasFcs = true;
-                    currentLayerStatus = "🛠️ WAN 封装";
+                case 25: // WAN 封装
+                    // factoryManager.getWanFactory().addPppHeader();
                     break;
-                case 26:
-                    currentLayerStatus = "📡 Router1";
-                    break;
-                case 27:
-                    currentLayerStatus = "📡 Router2";
-                    break;
-                case 28:
-                    currentLayerStatus = "📡 Router3";
-                    break;
-                case 29:
+                case 29: // 剥链路层（接收端）
                     hasLlc = false;
                     hasFcs = false;
-                    currentLayerStatus = "🔓 剥链路层";
+                    hasEther = false;
+                    // factoryManager.getLinkLayerFactory().removeEthernetHeader();
                     break;
-                case 30:
+                case 30: // 剥网络层（接收端）
                     hasIp = false;
-                    currentLayerStatus = "💛 剥网络层";
+                    // factoryManager.getIpPacketFactory().verifyChecksum();
+                    // factoryManager.getIpPacketFactory().reassembleFragments();
                     break;
-                case 31:
+                case 31: // 剥传输层（接收端）
                     hasTcp = false;
-                    currentLayerStatus = "🧡 剥传输层";
+                    // factoryManager.getTcpPacketFactory().extractPayload();
                     break;
-                case 32:
+                case 32: // 应用交付（接收端）
                     hasApp = false;
-                    currentLayerStatus = "💚 应用交付";
+                    // factoryManager.getApplicationFactory().processHttpData(httpBody);
                     break;
-                default:
-                    currentLayerStatus = "未知状态";
             }
         }
     }
