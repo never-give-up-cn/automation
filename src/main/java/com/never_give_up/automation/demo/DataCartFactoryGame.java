@@ -3,7 +3,9 @@ package com.never_give_up.automation.demo;
 import com.never_give_up.automation.demo.adapter.FactoryManager;
 import com.never_give_up.automation.demo.adapter.PacketAdapter;
 import com.never_give_up.automation.demo.factory.function.NatMappingFactory;
+import com.never_give_up.automation.demo.model.HttpPacket;
 import com.never_give_up.automation.demo.model.IpPacket;
+import com.never_give_up.automation.demo.model.TcpPacket;
 
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
@@ -31,7 +33,7 @@ public class DataCartFactoryGame extends JFrame {
     }
 
     enum TlsState {
-        IDLE, CLIENT_HELLO_SENT, SERVER_HELLO_RCVD, FINISHED,CLIENT_KEY_EXCHANGE_SENT
+        IDLE, CLIENT_HELLO_SENT, SERVER_HELLO_RCVD, FINISHED, CLIENT_KEY_EXCHANGE_SENT
     }
 
     private static class DnsEntry {
@@ -524,6 +526,7 @@ public class DataCartFactoryGame extends JFrame {
         });
         txtNatDisplay.setText(natSb.toString());
     }
+
     private void updateTcpConnTable() {
         SwingUtilities.invokeLater(() -> {
             tableModel.setRowCount(0);
@@ -1036,6 +1039,7 @@ public class DataCartFactoryGame extends JFrame {
         pendingDataCarts.add(get);
         appendToConsole("【📡 HTTP】: 发送 GET /index.html HTTP/1.1");
     }
+
     // ========== 新增辅助方法 ==========
     private boolean isReassemblyComplete(IpFragmentKey key) {
         List<IpFragment> frags = fragmentBuffer.get(key);
@@ -1060,6 +1064,7 @@ public class DataCartFactoryGame extends JFrame {
         }
         return result;
     }
+
     private void handleCartArrival(DataCart cart) {
         Point serverPos = findBuildingCoords("RX_ST");
         Point dhcpServerPos = findBuildingCoords("DHCP_SERVER");
@@ -1678,6 +1683,7 @@ public class DataCartFactoryGame extends JFrame {
             appendToConsole(String.format("【📤 TCP 发送】: SEQ=%d (cwnd=%d)", data.sequenceNumber, cwnd));
         }
     }
+
     private void updateTopLabel() {
         int effectiveWin = Math.min(cwnd, rwnd);
         String ipStatus = pcIpAssigned ? pcIpAddress : "未分配";
@@ -2013,7 +2019,6 @@ public class DataCartFactoryGame extends JFrame {
         }
 
 
-
         private boolean isDHCP() {
             return cartType.equals("DHCP_DISCOVER") || cartType.equals("DHCP_OFFER")
                     || cartType.equals("DHCP_REQUEST") || cartType.equals("DHCP_ACK");
@@ -2192,10 +2197,10 @@ public class DataCartFactoryGame extends JFrame {
                 case 5: // 应用层
                     if (!hasApp && cartType.equals("HTTP_GET")) {
                         hasApp = true;
-                        httpBody = "GET /index.html HTTP/1.1\r\nHost: www.demo.com\r\n\r\n";
+                        httpBody = factoryManager.getHttpFactory().createGetRequest("/index.html").getBody();
                     } else if (!hasApp && cartType.equals("TLS_CLIENT_HELLO")) {
                         hasApp = true;
-                        httpBody = "TLS Client Hello (Cipher Suites: TLS_AES_128_GCM_SHA256)";
+                        httpBody = factoryManager.getTlsFactory().createClientHello(new byte[32]).getTlsMessageType();
                     }
                     break;
                 case 6: // 源端口
@@ -2332,16 +2337,24 @@ public class DataCartFactoryGame extends JFrame {
                     break;
                 case 30: // 剥网络层（接收端）
                     hasIp = false;
-                    // factoryManager.getIpPacketFactory().verifyChecksum();
-                    // factoryManager.getIpPacketFactory().reassembleFragments();
+                    if (cartType.equals("DATA") || cartType.equals("HTTP_200_OK")) {
+                        IpPacket ipPacket = ipFactory.produce();
+                        ipPacket.deserialize(new byte[0]);
+                    }
                     break;
                 case 31: // 剥传输层（接收端）
                     hasTcp = false;
-                    // factoryManager.getTcpPacketFactory().extractPayload();
+                    if (cartType.equals("DATA") || cartType.equals("HTTP_200_OK")) {
+                        TcpPacket tcpPacket = tcpFactory.produce();
+                        tcpPacket.deserialize(new byte[0]);
+                    }
                     break;
                 case 32: // 应用交付（接收端）
                     hasApp = false;
-                    // factoryManager.getApplicationFactory().processHttpData(httpBody);
+                    if (cartType.equals("HTTP_200_OK")) {
+                        HttpPacket httpPacket = factoryManager.getHttpFactory().createResponse(200, httpResponseContent);
+                        httpResponseContent = httpPacket.getBody();
+                    }
                     break;
             }
         }

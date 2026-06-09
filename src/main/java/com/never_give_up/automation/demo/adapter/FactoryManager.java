@@ -11,6 +11,7 @@ import com.never_give_up.automation.demo.factory.application.TlsPacketFactory;
 import com.never_give_up.automation.demo.factory.control.BandwidthFactory;
 import com.never_give_up.automation.demo.factory.control.CongestionControlFactory;
 import com.never_give_up.automation.demo.factory.control.SessionFactory;
+import com.never_give_up.automation.demo.factory.device.NetworkDeviceFactory;
 import com.never_give_up.automation.demo.factory.function.ArpCacheFactory;
 import com.never_give_up.automation.demo.factory.function.DnsCacheFactory;
 import com.never_give_up.automation.demo.factory.function.NatMappingFactory;
@@ -20,6 +21,10 @@ import com.never_give_up.automation.demo.factory.link.EthernetFactory;
 import com.never_give_up.automation.demo.factory.network.IcmpPacketFactory;
 import com.never_give_up.automation.demo.factory.network.IpFragmentFactory;
 import com.never_give_up.automation.demo.factory.network.IpPacketFactory;
+import com.never_give_up.automation.demo.factory.queue.PacketQueueFactory;
+import com.never_give_up.automation.demo.factory.security.FirewallRuleFactory;
+import com.never_give_up.automation.demo.factory.topology.LinkFactory;
+import com.never_give_up.automation.demo.factory.topology.SubnetFactory;
 import com.never_give_up.automation.demo.factory.transport.TcpPacketFactory;
 import com.never_give_up.automation.demo.factory.transport.UdpPacketFactory;
 import lombok.Data;
@@ -48,6 +53,11 @@ public class FactoryManager {
     private final FiveTupleFactory fiveTupleFactory;
     private final BandwidthFactory bandwidthFactory;
     private final SessionFactory sessionFactory;
+    private final NetworkDeviceFactory deviceFactory;
+    private final LinkFactory linkFactory;
+    private final SubnetFactory subnetFactory;
+    private final PacketQueueFactory queueFactory;
+    private final FirewallRuleFactory firewallFactory;
 
     public FactoryManager() {
         this.ipAddressFactory = new IpAddressFactory();
@@ -72,6 +82,11 @@ public class FactoryManager {
         this.natFactory = new NatMappingFactory("8.8.8.8");
         this.routeTable = new RouteTableFactory();
         this.congestionControl = new CongestionControlFactory();
+        this.deviceFactory = new NetworkDeviceFactory();
+        this.linkFactory = new LinkFactory();
+        this.subnetFactory = new SubnetFactory();
+        this.queueFactory = new PacketQueueFactory();
+        this.firewallFactory = new FirewallRuleFactory();
     }
 
     public void reset() {
@@ -82,6 +97,32 @@ public class FactoryManager {
         natFactory.clear();
         routeTable.clear();
         congestionControl.reset();
+        deviceFactory.reset();
+        linkFactory.reset();
+        subnetFactory.reset();
+        queueFactory.reset();
+        firewallFactory.reset();
+    }
+
+    // Getters for new factories
+    public NetworkDeviceFactory getDeviceFactory() {
+        return deviceFactory;
+    }
+
+    public LinkFactory getLinkFactory() {
+        return linkFactory;
+    }
+
+    public SubnetFactory getSubnetFactory() {
+        return subnetFactory;
+    }
+
+    public PacketQueueFactory getQueueFactory() {
+        return queueFactory;
+    }
+
+    public FirewallRuleFactory getFirewallFactory() {
+        return firewallFactory;
     }
 
     // Getters for all factories
