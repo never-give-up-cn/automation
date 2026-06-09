@@ -13,32 +13,36 @@ import java.util.concurrent.ConcurrentHashMap;
 public class HomeAssistantService {
 
     private final HomeAssistantWebSocketClient webSocketClient;
-    private boolean isConnected = false;
-    // 用线程安全的 Map 存储实时状态（key：设备ID，value：设备状态）
+    private volatile boolean isConnected = false; // volatile保证线程可见性
     private final Map<String, HaEntityState> entityStateMap = new ConcurrentHashMap<>();
+    private volatile boolean isReconnecting = false;
 
     public HomeAssistantService(HomeAssistantWebSocketClient webSocketClient) {
         this.webSocketClient = webSocketClient;
     }
 
-
-    // 初始化方法
     @PostConstruct
     public void init() {
-        // 关联服务到客户端（让客户端能同步状态到服务类）
         webSocketClient.setService(this);
         try {
-            if (!webSocketClient.isOpen()) {
-                webSocketClient.connect();
+            // 首次连接：先关闭可能存在的旧连接
+            if (webSocketClient.isOpen()) {
+                webSocketClient.close(1000, "初始化前清理旧连接");
             }
-            // 等待连接初始化（最多5秒）
-            int retry = 0;
-            while (!isConnected && retry < 10) {
+            // 发起首次连接
+            webSocketClient.connect();
+            // 等待连接+认证完成（最多15秒，包含连接超时+认证耗时）
+            int waitCount = 0;
+            while (!isConnected && waitCount < 30) { // 30*500ms=15秒
                 Thread.sleep(500);
-                retry++;
+                waitCount++;
             }
             if (!isConnected) {
-                System.err.println("Home Assistant 连接初始化超时");
+                System.err.println("Home Assistant 初始化超时（15秒），请检查连接配置");
+                // 超时后主动触发一次重连
+                reconnect();
+            } else {
+                System.out.println("Home Assistant 初始化成功，已连接");
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -46,118 +50,77 @@ public class HomeAssistantService {
         }
     }
 
-    // -------------------------- 新增：状态同步方法（供客户端调用） --------------------------
-
-    /**
-     * 同步全量设备状态（连接成功后首次拉取时调用）
-     */
-    public void setAllEntityStates(List<HaEntityState> allStates) {
-//        entityStateMap.clear(); // 清空旧数据
-        allStates.forEach(state -> entityStateMap.put(state.getEntity_id(), state));
-        System.out.println("全量状态已同步到服务类，共 " + entityStateMap.size() + " 个设备");
-    }
-
-
-    /**
-     * 同步单个设备的实时变更状态（客户端收到事件推送时调用）
-     */
-    public void updateEntityState(HaEntityState newState) {
-        if (newState != null && newState.getEntity_id() != null) {
-            entityStateMap.put(newState.getEntity_id(), newState);
-            System.out.println("entityStateMap：" + entityStateMap);
-        }
-    }
-
-    // -------------------------- 新增：外部查询接口（供Controller调用） --------------------------
-
-    /**
-     * 外部获取单个设备的实时状态（如Controller通过HTTP接口查询）
-     */
-    public HaEntityState getEntityState(String entityId) {
-        if (!isConnected) {
-            throw new RuntimeException("Home Assistant 未连接");
-        }
-        return entityStateMap.get(entityId);
-    }
-
-    /**
-     * 外部获取所有设备的实时状态
-     */
-    public Map<String, HaEntityState> getAllEntityStates() {
-        if (!isConnected) {
-            throw new RuntimeException("Home Assistant 未连接");
-        }
-        return entityStateMap;
-    }
-
-    // 供外部调用的获取状态方法
-    public void getStates() {
-        if (isConnected) {
-            webSocketClient.getStates();
-        } else {
-            System.err.println("未连接到Home Assistant，无法获取状态");
-            reconnect();
-        }
-    }
-
-    // 供外部调用的服务调用方法
-    public void callService(String domain, String service, String entityId) {
-        if (isConnected) {
-            webSocketClient.callService(domain, service, entityId);
-        } else {
-            System.err.println("未连接到Home Assistant，无法调用服务");
-            reconnect();
-        }
-    }
-
-    // 重连方法
+    // -------------------------- 关键优化1：重连逻辑状态同步+超时保护 --------------------------
     public void reconnect() {
-        // 避免并发重连，加锁保护
+        // 避免并发重连
+        if (isReconnecting) {
+            System.out.println("已在重连中，跳过本次请求");
+            return;
+        }
         synchronized (this) {
             if (isReconnecting) {
-                System.out.println("已在重连中，跳过本次请求");
                 return;
             }
             isReconnecting = true;
         }
 
+        System.out.println("开始重连 Home Assistant...");
         try {
-            // 关闭旧连接（若存在）
+            // 步骤1：关闭旧连接（确保状态干净）
             if (webSocketClient.isOpen()) {
                 System.out.println("关闭现有连接...");
-                webSocketClient.close(1000, "主动重连"); // 正常关闭码
+                webSocketClient.close(1000, "主动重连");
+                // 等待关闭完成（最多3秒）
+                int closeWait = 0;
+                while (webSocketClient.isOpen() && closeWait < 6) {
+                    Thread.sleep(500);
+                    closeWait++;
+                }
+                if (webSocketClient.isOpen()) {
+                    System.err.println("旧连接关闭超时，强制关闭");
+                    webSocketClient.closeConnection(4003, "关闭超时");
+                }
             }
 
-            // 指数退避重连（避免频繁重试导致服务器拒绝）
+            // 步骤2：指数退避重连（5次重试，避免频繁请求）
             int maxRetries = 5;
-            long baseDelay = 1000; // 初始延迟1秒
+            long baseDelay = 1000; // 1s → 2s → 4s → 8s → 16s
             for (int i = 0; i < maxRetries; i++) {
                 try {
-                    System.out.println("第" + (i+1) + "次重连...");
+                    System.out.println("第" + (i + 1) + "次重连尝试...");
+                    // 发起新连接（客户端已设置10秒连接超时）
                     webSocketClient.connect();
 
-                    // 等待连接成功（最多5秒）
+                    // 等待连接+认证完成（最多15秒）
                     int waitCount = 0;
-                    while (!isConnected && waitCount < 10) {
+                    while (!isConnected && waitCount < 30) {
                         Thread.sleep(500);
                         waitCount++;
                     }
+
+                    // 重连成功：跳出循环
                     if (isConnected) {
-                        System.out.println("重连成功！");
-                        // 重连后主动拉取一次全量状态
+                        System.out.println("第" + (i + 1) + "次重连成功！");
+                        // 重连后主动拉取全量状态（双重保障）
                         getStates();
                         return;
+                    } else {
+                        System.err.println("第" + (i + 1) + "次重连超时（15秒），未完成认证");
                     }
                 } catch (Exception e) {
-                    System.err.println("第" + (i+1) + "次重连失败：" + e.getMessage());
+                    System.err.println("第" + (i + 1) + "次重连异常：" + e.getMessage());
                 }
 
-                // 指数退避延迟（1s → 2s → 4s → ...）
-                long delay = baseDelay * (1 << i);
-                Thread.sleep(delay);
+                // 退避延迟（最后一次重试后不延迟）
+                if (i < maxRetries - 1) {
+                    long delay = baseDelay * (1 << i);
+                    System.out.println("重连失败，等待" + delay + "ms后重试...");
+                    Thread.sleep(delay);
+                }
             }
 
-            System.err.println("达到最大重连次数（" + maxRetries + "次），请检查连接配置");
+            // 步骤3：重连失败处理
+            System.err.println("达到最大重连次数（" + maxRetries + "次），请检查：1.网络 2.Token 3.HA服务状态");
         } catch (Exception e) {
             System.err.println("重连过程异常：" + e.getMessage());
         } finally {
@@ -165,20 +128,60 @@ public class HomeAssistantService {
         }
     }
 
-    // 新增：标记是否正在重连，避免并发问题
-    private volatile boolean isReconnecting = false;
+    // -------------------------- 其他方法保持不变（状态同步、设备控制等） --------------------------
+    public void setAllEntityStates(List<HaEntityState> allStates) {
+        allStates.forEach(state -> entityStateMap.put(state.getEntity_id(), state));
+        System.out.println("全量状态同步完成，共 " + entityStateMap.size() + " 个设备");
+    }
 
-    // 供WebSocket客户端回调更新连接状态
+    public void updateEntityState(HaEntityState newState) {
+        if (newState != null && newState.getEntity_id() != null) {
+            entityStateMap.put(newState.getEntity_id(), newState);
+            // 注释掉全量打印（避免日志冗余，按需开启）
+            // System.out.println("设备状态更新：" + newState.getEntity_id() + " -> " + newState.getState());
+        }
+    }
+
+    public HaEntityState getEntityState(String entityId) {
+        if (!isConnected) {
+            throw new RuntimeException("Home Assistant 未连接，请检查网络或Token");
+        }
+        return entityStateMap.get(entityId);
+    }
+
+    public Map<String, HaEntityState> getAllEntityStates() {
+        if (!isConnected) {
+            throw new RuntimeException("Home Assistant 未连接，请检查网络或Token");
+        }
+        return entityStateMap;
+    }
+
+    public void getStates() {
+        if (isConnected && webSocketClient.isOpen()) {
+            webSocketClient.getStates();
+        } else {
+            System.err.println("未连接到Home Assistant，无法获取状态");
+            reconnect();
+        }
+    }
+
+    public void callService(String domain, String service, String entityId) {
+        if (isConnected && webSocketClient.isOpen()) {
+            webSocketClient.callService(domain, service, entityId);
+        } else {
+            System.err.println("未连接到Home Assistant，无法调用服务");
+            reconnect();
+        }
+    }
+
     public void setConnected(boolean connected) {
         this.isConnected = connected;
     }
 
-    // 提供连接状态查询
     public boolean isConnected() {
         return isConnected;
     }
 
-    // 在 HomeAssistantService 中添加关闭设备的方法
     public void turnOffDevice(String entityId) {
         HaEntityState state = getEntityState(entityId);
         if (state == null || "unavailable".equals(state.getState())) {
@@ -189,32 +192,22 @@ public class HomeAssistantService {
             System.out.println("设备已关闭，无需重复操作：" + entityId);
             return;
         }
-        // 仅在设备在线且状态为on时发送指令
         webSocketClient.callService("switch", "turn_off", entityId);
     }
 
-    // -------------------------- 新增：空调控制方法 --------------------------
-
-    /**
-     * 控制空调开关（打开/关闭）
-     * @param acEntityId 空调设备ID（如 "climate.hzyk_cn_2003157372_kt5s01"）
-     * @param turnOn 是否打开（true-打开，false-关闭）
-     */
     public void controlAcPower(String acEntityId, boolean turnOn) {
         HaEntityState state = getEntityState(acEntityId);
         if (!checkAcAvailability(state, acEntityId)) {
             return;
         }
 
-        String targetMode = turnOn ? "cool" : "off"; // 打开默认制冷模式，可根据需求修改
+        String targetMode = turnOn ? "cool" : "off";
         String currentMode = state.getState();
-
         if (currentMode.equals(targetMode)) {
             System.out.println("空调已" + (turnOn ? "开启" : "关闭") + "，无需操作：" + acEntityId);
             return;
         }
 
-        // 调用Home Assistant的set_hvac_mode服务切换模式（off即为关闭）
         webSocketClient.callServiceWithData(
                 "climate",
                 "set_hvac_mode",
@@ -223,7 +216,7 @@ public class HomeAssistantService {
         );
         System.out.println("已发送空调" + (turnOn ? "开启" : "关闭") + "指令：" + acEntityId);
     }
-// 提取为独立方法，便于复用
+
     private double getTemperatureAttribute(Map<String, Object> attributes, String key, double defaultValue) {
         Object value = attributes.getOrDefault(key, defaultValue);
         if (value instanceof Integer) {
@@ -231,7 +224,6 @@ public class HomeAssistantService {
         } else if (value instanceof Double) {
             return (Double) value;
         } else {
-            // 处理字符串或其他类型
             try {
                 return Double.parseDouble(value.toString());
             } catch (NumberFormatException e) {
@@ -240,18 +232,13 @@ public class HomeAssistantService {
             }
         }
     }
-    /**
-     * 调节空调温度
-     * @param acEntityId 空调设备ID
-     * @param temperature 目标温度（需在设备支持的范围内，如16-30°C）
-     */
+
     public void setAcTemperature(String acEntityId, double temperature) {
         HaEntityState state = getEntityState(acEntityId);
         if (!checkAcAvailability(state, acEntityId)) {
             return;
         }
 
-        // 检查设备支持的温度范围
         Map<String, Object> attributes = state.getAttributes();
         double minTemp = getTemperatureAttribute(attributes, "min_temp", 16.0);
         double maxTemp = getTemperatureAttribute(attributes, "max_temp", 30.0);
@@ -261,7 +248,6 @@ public class HomeAssistantService {
             return;
         }
 
-        // 调用set_temperature服务
         webSocketClient.callServiceWithData(
                 "climate",
                 "set_temperature",
@@ -271,18 +257,12 @@ public class HomeAssistantService {
         System.out.println("已发送空调调温指令：" + acEntityId + " -> " + temperature + "°C");
     }
 
-    /**
-     * 切换空调运行模式（制冷/制热/自动等）
-     * @param acEntityId 空调设备ID
-     * @param mode 目标模式（需在设备支持的hvac_modes中，如"cool"、"heat"、"auto"）
-     */
     public void setAcMode(String acEntityId, String mode) {
         HaEntityState state = getEntityState(acEntityId);
         if (!checkAcAvailability(state, acEntityId)) {
             return;
         }
 
-        // 检查模式是否在设备支持的列表中
         Map<String, Object> attributes = state.getAttributes();
         List<String> supportedModes = (List<String>) attributes.getOrDefault("hvac_modes", List.of());
         if (!supportedModes.contains(mode)) {
@@ -290,7 +270,6 @@ public class HomeAssistantService {
             return;
         }
 
-        // 调用set_hvac_mode服务
         webSocketClient.callServiceWithData(
                 "climate",
                 "set_hvac_mode",
@@ -300,9 +279,6 @@ public class HomeAssistantService {
         System.out.println("已发送空调模式切换指令：" + acEntityId + " -> " + mode);
     }
 
-    /**
-     * 检查空调是否可用（辅助方法）
-     */
     private boolean checkAcAvailability(HaEntityState state, String entityId) {
         if (state == null) {
             System.err.println("空调设备不存在：" + entityId);
@@ -319,15 +295,8 @@ public class HomeAssistantService {
         return true;
     }
 
-    /**
-     * 带参数的服务调用（供内部或外部调用）
-     * @param domain 服务域（如"climate"）
-     * @param service 服务名称（如"set_fan_mode"）
-     * @param entityId 设备ID
-     * @param data 额外参数
-     */
     public void callServiceWithData(String domain, String service, String entityId, Map<String, Object> data) {
-        if (isConnected) {
+        if (isConnected && webSocketClient.isOpen()) {
             webSocketClient.callServiceWithData(domain, service, entityId, data);
         } else {
             System.err.println("未连接到Home Assistant，无法调用服务：" + domain + "." + service);

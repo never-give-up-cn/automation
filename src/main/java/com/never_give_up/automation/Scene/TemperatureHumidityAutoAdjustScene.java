@@ -1,7 +1,10 @@
 package com.never_give_up.automation.Scene;
 
+import com.aliyun.dysmsapi20170525.models.SendSmsResponse;
+import com.never_give_up.automation.Component.SMSComponent;
 import com.never_give_up.automation.Entity.HaEntityState;
 import com.never_give_up.automation.Service.HomeAssistantService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -18,6 +21,9 @@ import java.util.Map;
  */
 @Component
 public class TemperatureHumidityAutoAdjustScene {
+
+    @Autowired
+    private SMSComponent smsComponent;
 
     private final HomeAssistantService homeAssistantService;
 
@@ -133,6 +139,8 @@ public class TemperatureHumidityAutoAdjustScene {
      */
     private void handleDoorWindowTimeoutShutdown() {
         System.out.println("处理门窗超时关闭逻辑...");
+        SendSmsResponse sendSmsResponse = smsComponent.smsResponse("17338031465", "123456");
+        System.out.println("短信发送结果：" + sendSmsResponse.body.getMessage());
         // 1. 获取门窗传感器状态
         HaEntityState doorWindowState = homeAssistantService.getEntityState(DOOR_WINDOW_SENSOR_ID);
         System.out.println("门窗传感器原始状态：" + doorWindowState);
