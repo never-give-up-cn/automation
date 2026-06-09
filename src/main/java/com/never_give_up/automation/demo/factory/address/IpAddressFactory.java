@@ -54,10 +54,11 @@ public class IpAddressFactory implements INetworkFactory<String> {
         deviceIpMap.values().remove(ip);
     }
 
-    public void setCustomIp(String deviceName, String ip) {
+    public String setCustomIp(String deviceName, String ip) {
         if (isValidIp(ip) && !usedIps.contains(ip)) {
             deviceIpMap.put(deviceName, ip);
             usedIps.add(ip);
+            return ip;
         } else {
             throw new IllegalArgumentException("无效的IP地址或已被占用: " + ip);
         }
