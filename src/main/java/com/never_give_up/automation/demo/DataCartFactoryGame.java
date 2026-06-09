@@ -3,6 +3,7 @@ package com.never_give_up.automation.demo;
 import com.never_give_up.automation.demo.adapter.FactoryManager;
 import com.never_give_up.automation.demo.adapter.PacketAdapter;
 import com.never_give_up.automation.demo.factory.function.NatMappingFactory;
+import com.never_give_up.automation.demo.model.IpPacket;
 
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
@@ -1828,7 +1829,7 @@ public class DataCartFactoryGame extends JFrame {
         boolean hasPayload = true;
         boolean hasApp = false, hasTcp = false, hasIp = false, hasEther = false, hasLlc = false, hasFcs = false;
         boolean c_Payload = false, c_SP = false, c_DP = false, c_SEQ = false, c_ACK = false, c_CTL = false, c_WIN = false, c_CHK = false;
-
+        boolean isFragmented = false;
         boolean isNatted = false;
         String natPublicIp = null;
         int natPublicPort = 0;
@@ -2250,7 +2251,17 @@ public class DataCartFactoryGame extends JFrame {
                         ipFactory.createTcpPacket(srcIp, dstIp, new byte[0]);
                     }
                     break;
-                case 15: // IP 分片（已在 update() 中处理）
+                case 15: // IP 分片
+                    if (!isFragmented && cartType.equals("DATA")) {
+                        isFragmented = true;
+                        final int MTU = 500;
+                        int packetSize = 1000;
+                        if (packetSize > MTU) {
+                            IpPacket tempPacket = new IpPacket();
+                            tempPacket.setPayload(new byte[packetSize]);
+                            factoryManager.getIpFragmentFactory().fragmentPacket(tempPacket);
+                        }
+                    }
                     break;
                 case 16: // ARP 解析
                     if (resolvedServerIp != null && pcIpAddress != null) {
@@ -2298,7 +2309,7 @@ public class DataCartFactoryGame extends JFrame {
                     // factoryManager.getLinkLayerFactory().removeEthernetHeader();
                     break;
                 case 23: // 路由查表
-                    // factoryManager.getRouteTableFactory().lookupNextHop(resolvedServerIp);
+                    factoryManager.getRouteTable().lookup(resolvedServerIp);
                     break;
                 case 24: // NAT 转换
                     if (!isNatted && !isReturnTrip) {
@@ -2309,7 +2320,9 @@ public class DataCartFactoryGame extends JFrame {
                     }
                     break;
                 case 25: // WAN 封装
-                    // factoryManager.getWanFactory().addPppHeader();
+                    if (factoryManager.getBandwidthFactory().shouldDropPacket()) {
+                        appendToConsole("【💥 带宽限制】: 公网丢包模拟");
+                    }
                     break;
                 case 29: // 剥链路层（接收端）
                     hasLlc = false;
