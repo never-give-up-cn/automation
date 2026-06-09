@@ -17,7 +17,7 @@ public class TcpPacket extends BasePacket {
     private int checksum;
     private int urgentPointer;
     private byte[] options;
-
+    private boolean retransmission = false;
     public boolean isSyn() { return flags.contains("SYN"); }
     public boolean isAck() { return flags.contains("ACK"); }
     public boolean isFin() { return flags.contains("FIN"); }
