@@ -1263,7 +1263,7 @@ public class DataCartFactoryGame extends JFrame {
                         shCert.stage = -1;
                         shCert.serverCertificate = serverRsaKeyPair.getPublic().getEncoded();
                         pendingDataCarts.add(shCert);
-                        appendToConsole("【🔒 TLS】: 服务器回复 Server Hello + Certificate（RSA 公钥）");
+                        appendToConsole("【 TLS】: 服务器回复 Server Hello + Certificate（RSA 公钥）");
                     }
                     return;
                 case "TLS_CLIENT_FINISHED":
@@ -1338,6 +1338,28 @@ public class DataCartFactoryGame extends JFrame {
             }
         } else {
             switch (cart.cartType) {
+                case "TLS_SERVER_HELLO_CERT":
+                    if (cart.isReturnTrip && cart.isArrived && tlsState == TlsState.CLIENT_HELLO_SENT) {
+                        tlsState = TlsState.SERVER_HELLO_RCVD;
+                        try {
+                            // 客户端使用服务端公钥加密预主密钥（对称密钥）
+                            PublicKey serverPub = KeyFactory.getInstance("RSA").generatePublic(
+                                    new X509EncodedKeySpec(cart.serverCertificate));
+                            rsaCipher.init(Cipher.ENCRYPT_MODE, serverPub);
+                            byte[] encryptedSessionKey = rsaCipher.doFinal(sessionKey.getEncoded());
+                            // 发送 ClientKeyExchange
+                            DataCart cke = new DataCart(pcFactory.x, pcFactory.y, "TLS_CLIENT_KEY_EXCHANGE", 0);
+                            cke.encryptedData = encryptedSessionKey;
+                            cke.stage = 5;
+                            pendingDataCarts.add(cke);
+                            appendToConsole("【🔒 TLS】: 客户端 RSA 加密预主密钥，发送 ClientKeyExchange");
+                            tlsState = TlsState.CLIENT_KEY_EXCHANGE_SENT;
+                        } catch (Exception ex) {
+                            appendToConsole("【❌ TLS 错误】: 密钥交换失败");
+                            ex.printStackTrace();
+                        }
+                    }
+                    return;
                 case "SYN_ACK":
                     DataCart finalAck = new DataCart(pcFactory.x, pcFactory.y, "ACK_PC", 0);
                     finalAck.ackNumber = cart.sequenceNumber + 1;
@@ -1397,28 +1419,6 @@ public class DataCartFactoryGame extends JFrame {
                     timer.setRepeats(false);
                     timer.start();
                     break;
-                case "TLS_SERVER_HELLO_CERT":
-                    if (tlsState == TlsState.CLIENT_HELLO_SENT) {
-                        tlsState = TlsState.SERVER_HELLO_RCVD;
-                        try {
-                            // 客户端使用服务端公钥加密预主密钥（对称密钥）
-                            PublicKey serverPub = KeyFactory.getInstance("RSA").generatePublic(
-                                    new X509EncodedKeySpec(cart.serverCertificate));
-                            rsaCipher.init(Cipher.ENCRYPT_MODE, serverPub);
-                            byte[] encryptedSessionKey = rsaCipher.doFinal(sessionKey.getEncoded());
-                            // 发送 ClientKeyExchange
-                            DataCart cke = new DataCart(pcFactory.x, pcFactory.y, "TLS_CLIENT_KEY_EXCHANGE", 0);
-                            cke.encryptedData = encryptedSessionKey;
-                            cke.stage = 5;
-                            pendingDataCarts.add(cke);
-                            appendToConsole("【🔒 TLS】: 客户端 RSA 加密预主密钥，发送 ClientKeyExchange");
-                            // 随后发送 ChangeCipherSpec（模拟为同一个包，也可分开发送，此处简化）
-                            tlsState = TlsState.CLIENT_KEY_EXCHANGE_SENT;
-                        } catch (Exception ex) {
-                            appendToConsole("【❌ TLS 错误】: 密钥交换失败");
-                        }
-                    }
-                    return;
                 case "TLS_CLIENT_KEY_EXCHANGE":
                     if (cart.isArrived && tlsState == TlsState.CLIENT_KEY_EXCHANGE_SENT) {
                         // 服务器解密对称密钥，然后发送 ChangeCipherSpec + Finished
