@@ -112,6 +112,12 @@ public class PacketQueueFactory implements INetworkFactory<PacketQueue> {
             return queue.size();
         }
 
+        // 实现 PacketQueue 接口的 capacity() 方法
+        @Override
+        public int capacity() {
+            return capacity;
+        }
+
         @Override
         public void clear() {
             queue.clear();
@@ -175,6 +181,12 @@ public class PacketQueueFactory implements INetworkFactory<PacketQueue> {
         @Override
         public int size() {
             return queue.size();
+        }
+
+        // 实现 PacketQueue 接口的 capacity() 方法
+        @Override
+        public int capacity() {
+            return capacity;
         }
 
         @Override

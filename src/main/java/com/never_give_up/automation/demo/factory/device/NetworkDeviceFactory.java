@@ -80,15 +80,20 @@ public class NetworkDeviceFactory implements INetworkFactory<NetworkDevice> {
     }
 
     public DhcpServer createDhcpServer(String name, String ipAddress, String macAddress, String poolStart, String poolEnd) {
-        DhcpServer dhcpServer = new DhcpServer(name, ipAddress, macAddress, poolStart, poolEnd);
+        DhcpServer dhcpServer = new DhcpServer(name, ipAddress, macAddress);
+        dhcpServer.addAddressPool(poolStart, poolEnd);
         createdDevices.put(name, dhcpServer);
         return dhcpServer;
     }
 
     public DhcpServer createDhcpServer(String ipAddress, String macAddress) {
         dhcpServerCounter++;
-        return createDhcpServer("DhcpServer-" + dhcpServerCounter, ipAddress, macAddress,
-                "192.168.1.100", "192.168.1.200");
+        String name = "DhcpServer-" + dhcpServerCounter;
+        DhcpServer dhcpServer = new DhcpServer(name, ipAddress, macAddress);
+        // 设置默认地址池
+        dhcpServer.addAddressPool("192.168.1.100", "192.168.1.200");
+        createdDevices.put(name, dhcpServer);
+        return dhcpServer;
     }
 
     public NetworkDevice getDevice(String name) {

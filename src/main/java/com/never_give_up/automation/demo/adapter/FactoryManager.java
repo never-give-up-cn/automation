@@ -18,6 +18,7 @@ import com.never_give_up.automation.demo.factory.function.NatMappingFactory;
 import com.never_give_up.automation.demo.factory.function.RouteTableFactory;
 import com.never_give_up.automation.demo.factory.link.ArpPacketFactory;
 import com.never_give_up.automation.demo.factory.link.EthernetFactory;
+import com.never_give_up.automation.demo.factory.link.LinkLayerFactory;
 import com.never_give_up.automation.demo.factory.network.IcmpPacketFactory;
 import com.never_give_up.automation.demo.factory.network.IpFragmentFactory;
 import com.never_give_up.automation.demo.factory.network.IpPacketFactory;
@@ -58,6 +59,7 @@ public class FactoryManager {
     private final SubnetFactory subnetFactory;
     private final PacketQueueFactory queueFactory;
     private final FirewallRuleFactory firewallFactory;
+    private LinkLayerFactory linkLayerFactory;
 
     public FactoryManager() {
         this.ipAddressFactory = new IpAddressFactory();
@@ -87,6 +89,7 @@ public class FactoryManager {
         this.subnetFactory = new SubnetFactory();
         this.queueFactory = new PacketQueueFactory();
         this.firewallFactory = new FirewallRuleFactory();
+        linkLayerFactory = new LinkLayerFactory();
     }
 
     public void reset() {
@@ -213,5 +216,9 @@ public class FactoryManager {
 
     public SessionFactory getSessionFactory() {
         return sessionFactory;
+    }
+
+    public LinkLayerFactory getLinkLayerFactory() {
+        return linkLayerFactory;
     }
 }

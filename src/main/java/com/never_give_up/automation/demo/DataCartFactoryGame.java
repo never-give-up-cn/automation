@@ -3,6 +3,7 @@ package com.never_give_up.automation.demo;
 import com.never_give_up.automation.demo.adapter.FactoryManager;
 import com.never_give_up.automation.demo.adapter.PacketAdapter;
 import com.never_give_up.automation.demo.factory.function.NatMappingFactory;
+import com.never_give_up.automation.demo.factory.link.LlcHeader;
 import com.never_give_up.automation.demo.model.HttpPacket;
 import com.never_give_up.automation.demo.model.IpPacket;
 import com.never_give_up.automation.demo.model.TcpPacket;
@@ -2299,19 +2300,30 @@ public class DataCartFactoryGame extends JFrame {
                 case 20: // LLC（可选）
                     if (!hasLlc) {
                         hasLlc = true;
-                        // factoryManager.getLinkLayerFactory().setLlcHeader();
+                        // 添加 LLC 头部（使用默认 IP SAP）
+                        factoryManager.getLinkLayerFactory().setLlcHeader();
+                        LlcHeader llc = factoryManager.getLinkLayerFactory().getLlcHeader();
+                        appendToConsole("【🔗 LLC】: " + llc.toString());
                     }
                     break;
                 case 21: // FCS 校验
                     if (!hasFcs) {
                         hasFcs = true;
-                        // factoryManager.getLinkLayerFactory().calculateFcs();
+                        // 计算并添加 FCS（CRC32）
+                        // 注意：实际应该在封装完整帧后计算，这里仅模拟
+                        // byte[] frameData = ...;
+                        // byte[] fcs = factoryManager.getLinkLayerFactory().calculateFcs(frameData);
+                        appendToConsole("【🔒 FCS】: 计算 CRC32 校验和");
                     }
                     break;
                 case 22: // LAN 拆包（接收端）
                     hasLlc = false;
                     hasFcs = false;
-                    // factoryManager.getLinkLayerFactory().removeEthernetHeader();
+                    // 移除 Ethernet 头部并验证 FCS
+                    // byte[] ethernetFrame = ...;
+                    // boolean valid = factoryManager.getLinkLayerFactory().verifyFcs(ethernetFrame);
+                    // if (!valid) appendToConsole("【⚠️ FCS 校验失败】: 帧损坏");
+                    appendToConsole("【📥 链路层拆封】: 移除 Ethernet 头部、LLC、FCS");
                     break;
                 case 23: // 路由查表
                     factoryManager.getRouteTable().lookup(resolvedServerIp);
