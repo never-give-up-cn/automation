@@ -7,6 +7,7 @@ import com.never_give_up.automation.demo.factory.link.LlcHeader;
 import com.never_give_up.automation.demo.model.HttpPacket;
 import com.never_give_up.automation.demo.model.IpPacket;
 import com.never_give_up.automation.demo.model.TcpPacket;
+import lombok.Data;
 
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
@@ -1801,7 +1802,11 @@ public class DataCartFactoryGame extends JFrame {
         }
     }
 
+    @Data
     private class DataCart {
+        private byte[] ethernetFrameData;  // 存储完整的以太网帧数据
+        private boolean fcsVerified = false;  // FCS 是否已验证
+
         private static final AtomicInteger cartIdGenerator = new AtomicInteger(0);
         public final int cartId = cartIdGenerator.getAndIncrement();
         int identification;
@@ -2306,24 +2311,80 @@ public class DataCartFactoryGame extends JFrame {
                         appendToConsole("【🔗 LLC】: " + llc.toString());
                     }
                     break;
-                case 21: // FCS 校验
+                case 21: // FCS 校验（发送端：计算并附加）
                     if (!hasFcs) {
                         hasFcs = true;
-                        // 计算并添加 FCS（CRC32）
-                        // 注意：实际应该在封装完整帧后计算，这里仅模拟
-                        // byte[] frameData = ...;
-                        // byte[] fcs = factoryManager.getLinkLayerFactory().calculateFcs(frameData);
-                        appendToConsole("【🔒 FCS】: 计算 CRC32 校验和");
+
+                        // 获取当前正在构建的以太网帧（不含 FCS）
+                        String srcMac = "00:1A:2B:3C:4D:5F";  // PC 的 MAC
+                        String dstMac = "00:1A:2B:3C:4D:60";  // 网关/服务器的 MAC
+
+                        // 模拟网络层数据（IP 包）
+                        byte[] networkData = ("IP Packet Data").getBytes();
+
+                        // 构建以太网帧并计算 FCS
+                        byte[] completeFrame = factoryManager.getLinkLayerFactory()
+                                .buildEthernetFrame(dstMac, srcMac, 0x0800, networkData, hasLlc);
+
+                        // 存储帧数据到 DataCart
+                        this.setEthernetFrameData(completeFrame);
+
+                        // 获取 FCS 值用于显示
+                        byte[] fcs = factoryManager.getLinkLayerFactory().getCurrentFcs();
+
+                        appendToConsole(String.format("【🔒 FCS 计算】: CRC32 = %02X%02X%02X%02X",
+                                fcs[0] & 0xFF, fcs[1] & 0xFF, fcs[2] & 0xFF, fcs[3] & 0xFF));
+                        appendToConsole(String.format("【📦 完整帧】: 总长度 %d 字节 (含 4 字节 FCS)",
+                                completeFrame.length));
                     }
                     break;
+
                 case 22: // LAN 拆包（接收端）
-                    hasLlc = false;
-                    hasFcs = false;
-                    // 移除 Ethernet 头部并验证 FCS
-                    // byte[] ethernetFrame = ...;
-                    // boolean valid = factoryManager.getLinkLayerFactory().verifyFcs(ethernetFrame);
-                    // if (!valid) appendToConsole("【⚠️ FCS 校验失败】: 帧损坏");
-                    appendToConsole("【📥 链路层拆封】: 移除 Ethernet 头部、LLC、FCS");
+                    if (!isReturnTrip) {
+                        // 接收端处理：移除 Ethernet 头部并验证 FCS
+                        hasLlc = false;
+                        hasFcs = false;
+
+                        // 获取收到的完整以太网帧
+                        byte[] receivedFrame = this.getEthernetFrameData();
+
+                        if (receivedFrame != null && receivedFrame.length > 0) {
+                            // 验证 FCS 并提取网络层数据
+                            byte[] networkData = factoryManager.getLinkLayerFactory()
+                                    .extractNetworkData(receivedFrame);
+
+                            if (networkData != null) {
+                                // FCS 校验通过
+                                this.setFcsVerified(true);
+                                String 拆封Info = factoryManager.getLinkLayerFactory().getRemoveEthernetHeaderInfo();
+                                appendToConsole(拆封Info);
+                                appendToConsole(String.format("  └─ 提取网络层数据: %d 字节", networkData.length));
+                            } else {
+                                // FCS 校验失败，帧损坏
+                                this.setFcsVerified(false);
+                                appendToConsole("【⚠️ FCS 校验失败】: 帧损坏，数据包将被丢弃");
+                                appendToConsole(String.format("  └─ 帧长度: %d 字节 (期望至少 18 字节)",
+                                        receivedFrame.length));
+
+                                // 标记数据包为丢弃
+                                this.isDropped = true;
+                                return;
+                            }
+                        } else {
+                            // 模拟拆封过程（当没有实际帧数据时）
+                            String 拆封Info = factoryManager.getLinkLayerFactory().getRemoveEthernetHeaderInfo();
+                            appendToConsole(拆封Info);
+                        }
+
+                        // 重置链路层状态，准备处理下一个包
+                        factoryManager.getLinkLayerFactory().resetLinkLayer();
+                    } else {
+                        // 回传包（如 ACK）也需要拆封
+                        hasLlc = false;
+                        hasFcs = false;
+                        appendToConsole("【📥 链路层拆封】: 处理回传数据包");
+                        factoryManager.getLinkLayerFactory().resetLinkLayer();
+                    }
                     break;
                 case 23: // 路由查表
                     factoryManager.getRouteTable().lookup(resolvedServerIp);

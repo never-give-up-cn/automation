@@ -13,15 +13,15 @@ public class LlcHeader {
     private byte control;
 
     // 常用 SAP 值
-    public static final byte SAP_NULL = 0x00;      // Null SAP
-    public static final byte SAP_LLC_MGMT = 0x02;   // LLC Management
-    public static final byte SAP_IP = 0x06;         // IP 协议
-    public static final byte SAP_SNA = 0x04;        // SNA Path Control
-    public static final byte SAP_NETBIOS = 0xF0;    // NetBIOS
-    public static final byte SAP_IPX = 0xE0;        // IPX/SPX
+    public static final byte SAP_NULL = 0x00;           // Null SAP (0)
+    public static final byte SAP_LLC_MGMT = 0x02;       // LLC Management (2)
+    public static final byte SAP_IP = 0x06;             // IP 协议 (6)
+    public static final byte SAP_SNA = 0x04;            // SNA Path Control (4)
+    public static final byte SAP_NETBIOS = (byte) 0xF0; // NetBIOS (240，需强制转换)
+    public static final byte SAP_IPX = (byte) 0xE0;     // IPX/SPX (224，需强制转换)
 
     // 控制字段 - UI 帧 (Unnumbered Information)
-    public static final byte UI_FRAME = 0x03;       // 无编号信息帧
+    public static final byte UI_FRAME = 0x03;           // 无编号信息帧 (3)
 
     public LlcHeader() {
         this.dsap = SAP_IP;
@@ -44,6 +44,11 @@ public class LlcHeader {
 
     public byte getControl() { return control; }
     public void setControl(byte control) { this.control = control; }
+
+    // 获取无符号值（用于显示）
+    public int getDsapUnsigned() { return dsap & 0xFF; }
+    public int getSsapUnsigned() { return ssap & 0xFF; }
+    public int getControlUnsigned() { return control & 0xFF; }
 
     /**
      * 序列化 LLC 头为字节数组
