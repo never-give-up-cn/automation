@@ -1072,13 +1072,24 @@ public class DataCartFactoryGame extends JFrame {
             }
         } else {
             switch (cart.cartType) {
+                case "DNS_RESPONSE":
+                    resolvedServerIp = cart.resolvedIp;
+                    isDnsResolved = true;
+                    isDnsResolving = false;
+                    dnsCache.put(targetDomain, new DnsEntry(targetDomain, resolvedServerIp, 3600000));
+                    updateDnsDisplay();
+                    appendToConsole("【 DNS 解析成功】: " + targetDomain + " → " + resolvedServerIp);
+                    performArpResolution(resolvedServerIp);
+                    if (!useUdp) startTcpHandshake();
+                    else startUdpTransmission();
+                    return;
                 case "DHCP_OFFER":
-                    appendToConsole("【📥 DHCP】: Offer 到达客户端");
+                    appendToConsole("【 DHCP】: Offer 到达客户端");
                     dhcpStep = 2;
                     DataCart request = new DataCart(pcFactory.x, pcFactory.y, "DHCP_REQUEST", 0);
                     request.stage = 1;
                     pendingDataCarts.add(request);
-                    appendToConsole("【📤 DHCP】: 发送 Request");
+                    appendToConsole("【 DHCP】: 发送 Request");
                     break;
                 case "DHCP_ACK":
                     appendToConsole("【✅ DHCP】: ACK 到达，IP 分配成功！");
@@ -1091,7 +1102,7 @@ public class DataCartFactoryGame extends JFrame {
                     dhcpStep = 4;
                     funds += 200;
                     updateTopLabel();
-                    appendToConsole("【🌐 网络就绪】: PC IP = " + pcIpAddress);
+                    appendToConsole("【 网络就绪】: PC IP = " + pcIpAddress);
                     break;
             }
         }
