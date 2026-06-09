@@ -1597,6 +1597,14 @@ public class DataCartFactoryGame extends JFrame {
                     httpResponseContent = cart.httpBody;
                     appendToConsole("【📡 HTTP】: 收到 200 OK, 内容: " + httpResponseContent);
                     JOptionPane.showMessageDialog(this, "HTTP 200 OK\n\n" + httpResponseContent, "HTTP 响应", JOptionPane.INFORMATION_MESSAGE);
+
+                    // HTTP 请求完成后，开始四次挥手
+                    currentTcpState = TcpState.FIN_WAIT_1;
+                    stateTimerWatchdog = now;
+                    DataCart fin = new DataCart(pcFactory.x, pcFactory.y, "FIN_PC", 0);
+                    fin.ttl = 64;
+                    pendingDataCarts.add(fin);
+                    appendToConsole("【🏁 HTTP 完成】: 发送 FIN，开始四次挥手");
                     break;
             }
         }
@@ -1999,6 +2007,18 @@ public class DataCartFactoryGame extends JFrame {
             } else if (type.equals("DNS_AUTH_TO_LOCAL")) {
                 return findBuildingCoords("DNS_LOCAL");
             }
+            // TLS 和 HTTP 演示专用路由（直接到应用层）
+            if (type.equals("TLS_CLIENT_HELLO") || type.equals("HTTP_GET") ||
+                    type.equals("TLS_CLIENT_KEY_EXCHANGE") || type.equals("TLS_CLIENT_FINISHED")) {
+                if (s == 5) return findBuildingCoords("TX_APP");
+                return null;
+            }
+            if (type.equals("TLS_SERVER_HELLO_CERT") || type.equals("HTTP_200_OK") ||
+                    type.equals("TLS_SERVER_FINISHED")) {
+                if (s == -1) return findBuildingCoords("PC_FACTORY");
+                return null;
+            }
+
 
             if (type.equals("DHCP_DISCOVER")) {
                 switch (s) {
