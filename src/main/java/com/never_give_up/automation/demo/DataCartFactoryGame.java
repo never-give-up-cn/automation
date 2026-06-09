@@ -1,11 +1,18 @@
 package com.never_give_up.automation.demo;
 
+import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.spec.SecretKeySpec;
 import javax.swing.*;
 import javax.swing.Timer;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.security.KeyFactory;
+import java.security.KeyPairGenerator;
+import java.security.PublicKey;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.*;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -20,7 +27,7 @@ public class DataCartFactoryGame extends JFrame {
     }
 
     enum TlsState {
-        IDLE, CLIENT_HELLO_SENT, SERVER_HELLO_RCVD, FINISHED
+        IDLE, CLIENT_HELLO_SENT, SERVER_HELLO_RCVD, FINISHED,CLIENT_KEY_EXCHANGE_SENT
     }
 
     private static class DnsEntry {
@@ -28,20 +35,28 @@ public class DataCartFactoryGame extends JFrame {
         String ipAddress;
         long ttl;
         long createTime;
+
         public DnsEntry(String domain, String ip, long ttl) {
             this.domain = domain;
             this.ipAddress = ip;
             this.ttl = ttl;
             this.createTime = System.currentTimeMillis();
         }
-        public boolean isExpired() { return System.currentTimeMillis() - createTime > ttl; }
-        public long getRemainingMs() { return ttl - (System.currentTimeMillis() - createTime); }
+
+        public boolean isExpired() {
+            return System.currentTimeMillis() - createTime > ttl;
+        }
+
+        public long getRemainingMs() {
+            return ttl - (System.currentTimeMillis() - createTime);
+        }
     }
 
     private static class ArpEntry {
         String ipAddress;
         String macAddress;
         long lastSeen;
+
         public ArpEntry(String ip, String mac) {
             this.ipAddress = ip;
             this.macAddress = mac;
@@ -54,6 +69,7 @@ public class DataCartFactoryGame extends JFrame {
         int insidePort;
         String publicIp;
         int publicPort;
+
         public NatEntry(String insideIp, int insidePort, String publicIp, int publicPort) {
             this.insideIp = insideIp;
             this.insidePort = insidePort;
@@ -67,9 +83,57 @@ public class DataCartFactoryGame extends JFrame {
         long sendTime;
         int retryCount = 0;
         boolean isAcked = false;
+
         public RetransmissionTask(int seqNum, long sendTime) {
             this.seqNum = seqNum;
             this.sendTime = sendTime;
+        }
+    }
+
+    // ========== 新增字段（类成员） ==========
+    private Map<IpFragmentKey, List<IpFragment>> fragmentBuffer = new HashMap<>();
+    private int ipIdentifierCounter = 2000;
+
+    private static class IpFragment {
+        int offset;
+        boolean moreFragments;
+        byte[] data;
+
+        public IpFragment(int offset, boolean mf, byte[] data) {
+            this.offset = offset;
+            this.moreFragments = mf;
+            this.data = data;
+        }
+    }
+
+    // ========== 新增内部类（放在类外部或内部均可） ==========
+    private static class IpFragmentKey {
+        int identification;
+        String srcIp;
+        String dstIp;
+        String protocol;
+
+        public IpFragmentKey(int id, String src, String dst, String proto) {
+            identification = id;
+            srcIp = src;
+            dstIp = dst;
+            protocol = proto;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            IpFragmentKey that = (IpFragmentKey) o;
+            return identification == that.identification &&
+                    Objects.equals(srcIp, that.srcIp) &&
+                    Objects.equals(dstIp, that.dstIp) &&
+                    Objects.equals(protocol, that.protocol);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(identification, srcIp, dstIp, protocol);
         }
     }
 
@@ -149,6 +213,11 @@ public class DataCartFactoryGame extends JFrame {
     private boolean useUdp = false;
     private boolean httpDemoEnabled = false;
     private boolean tlsEnabled = false;
+    private java.security.KeyPair serverRsaKeyPair;
+    private javax.crypto.Cipher rsaCipher;
+    private javax.crypto.SecretKey sessionKey;
+    private javax.crypto.Cipher aesCipher;
+    private boolean tlsCipherReady = false;
     private TlsState tlsState = TlsState.IDLE;
     private boolean udpActive = false;
     private int udpSeqToSend = 0;
@@ -165,7 +234,11 @@ public class DataCartFactoryGame extends JFrame {
         setLayout(new BorderLayout(10, 10));
 
         stateTimerWatchdog = System.currentTimeMillis();
-
+        try {
+            initCrypto();
+        } catch (Exception e) {
+            throw new RuntimeException("加密组件初始化失败", e);
+        }
         initMap();
         initArpCache();
         initDnsCache();
@@ -256,8 +329,16 @@ public class DataCartFactoryGame extends JFrame {
         ButtonGroup modeGroup = new ButtonGroup();
         modeGroup.add(rbTcp);
         modeGroup.add(rbUdp);
-        rbTcp.addActionListener(e -> { useUdp = false; resetTcpSession(); appendToConsole("【切换】: 使用 TCP 模式"); });
-        rbUdp.addActionListener(e -> { useUdp = true; resetTcpSession(); appendToConsole("【切换】: 使用 UDP 模式"); });
+        rbTcp.addActionListener(e -> {
+            useUdp = false;
+            resetTcpSession();
+            appendToConsole("【切换】: 使用 TCP 模式");
+        });
+        rbUdp.addActionListener(e -> {
+            useUdp = true;
+            resetTcpSession();
+            appendToConsole("【切换】: 使用 UDP 模式");
+        });
 
         JCheckBox cbHttp = new JCheckBox("📡 HTTP 演示", false);
         JCheckBox cbTls = new JCheckBox("🔒 启用 TLS", false);
@@ -278,9 +359,15 @@ public class DataCartFactoryGame extends JFrame {
         JButton resetButton = new JButton("🔄 重置会话");
         resetButton.addActionListener(e -> resetTcpSession());
         JButton clearArpButton = new JButton("🗑️ 清空 ARP 缓存");
-        clearArpButton.addActionListener(e -> { arpCache.clear(); updateArpDisplay(); });
+        clearArpButton.addActionListener(e -> {
+            arpCache.clear();
+            updateArpDisplay();
+        });
         JButton clearDnsButton = new JButton("🗑️ 清空 DNS 缓存");
-        clearDnsButton.addActionListener(e -> { dnsCache.clear(); updateDnsDisplay(); });
+        clearDnsButton.addActionListener(e -> {
+            dnsCache.clear();
+            updateDnsDisplay();
+        });
         JButton clearConsoleButton = new JButton("🗑️ 清空控制台");
         clearConsoleButton.addActionListener(e -> txtHexDisplay.setText(""));
 
@@ -319,7 +406,8 @@ public class DataCartFactoryGame extends JFrame {
                     if (existing.equals("NONE") || existing.equals("PC_FACTORY") || existing.equals("RX_ST")) return;
                     funds += existing.startsWith("MINER") ? PRICE_MINER / 2 : PRICE_MACHINE / 2;
                     buildingLayout[row][col] = "NONE";
-                    canvas.repaint(); updateTopLabel();
+                    canvas.repaint();
+                    updateTopLabel();
                     return;
                 }
 
@@ -337,7 +425,8 @@ public class DataCartFactoryGame extends JFrame {
                         buildingLayout[row][col] = selectedBuilding;
                     }
                 }
-                updateTopLabel(); canvas.repaint();
+                updateTopLabel();
+                canvas.repaint();
             }
 
             @Override
@@ -459,7 +548,7 @@ public class DataCartFactoryGame extends JFrame {
             shopPanel.add(title);
             for (int i = 1; i < cat.length; i += 2) {
                 final String tag = cat[i];
-                String name = cat[i+1];
+                String name = cat[i + 1];
                 JRadioButton rad = new JRadioButton(name);
                 group.add(rad);
                 rad.addActionListener(e -> selectedBuilding = tag);
@@ -469,8 +558,10 @@ public class DataCartFactoryGame extends JFrame {
     }
 
     private void initMap() {
-        mapLayout[2][1] = 1; mapLayout[3][1] = 1;
-        mapLayout[12][1] = 2; mapLayout[13][1] = 2;
+        mapLayout[2][1] = 1;
+        mapLayout[3][1] = 1;
+        mapLayout[12][1] = 2;
+        mapLayout[13][1] = 2;
 
         for (int r = 0; r < MAP_ROWS; r++) {
             for (int c = 0; c < MAP_COLS; c++) {
@@ -479,11 +570,13 @@ public class DataCartFactoryGame extends JFrame {
             }
         }
 
-        buildingLayout[MAP_ROWS/2][3] = "PC_FACTORY";
-        pcFactory = new Point(3 * TILE_SIZE + TILE_SIZE/2, (MAP_ROWS/2) * TILE_SIZE + TILE_SIZE/2);
-        buildingLayout[MAP_ROWS/2][MAP_COLS-3] = "RX_ST";
-        buildingLayout[2][1] = "MINER_H"; buildingLayout[3][1] = "MINER_H";
-        buildingLayout[12][1] = "MINER_S"; buildingLayout[13][1] = "MINER_S";
+        buildingLayout[MAP_ROWS / 2][3] = "PC_FACTORY";
+        pcFactory = new Point(3 * TILE_SIZE + TILE_SIZE / 2, (MAP_ROWS / 2) * TILE_SIZE + TILE_SIZE / 2);
+        buildingLayout[MAP_ROWS / 2][MAP_COLS - 3] = "RX_ST";
+        buildingLayout[2][1] = "MINER_H";
+        buildingLayout[3][1] = "MINER_H";
+        buildingLayout[12][1] = "MINER_S";
+        buildingLayout[13][1] = "MINER_S";
 
         int startRow = MAP_ROWS / 2 - 3;
 
@@ -593,6 +686,7 @@ public class DataCartFactoryGame extends JFrame {
 
         DnsEntry cached = dnsCache.get(targetDomain);
         if (cached != null && !cached.isExpired()) {
+            // 缓存命中，直接完成
             resolvedServerIp = cached.ipAddress;
             isDnsResolved = true;
             isDnsResolving = false;
@@ -600,13 +694,16 @@ public class DataCartFactoryGame extends JFrame {
             performArpResolution(resolvedServerIp);
             if (!useUdp) startTcpHandshake();
             else startUdpTransmission();
+//            updateTaskPanel();
+//            checkTaskCompletion();
             return;
         }
 
+        // 无缓存，发起递归查询第一步：客户端 → 本地 DNS
         DataCart dnsQuery = new DataCart(pcFactory.x, pcFactory.y, "DNS_QUERY", 0);
         dnsQuery.domain = targetDomain;
         pendingDataCarts.add(dnsQuery);
-        appendToConsole("【📤 DNS 查询】: 发送 DNS 请求到本地 DNS 服务器");
+        appendToConsole("【📤 DNS 查询】: 发送请求到本地 DNS 服务器");
     }
 
     private void performArpResolution(String targetIp) {
@@ -620,6 +717,18 @@ public class DataCartFactoryGame extends JFrame {
         } else {
             appendToConsole("【✅ ARP 缓存命中】: " + targetIp + " → " + arpCache.get(targetIp).macAddress);
         }
+    }
+
+    // ========== 新增：加密初始化 ==========
+    private void initCrypto() throws Exception {
+        KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
+        keyGen.initialize(2048);
+        serverRsaKeyPair = keyGen.generateKeyPair();
+        rsaCipher = Cipher.getInstance("RSA");
+        KeyGenerator aesGen = KeyGenerator.getInstance("AES");
+        aesGen.init(128);
+        sessionKey = aesGen.generateKey();
+        aesCipher = Cipher.getInstance("AES");
     }
 
     private void startTcpHandshake() {
@@ -697,7 +806,7 @@ public class DataCartFactoryGame extends JFrame {
 
         int currentCartsInWan = 0;
         for (DataCart c : dataCarts) {
-            int col = (int)(c.x / TILE_SIZE);
+            int col = (int) (c.x / TILE_SIZE);
             if (!c.isReturnTrip && c.stage >= 25 && c.stage <= 31 && col >= 21 && col <= 34) {
                 currentCartsInWan++;
             }
@@ -707,9 +816,9 @@ public class DataCartFactoryGame extends JFrame {
             for (int r = 0; r < MAP_ROWS; r++) {
                 for (int c = 0; c < MAP_COLS; c++) {
                     if (buildingLayout[r][c].equals("MINER_H"))
-                        oreCarts.add(new OreCart(c*TILE_SIZE+TILE_SIZE/2, r*TILE_SIZE+TILE_SIZE/2, "HELLO"));
+                        oreCarts.add(new OreCart(c * TILE_SIZE + TILE_SIZE / 2, r * TILE_SIZE + TILE_SIZE / 2, "HELLO"));
                     if (buildingLayout[r][c].equals("MINER_S"))
-                        oreCarts.add(new OreCart(c*TILE_SIZE+TILE_SIZE/2, r*TILE_SIZE+TILE_SIZE/2, "SAY"));
+                        oreCarts.add(new OreCart(c * TILE_SIZE + TILE_SIZE / 2, r * TILE_SIZE + TILE_SIZE / 2, "SAY"));
                 }
             }
 
@@ -734,7 +843,8 @@ public class DataCartFactoryGame extends JFrame {
                             // 只有普通 TCP 才发送数据包
                             int effectiveWindow = Math.min(cwnd, rwnd);
                             while (effectiveWindow > 0 && helloStock >= 2 && sayStock >= 1 && serverReceivedCount < totalDataToTransmit) {
-                                helloStock -= 2; sayStock -= 1;
+                                helloStock -= 2;
+                                sayStock -= 1;
                                 int currentSeq = nextSeqNum++;
                                 activeTimers.add(new RetransmissionTask(currentSeq, now));
                                 DataCart dataPkt = new DataCart(pcFactory.x, pcFactory.y, "DATA", currentSeq);
@@ -755,11 +865,12 @@ public class DataCartFactoryGame extends JFrame {
             }
 
             // HTTP / TLS 专用逻辑（仅在 TCP 且 HTTP 演示启用时）
+            // 原位置：在 httpDemoEnabled 且连接建立后，添加以下 TLS 启动逻辑
             if (httpDemoEnabled && pcIpAssigned && !useUdp && currentTcpState == TcpState.ESTABLISHED && !httpSent) {
                 if (tlsEnabled && tlsState == TlsState.IDLE) {
                     tlsState = TlsState.CLIENT_HELLO_SENT;
                     DataCart hello = new DataCart(pcFactory.x, pcFactory.y, "TLS_CLIENT_HELLO", 0);
-                    hello.stage = 5;
+                    hello.stage = 5; // 直接进入应用层封装
                     pendingDataCarts.add(hello);
                     appendToConsole("【🔒 TLS】: 发送 Client Hello");
                 } else if (!tlsEnabled) {
@@ -805,13 +916,17 @@ public class DataCartFactoryGame extends JFrame {
 
         oreCarts.removeIf(c -> {
             c.update();
-            if (c.isArrived) { if (c.oreType.equals("HELLO")) helloStock++; else sayStock++; return true; }
+            if (c.isArrived) {
+                if (c.oreType.equals("HELLO")) helloStock++;
+                else sayStock++;
+                return true;
+            }
             return false;
         });
 
         List<DataCart> toRemoveCarts = new ArrayList<>();
         for (DataCart cart : dataCarts) {
-            int col = (int)(cart.x / TILE_SIZE);
+            int col = (int) (cart.x / TILE_SIZE);
             if (!cart.isReturnTrip && cart.stage >= 25 && cart.stage <= 31 && col >= 21 && col <= 34) {
                 if (currentCartsInWan > WAN_BOTTLE_NECK_MAX && !isForemostCartInWan(cart)) {
                     cart.waitInQueueTimer++;
@@ -852,12 +967,18 @@ public class DataCartFactoryGame extends JFrame {
         dataCarts.removeAll(toRemoveCarts);
 
         if (!pendingDataCarts.isEmpty()) {
-            dataCarts.addAll(pendingDataCarts);
-            pendingDataCarts.clear();
+            // 防止队列无限膨胀，限制最大待处理包数
+            if (pendingDataCarts.size() > 1000) {
+                appendToConsole("【⚠️ 队列溢出】: 待处理包过多，清空队列防止卡死");
+                pendingDataCarts.clear();
+            } else {
+                dataCarts.addAll(pendingDataCarts);
+                pendingDataCarts.clear();
+            }
         }
 
         dnsCache.entrySet().removeIf(entry -> entry.getValue().isExpired());
-        prgNetwork.setValue((int)(((double)serverReceivedCount / totalDataToTransmit) * 100));
+        prgNetwork.setValue((int) (((double) serverReceivedCount / totalDataToTransmit) * 100));
         canvas.repaint();
     }
 
@@ -865,9 +986,12 @@ public class DataCartFactoryGame extends JFrame {
         double maxProgressX = 0;
         DataCart foremost = null;
         for (DataCart c : dataCarts) {
-            int col = (int)(c.x / TILE_SIZE);
+            int col = (int) (c.x / TILE_SIZE);
             if (!c.isReturnTrip && c.stage >= 25 && c.stage <= 31 && col >= 21 && col <= 34) {
-                if (c.x > maxProgressX) { maxProgressX = c.x; foremost = c; }
+                if (c.x > maxProgressX) {
+                    maxProgressX = c.x;
+                    foremost = c;
+                }
             }
         }
         return foremost == null || foremost == target;
@@ -880,7 +1004,30 @@ public class DataCartFactoryGame extends JFrame {
         pendingDataCarts.add(get);
         appendToConsole("【📡 HTTP】: 发送 GET /index.html HTTP/1.1");
     }
+    // ========== 新增辅助方法 ==========
+    private boolean isReassemblyComplete(IpFragmentKey key) {
+        List<IpFragment> frags = fragmentBuffer.get(key);
+        if (frags == null || frags.isEmpty()) return false;
+        // 简单判断：存在 MF=0 的最后一个分片即认为所有分片到达（此处未严格校验偏移连续性）
+        for (IpFragment f : frags) {
+            if (!f.moreFragments) return true;
+        }
+        return false;
+    }
 
+    private byte[] reassembleFragments(IpFragmentKey key) {
+        List<IpFragment> frags = fragmentBuffer.get(key);
+        frags.sort(Comparator.comparingInt(f -> f.offset));
+        int totalLen = 0;
+        for (IpFragment f : frags) totalLen += f.data.length;
+        byte[] result = new byte[totalLen];
+        int pos = 0;
+        for (IpFragment f : frags) {
+            System.arraycopy(f.data, 0, result, pos, f.data.length);
+            pos += f.data.length;
+        }
+        return result;
+    }
     private void handleCartArrival(DataCart cart) {
         Point serverPos = findBuildingCoords("RX_ST");
         Point dhcpServerPos = findBuildingCoords("DHCP_SERVER");
@@ -989,14 +1136,98 @@ public class DataCartFactoryGame extends JFrame {
         }
 
         if (!cart.isReturnTrip) {
-            switch(cart.cartType) {
+            switch (cart.cartType) {
+                // ========== handleCartArrival() 中新增 IP_FRAGMENT 处理 ==========
+                case "IP_FRAGMENT":
+                    if (!cart.isReturnTrip && cart.isArrived) {
+                        String dstIp = resolvedServerIp != null ? resolvedServerIp : "unknown";
+                        IpFragmentKey key = new IpFragmentKey(cart.identification, pcIpAddress, dstIp, "TCP");
+                        fragmentBuffer.computeIfAbsent(key, k -> new ArrayList<>()).add(
+                                new IpFragment(cart.fragmentOffset, cart.moreFragments, cart.fragmentData)
+                        );
+                        appendToConsole(String.format("【🧩 IP 分片】: 收到分片 ID=%d offset=%d MF=%b",
+                                cart.identification, cart.fragmentOffset, cart.moreFragments));
+                        if (isReassemblyComplete(key)) {
+                            byte[] fullData = reassembleFragments(key);
+                            fragmentBuffer.remove(key);
+                            appendToConsole("【🧩 IP 重组完成】: 大小 " + fullData.length + " 字节");
+                            // 生成重组后的完整数据包，并直接跳到 RX_TCP 阶段继续处理
+                            DataCart reassembled = new DataCart(serverPos.x, serverPos.y, "DATA", 0);
+                            reassembled.isReturnTrip = false;
+                            reassembled.stage = 31; // 直接进入传输层解封装
+                            pendingDataCarts.add(reassembled);
+                        }
+                    }
+                    return;
                 case "DNS_QUERY":
+                    if (!cart.isReturnTrip && cart.stage >= 2) {
+                        // 到达本地 DNS (stage 2)
+                        appendToConsole("【📥 本地 DNS】: 无缓存，向根 DNS 发起递归查询");
+                        DataCart toRoot = new DataCart(cart.x, cart.y, "DNS_RECURSION_ROOT", 0);
+                        toRoot.domain = cart.domain;
+                        toRoot.isReturnTrip = false;
+                        pendingDataCarts.add(toRoot);
+                        return;
+                    }
                     appendToConsole("【📥 DNS 查询】: 到达 DNS 服务器，正在递归查询...");
                     DataCart dnsResp = new DataCart(cart.x, cart.y, "DNS_RESPONSE", 0);
                     dnsResp.domain = cart.domain;
                     dnsResp.resolvedIp = "10.0.0.1";
                     dnsResp.isReturnTrip = true;
                     pendingDataCarts.add(dnsResp);
+                    break;
+                case "DNS_RECURSION_ROOT":
+                    if (!cart.isReturnTrip && cart.isArrived) {
+                        // 到达根 DNS，返回顶级域权威 DNS 地址（模拟为 10.1.1.1）
+                        DataCart rootResp = new DataCart(cart.x, cart.y, "DNS_RECURSION_ROOT_RESP", 0);
+                        rootResp.domain = cart.domain;
+                        rootResp.resolvedIp = "10.1.1.1"; // 模拟权威 DNS 地址
+                        rootResp.isReturnTrip = true;
+                        pendingDataCarts.add(rootResp);
+                        appendToConsole("【🌐 根 DNS】: 返回顶级域权威 DNS 地址 " + rootResp.resolvedIp);
+                    }
+                    break;
+                case "DNS_RECURSION_ROOT_RESP":
+                    if (cart.isReturnTrip && cart.isArrived) {
+                        // 本地 DNS 收到根回复，向权威 DNS 发起查询
+                        DataCart toAuth = new DataCart(findBuildingCoords("DNS_AUTH").x, findBuildingCoords("DNS_AUTH").y,
+                                "DNS_RECURSION_AUTH", 0);
+                        toAuth.domain = cart.domain;
+                        toAuth.isReturnTrip = false;
+                        pendingDataCarts.add(toAuth);
+                        appendToConsole("【📤 本地 DNS】: 向权威 DNS 查询 " + cart.domain);
+                    }
+                    break;
+                case "DNS_RECURSION_AUTH":
+                    if (!cart.isReturnTrip && cart.isArrived) {
+                        // 权威 DNS 响应最终 IP
+                        DataCart authResp = new DataCart(cart.x, cart.y, "DNS_RECURSION_AUTH_RESP", 0);
+                        authResp.domain = cart.domain;
+                        authResp.resolvedIp = "10.0.0.1"; // 目标服务器 IP
+                        authResp.isReturnTrip = true;
+                        pendingDataCarts.add(authResp);
+                        appendToConsole("【🏢 权威 DNS】: " + cart.domain + " → " + authResp.resolvedIp);
+                    }
+                    break;
+                case "DNS_RECURSION_AUTH_RESP":
+                    if (cart.isReturnTrip && cart.isArrived) {
+                        // 本地 DNS 获得最终结果，缓存并返回给客户端
+                        resolvedServerIp = cart.resolvedIp;
+                        isDnsResolved = true;
+                        isDnsResolving = false;
+                        dnsCache.put(targetDomain, new DnsEntry(targetDomain, resolvedServerIp, 3600000));
+                        appendToConsole("【📥 本地 DNS】: 缓存结果 " + targetDomain + " → " + resolvedServerIp);
+                        updateDnsDisplay();
+
+                        // 向客户端发送最终响应
+                        DataCart finalResp = new DataCart(findBuildingCoords("DNS_LOCAL").x, findBuildingCoords("DNS_LOCAL").y,
+                                "DNS_RESPONSE", 0);
+                        finalResp.domain = cart.domain;
+                        finalResp.resolvedIp = resolvedServerIp;
+                        finalResp.isReturnTrip = true;
+                        pendingDataCarts.add(finalResp);
+                        appendToConsole("【📬 DNS 响应】: 返回给客户端");
+                    }
                     break;
                 case "DNS_RESPONSE":
                     resolvedServerIp = cart.resolvedIp;
@@ -1023,13 +1254,16 @@ public class DataCartFactoryGame extends JFrame {
                         }
                     }
                     break;
+                // ========== handleCartArrival() 中 TLS 新增 case ==========
                 case "TLS_CLIENT_HELLO":
                     if (cart.isArrived) {
-                        DataCart sh = new DataCart(serverPos.x, serverPos.y, "TLS_SERVER_HELLO_CERT", 0);
-                        sh.isReturnTrip = true;
-                        sh.stage = -1;
-                        pendingDataCarts.add(sh);
-                        appendToConsole("【🔒 TLS】: 服务器收到 Client Hello，回复 Server Hello + Certificate");
+                        // 服务器回复 ServerHello + Certificate（携带公钥）
+                        DataCart shCert = new DataCart(serverPos.x, serverPos.y, "TLS_SERVER_HELLO_CERT", 0);
+                        shCert.isReturnTrip = true;
+                        shCert.stage = -1;
+                        shCert.serverCertificate = serverRsaKeyPair.getPublic().getEncoded();
+                        pendingDataCarts.add(shCert);
+                        appendToConsole("【🔒 TLS】: 服务器回复 Server Hello + Certificate（RSA 公钥）");
                     }
                     return;
                 case "TLS_CLIENT_FINISHED":
@@ -1058,7 +1292,7 @@ public class DataCartFactoryGame extends JFrame {
                 synAck.ackNumber = cart.sequenceNumber + 1;
                 synAck.sequenceNumber = 200;
                 pendingDataCarts.add(synAck);
-                appendToConsole("【🤝 三次握手】: 收到 SYN，回复 SYN-ACK (seq=200, ack=" + (cart.sequenceNumber+1) + ")");
+                appendToConsole("【🤝 三次握手】: 收到 SYN，回复 SYN-ACK (seq=200, ack=" + (cart.sequenceNumber + 1) + ")");
                 stateTimerWatchdog = now;
                 return;
             }
@@ -1103,7 +1337,7 @@ public class DataCartFactoryGame extends JFrame {
                 return;
             }
         } else {
-            switch(cart.cartType) {
+            switch (cart.cartType) {
                 case "SYN_ACK":
                     DataCart finalAck = new DataCart(pcFactory.x, pcFactory.y, "ACK_PC", 0);
                     finalAck.ackNumber = cart.sequenceNumber + 1;
@@ -1166,19 +1400,54 @@ public class DataCartFactoryGame extends JFrame {
                 case "TLS_SERVER_HELLO_CERT":
                     if (tlsState == TlsState.CLIENT_HELLO_SENT) {
                         tlsState = TlsState.SERVER_HELLO_RCVD;
-                        DataCart cf = new DataCart(pcFactory.x, pcFactory.y, "TLS_CLIENT_FINISHED", 0);
-                        cf.stage = 5;
-                        pendingDataCarts.add(cf);
-                        appendToConsole("【🔒 TLS】: 收到 Server Hello，发送 Client Finished");
+                        try {
+                            // 客户端使用服务端公钥加密预主密钥（对称密钥）
+                            PublicKey serverPub = KeyFactory.getInstance("RSA").generatePublic(
+                                    new X509EncodedKeySpec(cart.serverCertificate));
+                            rsaCipher.init(Cipher.ENCRYPT_MODE, serverPub);
+                            byte[] encryptedSessionKey = rsaCipher.doFinal(sessionKey.getEncoded());
+                            // 发送 ClientKeyExchange
+                            DataCart cke = new DataCart(pcFactory.x, pcFactory.y, "TLS_CLIENT_KEY_EXCHANGE", 0);
+                            cke.encryptedData = encryptedSessionKey;
+                            cke.stage = 5;
+                            pendingDataCarts.add(cke);
+                            appendToConsole("【🔒 TLS】: 客户端 RSA 加密预主密钥，发送 ClientKeyExchange");
+                            // 随后发送 ChangeCipherSpec（模拟为同一个包，也可分开发送，此处简化）
+                            tlsState = TlsState.CLIENT_KEY_EXCHANGE_SENT;
+                        } catch (Exception ex) {
+                            appendToConsole("【❌ TLS 错误】: 密钥交换失败");
+                        }
                     }
-                    break;
+                    return;
+                case "TLS_CLIENT_KEY_EXCHANGE":
+                    if (cart.isArrived && tlsState == TlsState.CLIENT_KEY_EXCHANGE_SENT) {
+                        // 服务器解密对称密钥，然后发送 ChangeCipherSpec + Finished
+                        try {
+                            rsaCipher.init(Cipher.DECRYPT_MODE, serverRsaKeyPair.getPrivate());
+                            byte[] decryptedKey = rsaCipher.doFinal(cart.encryptedData);
+                            sessionKey = new SecretKeySpec(decryptedKey, "AES");
+                            aesCipher.init(Cipher.ENCRYPT_MODE, sessionKey);
+                            tlsCipherReady = true;
+                            appendToConsole("【🔒 TLS】: 服务器解密对称密钥成功，加密信道已建立");
+                        } catch (Exception ex) {
+                            appendToConsole("【❌ TLS】: 服务器解密失败");
+                            return;
+                        }
+                        // 发送 Server Finished（含 ChangeCipherSpec 语义）
+                        DataCart sf = new DataCart(serverPos.x, serverPos.y, "TLS_SERVER_FINISHED", 0);
+                        sf.isReturnTrip = true;
+                        sf.stage = -1;
+                        pendingDataCarts.add(sf);
+                        appendToConsole("【🔒 TLS】: 服务器发送 ChangeCipherSpec + Finished");
+                    }
+                    return;
                 case "TLS_SERVER_FINISHED":
-                    if (tlsState == TlsState.SERVER_HELLO_RCVD) {
+                    if (tlsState == TlsState.CLIENT_KEY_EXCHANGE_SENT) {
                         tlsState = TlsState.FINISHED;
-                        appendToConsole("【🔒 TLS】: 握手完成，开始 HTTP 通信");
-                        sendHttpGet();
+                        appendToConsole("【🔒 TLS】: 握手完成，后续 HTTP 请求将加密传输");
+                        sendHttpGet(); // 现在可以发送加密的 HTTP GET
                     }
-                    break;
+                    return;
                 case "HTTP_200_OK":
                     httpResponseContent = cart.httpBody;
                     appendToConsole("【📡 HTTP】: 收到 200 OK, 内容: " + httpResponseContent);
@@ -1192,7 +1461,9 @@ public class DataCartFactoryGame extends JFrame {
         currentTcpState = TcpState.CLOSED;
         serverReceivedCount = 0;
         serverBufferCount = 0;
-        cwnd = 1; ssthresh = 12; rwnd = 3;
+        cwnd = 1;
+        ssthresh = 12;
+        rwnd = 3;
         packetsAckedSinceLastIncrease = 0;
         nextSeqNum = 100;
         sentSeq.clear();
@@ -1233,7 +1504,7 @@ public class DataCartFactoryGame extends JFrame {
         for (int r = 0; r < MAP_ROWS; r++) {
             for (int c = 0; c < MAP_COLS; c++) {
                 if (buildingLayout[r][c].equals(tag))
-                    return new Point(c*TILE_SIZE+TILE_SIZE/2, r*TILE_SIZE+TILE_SIZE/2);
+                    return new Point(c * TILE_SIZE + TILE_SIZE / 2, r * TILE_SIZE + TILE_SIZE / 2);
             }
         }
         return null;
@@ -1243,7 +1514,7 @@ public class DataCartFactoryGame extends JFrame {
         for (DataCart cart : dataCarts) {
             double dx = cart.x - p.x;
             double dy = cart.y - p.y;
-            if (Math.sqrt(dx*dx + dy*dy) < 12) return cart;
+            if (Math.sqrt(dx * dx + dy * dy) < 12) return cart;
         }
         return null;
     }
@@ -1307,21 +1578,48 @@ public class DataCartFactoryGame extends JFrame {
     }
 
     private class OreCart {
-        double x, y; double speed = 6.0; String oreType; boolean isArrived = false;
-        public OreCart(double x, double y, String type) { this.x = x; this.y = y; this.oreType = type; }
+        double x, y;
+        double speed = 6.0;
+        String oreType;
+        boolean isArrived = false;
+
+        public OreCart(double x, double y, String type) {
+            this.x = x;
+            this.y = y;
+            this.oreType = type;
+        }
+
         public void update() {
-            double dx = pcFactory.x - x; double dy = pcFactory.y - y;
-            double dist = Math.sqrt(dx*dx+dy*dy);
+            double dx = pcFactory.x - x;
+            double dy = pcFactory.y - y;
+            double dist = Math.sqrt(dx * dx + dy * dy);
             if (dist <= speed) isArrived = true;
-            else { x += (dx/dist)*speed; y += (dy/dist)*speed; }
+            else {
+                x += (dx / dist) * speed;
+                y += (dy / dist) * speed;
+            }
         }
     }
 
     private class DataCart {
-        double x, y; double speed = 12.0; int stage; int timer = 0;
-        boolean isArrived = false; boolean isDropped = false; boolean isReturnTrip = false;
+        private static final AtomicInteger cartIdGenerator = new AtomicInteger(0);
+        public final int cartId = cartIdGenerator.getAndIncrement();
+        int identification;
+        int fragmentOffset;
+        boolean moreFragments;
+        byte[] fragmentData;
+        byte[] serverCertificate;   // 用于 TLS ServerHello 携带证书
+        byte[] encryptedData;       // 用于 ClientKeyExchange 携带加密的会话密钥
+        double x, y;
+        double speed = 12.0;
+        int stage;
+        int timer = 0;
+        boolean isArrived = false;
+        boolean isDropped = false;
+        boolean isReturnTrip = false;
         boolean isRetransmission = false;
-        String cartType; String currentLayerStatus = "";
+        String cartType;
+        String currentLayerStatus = "";
         int sequenceNumber = 0;
         int ackNumber = 0;
         int advertisedWindow = 3;
@@ -1337,7 +1635,7 @@ public class DataCartFactoryGame extends JFrame {
 
         boolean hasPayload = true;
         boolean hasApp = false, hasTcp = false, hasIp = false, hasEther = false, hasLlc = false, hasFcs = false;
-        boolean c_Payload=false, c_SP=false, c_DP=false, c_SEQ=false, c_ACK=false, c_CTL=false, c_WIN=false, c_CHK=false;
+        boolean c_Payload = false, c_SP = false, c_DP = false, c_SEQ = false, c_ACK = false, c_CTL = false, c_WIN = false, c_CHK = false;
 
         boolean isNatted = false;
         String natPublicIp = null;
@@ -1346,7 +1644,10 @@ public class DataCartFactoryGame extends JFrame {
         String httpBody = null;
 
         public DataCart(double sx, double sy, String type, int seq) {
-            this.x = sx; this.y = sy; this.cartType = type; this.sequenceNumber = seq;
+            this.x = sx;
+            this.y = sy;
+            this.cartType = type;
+            this.sequenceNumber = seq;
             if (type.equals("ICMP_TIMEEXCEEDED") || type.equals("ICMP_ECHO_REPLY") || type.equals("HTTP_200_OK")) {
                 this.isReturnTrip = true;
                 this.stage = -1;
@@ -1369,20 +1670,24 @@ public class DataCartFactoryGame extends JFrame {
         }
 
         public void update() {
-            if (timer > 0) { timer--; return; }
+            if (timer > 0) {
+                timer--;
+                return;
+            }
             Point target;
 
             if (stage == -1) {
                 target = pcFactory;
                 double dx = target.x - x;
                 double dy = target.y - y;
-                double dist = Math.sqrt(dx*dx+dy*dy);
+                double dist = Math.sqrt(dx * dx + dy * dy);
                 if (dist <= speed) {
-                    x = target.x; y = target.y;
+                    x = target.x;
+                    y = target.y;
                     isArrived = true;
                 } else {
-                    x += (dx/dist)*speed;
-                    y += (dy/dist)*speed;
+                    x += (dx / dist) * speed;
+                    y += (dy / dist) * speed;
                 }
                 return;
             }
@@ -1398,11 +1703,37 @@ public class DataCartFactoryGame extends JFrame {
                 target = pcFactory;
             }
 
-            double dx = target.x - x; double dy = target.y - y;
-            double dist = Math.sqrt(dx*dx+dy*dy);
+            double dx = target.x - x;
+            double dy = target.y - y;
+            double dist = Math.sqrt(dx * dx + dy * dy);
             if (dist <= speed) {
-                x = target.x; y = target.y;
+                x = target.x;
+                y = target.y;
                 if (!isReturnTrip || isDHCP()) {
+                    // ========== DataCart.update() 中 stage 15 的处理修改 ==========
+// 在 processStageCraft() 调用之前，对于 stage==15 的特殊处理（仅对 DATA 等大包）
+                    // ========== DataCart.update() 中 stage == 15 的处理修改 ==========
+                    if (stage == 15 && !isReturnTrip && !isControlFrame(cartType) && cartType.equals("DATA")) {
+                        final int MTU = 500;
+                        int packetSize = 1000; // 硬编码的固定大小
+                        if (packetSize > MTU) {
+                            int fragCount = (packetSize + MTU - 1) / MTU;
+                            for (int i = 0; i < fragCount; i++) {
+                                DataCart fragment = new DataCart(x, y, "IP_FRAGMENT", 0);
+                                fragment.identification = ipIdentifierCounter;
+                                fragment.fragmentOffset = i * (MTU / 8);
+                                fragment.moreFragments = (i < fragCount - 1);
+                                fragment.fragmentData = new byte[Math.min(MTU, packetSize - i * MTU)];
+                                fragment.stage = 16; // 从 IP 分片器继续后续封装
+                                fragment.ttl = this.ttl;
+                                pendingDataCarts.add(fragment);
+                            }
+                            ipIdentifierCounter++;
+                            // 关键：标记原包为已处理，避免再次触发分片
+                            this.isArrived = true; // 让原包在 gameTick 中被移除
+                            return; // 不执行后续 processStageCraft
+                        }
+                    }
                     processStageCraft();
                     if (stage == 24 && !isNatted && !isReturnTrip) {
                         applyNatMapping();
@@ -1414,7 +1745,7 @@ public class DataCartFactoryGame extends JFrame {
                             if (stage == 26) droppedAtRouterTag = "ROUTER1";
                             else if (stage == 27) droppedAtRouterTag = "ROUTER2";
                             else if (stage == 28) droppedAtRouterTag = "ROUTER3";
-                            droppedAtPosition = new Point((int)x, (int)y);
+                            droppedAtPosition = new Point((int) x, (int) y);
                             return;
                         }
                     }
@@ -1438,8 +1769,8 @@ public class DataCartFactoryGame extends JFrame {
                     isArrived = true;
                 }
             } else {
-                x += (dx/dist)*speed;
-                y += (dy/dist)*speed;
+                x += (dx / dist) * speed;
+                y += (dy / dist) * speed;
             }
         }
 
@@ -1466,82 +1797,272 @@ public class DataCartFactoryGame extends JFrame {
 
         private Point findTargetMachine(int s, String type) {
             if (type.equals("DHCP_DISCOVER")) {
-                switch(s) { case 1: return findBuildingCoords("DHCP_DISC"); case 2: return findBuildingCoords("DHCP_SERVER"); }
+                switch (s) {
+                    case 1:
+                        return findBuildingCoords("DHCP_DISC");
+                    case 2:
+                        return findBuildingCoords("DHCP_SERVER");
+                }
             } else if (type.equals("DHCP_OFFER")) {
-                switch(s) { case 1: return findBuildingCoords("DHCP_OFFER"); case 2: return findBuildingCoords("PC_FACTORY"); }
+                switch (s) {
+                    case 1:
+                        return findBuildingCoords("DHCP_OFFER");
+                    case 2:
+                        return findBuildingCoords("PC_FACTORY");
+                }
             } else if (type.equals("DHCP_REQUEST")) {
-                switch(s) { case 1: return findBuildingCoords("DHCP_REQ"); case 2: return findBuildingCoords("DHCP_SERVER"); }
+                switch (s) {
+                    case 1:
+                        return findBuildingCoords("DHCP_REQ");
+                    case 2:
+                        return findBuildingCoords("DHCP_SERVER");
+                }
             } else if (type.equals("DHCP_ACK")) {
-                switch(s) { case 1: return findBuildingCoords("DHCP_ACK"); case 2: return findBuildingCoords("PC_FACTORY"); }
+                switch (s) {
+                    case 1:
+                        return findBuildingCoords("DHCP_ACK");
+                    case 2:
+                        return findBuildingCoords("PC_FACTORY");
+                }
             }
 
             String tag = "NONE";
-            switch(s) {
-                case 1: tag = "DNS_CLIENT"; break; case 2: tag = "DNS_LOCAL"; break;
-                case 3: tag = "DNS_ROOT"; break; case 4: tag = "DNS_AUTH"; break;
-                case 5: tag = "TX_APP"; break;
-                case 6: tag = "T_SP"; break; case 7: tag = "T_DP"; break;
-                case 8: tag = "T_SEQ"; break; case 9: tag = "T_ACK"; break;
-                case 10: tag = "T_CTL"; break; case 11: tag = "T_WIN"; break;
-                case 12: tag = "T_CHK"; break; case 13: tag = "T_CORE"; break;
-                case 14: tag = "TX_IPH"; break; case 15: tag = "TX_IP_FRAG"; break;
-                case 16: tag = "TX_ARP"; break;
-                case 17: tag = "ETH_DST"; break; case 18: tag = "ETH_SRC"; break;
-                case 19: tag = "ETH_TYPE"; break; case 20: tag = "TX_LLC"; break;
-                case 21: tag = "TX_FCS"; break;
-                case 22: tag = "R_LAN"; break; case 23: tag = "R_TAB"; break;
-                case 24: tag = "R_NAT"; break; case 25: tag = "R_WAN"; break;
-                case 26: tag = "ROUTER1"; break; case 27: tag = "ROUTER2"; break;
-                case 28: tag = "ROUTER3"; break;
-                case 29: tag = "RX_LLC"; break; case 30: tag = "RX_IP"; break;
-                case 31: tag = "RX_TCP"; break; case 32: tag = "RX_APP"; break;
-                default: return null;
+            switch (s) {
+                case 1:
+                    tag = "DNS_CLIENT";
+                    break;
+                case 2:
+                    tag = "DNS_LOCAL";
+                    break;
+                case 3:
+                    tag = "DNS_ROOT";
+                    break;
+                case 4:
+                    tag = "DNS_AUTH";
+                    break;
+                case 5:
+                    tag = "TX_APP";
+                    break;
+                case 6:
+                    tag = "T_SP";
+                    break;
+                case 7:
+                    tag = "T_DP";
+                    break;
+                case 8:
+                    tag = "T_SEQ";
+                    break;
+                case 9:
+                    tag = "T_ACK";
+                    break;
+                case 10:
+                    tag = "T_CTL";
+                    break;
+                case 11:
+                    tag = "T_WIN";
+                    break;
+                case 12:
+                    tag = "T_CHK";
+                    break;
+                case 13:
+                    tag = "T_CORE";
+                    break;
+                case 14:
+                    tag = "TX_IPH";
+                    break;
+                case 15:
+                    tag = "TX_IP_FRAG";
+                    break;
+                case 16:
+                    tag = "TX_ARP";
+                    break;
+                case 17:
+                    tag = "ETH_DST";
+                    break;
+                case 18:
+                    tag = "ETH_SRC";
+                    break;
+                case 19:
+                    tag = "ETH_TYPE";
+                    break;
+                case 20:
+                    tag = "TX_LLC";
+                    break;
+                case 21:
+                    tag = "TX_FCS";
+                    break;
+                case 22:
+                    tag = "R_LAN";
+                    break;
+                case 23:
+                    tag = "R_TAB";
+                    break;
+                case 24:
+                    tag = "R_NAT";
+                    break;
+                case 25:
+                    tag = "R_WAN";
+                    break;
+                case 26:
+                    tag = "ROUTER1";
+                    break;
+                case 27:
+                    tag = "ROUTER2";
+                    break;
+                case 28:
+                    tag = "ROUTER3";
+                    break;
+                case 29:
+                    tag = "RX_LLC";
+                    break;
+                case 30:
+                    tag = "RX_IP";
+                    break;
+                case 31:
+                    tag = "RX_TCP";
+                    break;
+                case 32:
+                    tag = "RX_APP";
+                    break;
+                default:
+                    return null;
             }
             return findBuildingCoords(tag);
         }
 
         private void processStageCraft() {
             if (cartType.startsWith("DHCP")) return;
-            switch(stage) {
-                case 1: currentLayerStatus = "🔍 DNS 查询 (" + domain + ")"; break;
-                case 2: currentLayerStatus = "📡 本地 DNS"; break;
-                case 3: currentLayerStatus = "🌐 根 DNS"; break;
-                case 4: currentLayerStatus = "🏢 权威 DNS → " + resolvedIp; break;
-                case 5: hasApp = true; currentLayerStatus = "💚 应用数据"; break;
-                case 6: c_SP = true; currentLayerStatus = "⚙️ 源端口"; break;
-                case 7: c_DP = true; currentLayerStatus = "🎯 目的端口"; break;
-                case 8: c_SEQ = true; currentLayerStatus = "🔢 SEQ:" + sequenceNumber; break;
-                case 9: c_ACK = true; currentLayerStatus = "📜 ACK:" + ackNumber; break;
-                case 10: c_CTL = true; currentLayerStatus = "🚩 [" + cartType + "]"; break;
-                case 11: c_WIN = true; currentLayerStatus = "🌊 WIN:" + advertisedWindow; break;
-                case 12: c_CHK = true; currentLayerStatus = "🔥 校验和"; break;
-                case 13: hasTcp = true; currentLayerStatus = "🧡 TCP 段"; break;
-                case 14: hasIp = true; currentLayerStatus = "💛 IP 首部"; break;
-                case 15: currentLayerStatus = "✂️ IP 分片"; break;
-                case 16: currentLayerStatus = "🔍 ARP 解析"; break;
-                case 17: hasEther = true; currentLayerStatus = "🟦 目的 MAC (DST)"; break;
-                case 18: hasEther = true; currentLayerStatus = "🟦 源 MAC (SRC)"; break;
-                case 19: hasEther = true; currentLayerStatus = "🟦 EtherType (0x0800)"; break;
-                case 20: hasLlc = true; currentLayerStatus = "🟩 LLC (可选)"; break;
-                case 21: hasFcs = true; currentLayerStatus = "🟩 FCS"; break;
-                case 22: hasLlc = false; hasFcs = false; currentLayerStatus = "🎛️ LAN 拆包"; break;
-                case 23: currentLayerStatus = "🔀 路由查表"; break;
-                case 24: currentLayerStatus = "🌍 NAT 转换"; break;
-                case 25: hasLlc = true; hasFcs = true; currentLayerStatus = "🛠️ WAN 封装"; break;
-                case 26: currentLayerStatus = "📡 Router1"; break;
-                case 27: currentLayerStatus = "📡 Router2"; break;
-                case 28: currentLayerStatus = "📡 Router3"; break;
-                case 29: hasLlc = false; hasFcs = false; currentLayerStatus = "🔓 剥链路层"; break;
-                case 30: hasIp = false; currentLayerStatus = "💛 剥网络层"; break;
-                case 31: hasTcp = false; currentLayerStatus = "🧡 剥传输层"; break;
-                case 32: hasApp = false; currentLayerStatus = "💚 应用交付"; break;
-                default: currentLayerStatus = "未知状态";
+            switch (stage) {
+                case 1:
+                    currentLayerStatus = "🔍 DNS 查询 (" + domain + ")";
+                    break;
+                case 2:
+                    currentLayerStatus = "📡 本地 DNS";
+                    break;
+                case 3:
+                    currentLayerStatus = "🌐 根 DNS";
+                    break;
+                case 4:
+                    currentLayerStatus = "🏢 权威 DNS → " + resolvedIp;
+                    break;
+                case 5:
+                    hasApp = true;
+                    currentLayerStatus = "💚 应用数据";
+                    break;
+                case 6:
+                    c_SP = true;
+                    currentLayerStatus = "⚙️ 源端口";
+                    break;
+                case 7:
+                    c_DP = true;
+                    currentLayerStatus = "🎯 目的端口";
+                    break;
+                case 8:
+                    c_SEQ = true;
+                    currentLayerStatus = "🔢 SEQ:" + sequenceNumber;
+                    break;
+                case 9:
+                    c_ACK = true;
+                    currentLayerStatus = "📜 ACK:" + ackNumber;
+                    break;
+                case 10:
+                    c_CTL = true;
+                    currentLayerStatus = "🚩 [" + cartType + "]";
+                    break;
+                case 11:
+                    c_WIN = true;
+                    currentLayerStatus = "🌊 WIN:" + advertisedWindow;
+                    break;
+                case 12:
+                    c_CHK = true;
+                    currentLayerStatus = "🔥 校验和";
+                    break;
+                case 13:
+                    hasTcp = true;
+                    currentLayerStatus = "🧡 TCP 段";
+                    break;
+                case 14:
+                    hasIp = true;
+                    currentLayerStatus = "💛 IP 首部";
+                    break;
+                case 15:
+                    currentLayerStatus = "✂️ IP 分片";
+                    break;
+                case 16:
+                    currentLayerStatus = "🔍 ARP 解析";
+                    break;
+                case 17:
+                    hasEther = true;
+                    currentLayerStatus = "🟦 目的 MAC (DST)";
+                    break;
+                case 18:
+                    hasEther = true;
+                    currentLayerStatus = "🟦 源 MAC (SRC)";
+                    break;
+                case 19:
+                    hasEther = true;
+                    currentLayerStatus = "🟦 EtherType (0x0800)";
+                    break;
+                case 20:
+                    hasLlc = true;
+                    currentLayerStatus = "🟩 LLC (可选)";
+                    break;
+                case 21:
+                    hasFcs = true;
+                    currentLayerStatus = "🟩 FCS";
+                    break;
+                case 22:
+                    hasLlc = false;
+                    hasFcs = false;
+                    currentLayerStatus = "🎛️ LAN 拆包";
+                    break;
+                case 23:
+                    currentLayerStatus = "🔀 路由查表";
+                    break;
+                case 24:
+                    currentLayerStatus = "🌍 NAT 转换";
+                    break;
+                case 25:
+                    hasLlc = true;
+                    hasFcs = true;
+                    currentLayerStatus = "🛠️ WAN 封装";
+                    break;
+                case 26:
+                    currentLayerStatus = "📡 Router1";
+                    break;
+                case 27:
+                    currentLayerStatus = "📡 Router2";
+                    break;
+                case 28:
+                    currentLayerStatus = "📡 Router3";
+                    break;
+                case 29:
+                    hasLlc = false;
+                    hasFcs = false;
+                    currentLayerStatus = "🔓 剥链路层";
+                    break;
+                case 30:
+                    hasIp = false;
+                    currentLayerStatus = "💛 剥网络层";
+                    break;
+                case 31:
+                    hasTcp = false;
+                    currentLayerStatus = "🧡 剥传输层";
+                    break;
+                case 32:
+                    hasApp = false;
+                    currentLayerStatus = "💚 应用交付";
+                    break;
+                default:
+                    currentLayerStatus = "未知状态";
             }
         }
     }
 
     private class GameCanvas extends JPanel {
-        public GameCanvas() { setBackground(new Color(18, 20, 26)); }
+        public GameCanvas() {
+            setBackground(new Color(18, 20, 26));
+        }
 
         @Override
         protected void paintComponent(Graphics g) {
@@ -1563,11 +2084,11 @@ public class DataCartFactoryGame extends JFrame {
                     g2.drawRect(x, y, TILE_SIZE, TILE_SIZE);
                     if (mapLayout[r][c] == 1) {
                         g2.setColor(new Color(40, 100, 220, 60));
-                        g2.fillOval(x+6, y+6, TILE_SIZE-12, TILE_SIZE-12);
+                        g2.fillOval(x + 6, y + 6, TILE_SIZE - 12, TILE_SIZE - 12);
                     }
                     if (mapLayout[r][c] == 2) {
                         g2.setColor(new Color(40, 200, 100, 60));
-                        g2.fillOval(x+6, y+6, TILE_SIZE-12, TILE_SIZE-12);
+                        g2.fillOval(x + 6, y + 6, TILE_SIZE - 12, TILE_SIZE - 12);
                     }
                 }
             }
@@ -1577,7 +2098,7 @@ public class DataCartFactoryGame extends JFrame {
 
             int wanCarCount = 0;
             for (DataCart c : dataCarts) {
-                int col = (int)(c.x / TILE_SIZE);
+                int col = (int) (c.x / TILE_SIZE);
                 if (!c.isReturnTrip && c.stage >= 25 && c.stage <= 31 && col >= 21 && col <= 34) wanCarCount++;
             }
             g2.setColor(Color.WHITE);
@@ -1591,71 +2112,71 @@ public class DataCartFactoryGame extends JFrame {
                     if (tag.equals("NONE")) continue;
 
                     g2.setColor(new Color(45, 48, 58));
-                    g2.fillRect(x+2, y+2, TILE_SIZE-4, TILE_SIZE-4);
+                    g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                     g2.setColor(Color.GRAY);
-                    g2.drawRect(x+2, y+2, TILE_SIZE-4, TILE_SIZE-4);
+                    g2.drawRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                     g2.setFont(new Font("Consolas", Font.BOLD, 8));
                     g2.setColor(Color.WHITE);
 
                     if (tag.equals("PC_FACTORY")) {
-                        g2.setColor(new Color(0,130,200));
-                        g2.fillRect(x+2,y+2,TILE_SIZE-4,TILE_SIZE-4);
+                        g2.setColor(new Color(0, 130, 200));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("💻 源PC", x+4, y+24);
+                        g2.drawString("💻 源PC", x + 4, y + 24);
                     } else if (tag.equals("RX_ST")) {
-                        g2.setColor(new Color(190,30,50));
-                        g2.fillRect(x+2,y+2,TILE_SIZE-4,TILE_SIZE-4);
+                        g2.setColor(new Color(190, 30, 50));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.YELLOW);
-                        g2.drawString("🏛️ 服务器", x+2, y+24);
-                        for(int b=0; b<serverBufferCount; b++) {
+                        g2.drawString("🏛️ 服务器", x + 2, y + 24);
+                        for (int b = 0; b < serverBufferCount; b++) {
                             g2.setColor(Color.RED);
-                            g2.fillRect(x + 4 + (b*6), y + 4, 5, 6);
+                            g2.fillRect(x + 4 + (b * 6), y + 4, 5, 6);
                         }
                     } else if (tag.startsWith("DHCP_")) {
                         g2.setColor(new Color(100, 100, 255));
-                        g2.fillRect(x+2, y+2, TILE_SIZE-4, TILE_SIZE-4);
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString(tag, x+3, y+24);
+                        g2.drawString(tag, x + 3, y + 24);
                     } else if (tag.equals("DNS_CLIENT") || tag.equals("DNS_LOCAL") || tag.equals("DNS_ROOT") || tag.equals("DNS_AUTH")) {
                         g2.setColor(new Color(0, 200, 200));
-                        g2.fillRect(x+2, y+2, TILE_SIZE-4, TILE_SIZE-4);
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.BLACK);
-                        g2.drawString(tag, x+3, y+24);
+                        g2.drawString(tag, x + 3, y + 24);
                     } else if (tag.startsWith("ETH_")) {
                         g2.setColor(new Color(0, 160, 255));
-                        g2.fillRect(x+2, y+2, TILE_SIZE-4, TILE_SIZE-4);
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.BLACK);
-                        g2.drawString(tag, x+3, y+24);
+                        g2.drawString(tag, x + 3, y + 24);
                     } else if (tag.startsWith("ROUTER")) {
                         g2.setColor(new Color(200, 100, 0));
-                        g2.fillRect(x+2, y+2, TILE_SIZE-4, TILE_SIZE-4);
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.BLACK);
-                        g2.drawString(tag, x+3, y+24);
+                        g2.drawString(tag, x + 3, y + 24);
                     } else if (tag.startsWith("T_") || tag.startsWith("TX_") || tag.startsWith("R_") || tag.startsWith("RX_")) {
                         if (tag.contains("NAT")) g2.setColor(new Color(255, 165, 0));
                         else if (tag.contains("ARP")) g2.setColor(new Color(0, 255, 255));
                         else if (tag.startsWith("R_")) g2.setColor(Color.CYAN);
                         else if (tag.startsWith("RX_")) g2.setColor(Color.MAGENTA);
                         else g2.setColor(Color.ORANGE);
-                        g2.drawRect(x+2, y+2, TILE_SIZE-4, TILE_SIZE-4);
-                        g2.drawString(tag, x+3, y+24);
+                        g2.drawRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.drawString(tag, x + 3, y + 24);
                     } else if (tag.startsWith("MINER_H")) {
                         g2.setColor(Color.CYAN);
-                        g2.drawString("🔷 矿机", x+4, y+24);
+                        g2.drawString("🔷 矿机", x + 4, y + 24);
                     } else if (tag.startsWith("MINER_S")) {
                         g2.setColor(Color.GREEN);
-                        g2.drawString("🟩 矿机", x+4, y+24);
+                        g2.drawString("🟩 矿机", x + 4, y + 24);
                     }
                 }
             }
 
             for (OreCart c : oreCarts) {
                 g2.setColor(c.oreType.equals("HELLO") ? Color.CYAN : Color.GREEN);
-                g2.fillOval((int)c.x-5, (int)c.y-5, 10, 10);
+                g2.fillOval((int) c.x - 5, (int) c.y - 5, 10, 10);
             }
 
             for (DataCart cart : dataCarts) {
-                int cx = (int)cart.x, cy = (int)cart.y;
+                int cx = (int) cart.x, cy = (int) cart.y;
 
                 if (cart.waitInQueueTimer > 0) g2.setColor(Color.RED);
                 else if (cart.cartType.equals("ICMP_TIMEEXCEEDED")) g2.setColor(new Color(200, 50, 50));
@@ -1669,18 +2190,42 @@ public class DataCartFactoryGame extends JFrame {
                 else if (cart.cartType.startsWith("DNS")) g2.setColor(new Color(0, 200, 200));
                 else if (cart.isRetransmission) g2.setColor(Color.ORANGE);
                 else if (cart.cartType.startsWith("TLS_")) g2.setColor(new Color(255, 165, 0));
-                else if (cart.cartType.equals("HTTP_GET") || cart.cartType.equals("HTTP_200_OK")) g2.setColor(new Color(150, 0, 200));
+                else if (cart.cartType.equals("HTTP_GET") || cart.cartType.equals("HTTP_200_OK"))
+                    g2.setColor(new Color(150, 0, 200));
                 else if (cart.cartType.equals("UDP_DATA")) g2.setColor(new Color(50, 150, 255));
                 else g2.setColor(Color.LIGHT_GRAY);
-                g2.fillOval(cx-7, cy-7, 14, 14);
+                g2.fillOval(cx - 7, cy - 7, 14, 14);
 
                 int bx = cx - 30;
-                if (cart.hasApp) { g2.setColor(new Color(100, 255, 100)); g2.fillRect(bx, cy-5, 6, 10); bx += 6; }
-                if (cart.hasTcp) { g2.setColor(Color.ORANGE); g2.fillRect(bx, cy-5, 7, 10); bx += 7; }
-                if (cart.hasIp) { g2.setColor(Color.YELLOW); g2.fillRect(bx, cy-5, 6, 10); bx += 6; }
-                if (cart.hasEther) { g2.setColor(new Color(0, 160, 255)); g2.fillRect(bx, cy-5, 8, 10); bx += 8; }
-                if (cart.hasLlc) { g2.setColor(Color.GREEN); g2.fillRect(bx, cy-5, 6, 10); bx += 6; }
-                if (cart.hasFcs) { g2.setColor(Color.GREEN.darker()); g2.fillRect(bx, cy-5, 6, 10); }
+                if (cart.hasApp) {
+                    g2.setColor(new Color(100, 255, 100));
+                    g2.fillRect(bx, cy - 5, 6, 10);
+                    bx += 6;
+                }
+                if (cart.hasTcp) {
+                    g2.setColor(Color.ORANGE);
+                    g2.fillRect(bx, cy - 5, 7, 10);
+                    bx += 7;
+                }
+                if (cart.hasIp) {
+                    g2.setColor(Color.YELLOW);
+                    g2.fillRect(bx, cy - 5, 6, 10);
+                    bx += 6;
+                }
+                if (cart.hasEther) {
+                    g2.setColor(new Color(0, 160, 255));
+                    g2.fillRect(bx, cy - 5, 8, 10);
+                    bx += 8;
+                }
+                if (cart.hasLlc) {
+                    g2.setColor(Color.GREEN);
+                    g2.fillRect(bx, cy - 5, 6, 10);
+                    bx += 6;
+                }
+                if (cart.hasFcs) {
+                    g2.setColor(Color.GREEN.darker());
+                    g2.fillRect(bx, cy - 5, 6, 10);
+                }
 
                 g2.setFont(new Font("微软雅黑", Font.BOLD, 10));
                 String direction = cart.isReturnTrip ? "◀ 回传" : (cart.waitInQueueTimer > 0 ? "⚠️ 排队" : "▶ 发送");
