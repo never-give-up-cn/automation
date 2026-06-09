@@ -2,6 +2,7 @@ package com.never_give_up.automation.demo;
 
 import com.never_give_up.automation.demo.adapter.FactoryManager;
 import com.never_give_up.automation.demo.adapter.PacketAdapter;
+import com.never_give_up.automation.demo.factory.function.NatMappingFactory;
 
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
@@ -515,14 +516,13 @@ public class DataCartFactoryGame extends JFrame {
 
     private void updateNatDisplay() {
         StringBuilder natSb = new StringBuilder();
-        factoryManager.getNatFactory().getNatTable().forEach((key, entry) -> {
+        natTable.forEach((key, entry) -> {
             natSb.append(String.format("%s:%d → %s:%d\n",
-                    entry.getInsideIp(), entry.getInsidePort(),
-                    entry.getPublicIp(), entry.getPublicPort()));
+                    entry.insideIp, entry.insidePort,
+                    entry.publicIp, entry.publicPort));
         });
         txtNatDisplay.setText(natSb.toString());
     }
-
     private void updateTcpConnTable() {
         SwingUtilities.invokeLater(() -> {
             tableModel.setRowCount(0);
@@ -1990,18 +1990,28 @@ public class DataCartFactoryGame extends JFrame {
         private void applyNatMapping() {
             String insideIp = pcIpAddress != null ? pcIpAddress : "192.168.1.100";
             int insidePort = 1234;
+
+            // 调用 NAT 工厂创建映射
+            NatMappingFactory.NatEntry factoryEntry = factoryManager.getNatFactory().createMapping(insideIp, insidePort);
+
+            // 同步到本地 NAT 表
             String key = insideIp + ":" + insidePort;
-            NatEntry entry = natTable.get(key);
-            if (entry == null) {
-                String pubIp = "8.8.8.8";
-                int pubPort = natPortCounter.getAndIncrement();
-                entry = new NatEntry(insideIp, insidePort, pubIp, pubPort);
-                natTable.put(key, entry);
+            if (!natTable.containsKey(key)) {
+                NatEntry localEntry = new NatEntry(
+                        factoryEntry.getInsideIp(),
+                        factoryEntry.getInsidePort(),
+                        factoryEntry.getPublicIp(),
+                        factoryEntry.getPublicPort()
+                );
+                natTable.put(key, localEntry);
             }
+
             this.isNatted = true;
-            this.natPublicIp = entry.publicIp;
-            this.natPublicPort = entry.publicPort;
+            this.natPublicIp = factoryEntry.getPublicIp();
+            this.natPublicPort = factoryEntry.getPublicPort();
         }
+
+
 
         private boolean isDHCP() {
             return cartType.equals("DHCP_DISCOVER") || cartType.equals("DHCP_OFFER")
