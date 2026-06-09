@@ -1,72 +1,86 @@
 package com.never_give_up.automation.demo.factory.control;
 
-import lombok.Getter;
-
-@Getter
+/**
+ * 拥塞控制工厂
+ */
 public class CongestionControlFactory {
-    private int cwnd = 1;
-    private int ssthresh = 12;
-    private int rwnd = 3;
-    private int packetsAckedSinceLastIncrease = 0;
 
-    public enum Phase {
-        SLOW_START, CONGESTION_AVOIDANCE
+    private int cwnd = 1;      // 拥塞窗口
+    private int ssthresh = 64;  // 慢启动阈值
+    private int rtt = 100;      // 往返时间
+    private int rto = 200;      // 重传超时
+    private int dupAckCount = 0; // 重复 ACK 计数
+
+    public CongestionControlFactory() {
+        reset();
     }
 
-    public Phase getCurrentPhase() {
-        return cwnd < ssthresh ? Phase.SLOW_START : Phase.CONGESTION_AVOIDANCE;
-    }
-
-    public int getEffectiveWindow() {
-        return Math.min(cwnd, rwnd);
-    }
-
-    public void onAckReceived() {
-        if (cwnd < ssthresh) {
-            cwnd++;
+    /**
+     * 慢启动
+     */
+    public void slowStart(int currentCwnd) {
+        if (currentCwnd < ssthresh) {
+            cwnd = currentCwnd * 2;
+            System.out.println("【慢启动】: cwnd=" + cwnd + ", ssthresh=" + ssthresh);
         } else {
-            packetsAckedSinceLastIncrease++;
-            if (packetsAckedSinceLastIncrease >= cwnd) {
-                cwnd++;
-                packetsAckedSinceLastIncrease = 0;
-            }
+            congestionAvoidance(currentCwnd);
         }
     }
 
-    public void onTimeout() {
-        ssthresh = Math.max(2, cwnd / 2);
+    /**
+     * 拥塞避免
+     */
+    public void congestionAvoidance(int currentCwnd) {
+        if (currentCwnd >= ssthresh) {
+            cwnd = currentCwnd + 1;
+            System.out.println("【拥塞避免】: cwnd=" + cwnd);
+        }
+    }
+
+    /**
+     * 快速重传
+     */
+    public void fastRetransmit() {
+        dupAckCount++;
+        if (dupAckCount >= 3) {
+            ssthresh = cwnd / 2;
+            cwnd = ssthresh + 3;
+            System.out.println("【快速重传】: ssthresh=" + ssthresh + ", cwnd=" + cwnd);
+            dupAckCount = 0;
+        }
+    }
+
+    /**
+     * 超时处理
+     */
+    public void timeout() {
+        ssthresh = cwnd / 2;
         cwnd = 1;
-        packetsAckedSinceLastIncrease = 0;
+        dupAckCount = 0;
+        System.out.println("【超时】: ssthresh=" + ssthresh + ", cwnd=" + cwnd);
     }
 
-    public void onFastRetransmit() {
-        ssthresh = Math.max(2, cwnd / 2);
-        cwnd = ssthresh + 3;
-    }
-
-    public void onDuplicateAck() {
-        if (getCurrentPhase() == Phase.CONGESTION_AVOIDANCE) {
-            cwnd++;
+    /**
+     * 收到 ACK 时调用
+     */
+    public void onAck(int currentCwnd) {
+        if (currentCwnd < ssthresh) {
+            cwnd = currentCwnd + 1;
+        } else {
+            cwnd = currentCwnd + 1 / cwnd;
         }
     }
 
-    public void setRwnd(int size) {
-        this.rwnd = size;
-    }
-
-    public void setSsthresh(int threshold) {
-        this.ssthresh = threshold;
-    }
+    public int getCwnd() { return cwnd; }
+    public int getSsthresh() { return ssthresh; }
+    public void setCwnd(int cwnd) { this.cwnd = cwnd; }
+    public void setSsthresh(int ssthresh) { this.ssthresh = ssthresh; }
 
     public void reset() {
         cwnd = 1;
-        ssthresh = 12;
-        rwnd = 3;
-        packetsAckedSinceLastIncrease = 0;
-    }
-
-    public String getStatus() {
-        return String.format("cwnd=%d, ssthresh=%d, rwnd=%d, phase=%s",
-                cwnd, ssthresh, rwnd, getCurrentPhase());
+        ssthresh = 64;
+        dupAckCount = 0;
+        rtt = 100;
+        rto = 200;
     }
 }

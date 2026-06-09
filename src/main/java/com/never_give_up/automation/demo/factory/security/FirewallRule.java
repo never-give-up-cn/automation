@@ -45,34 +45,67 @@ public class FirewallRule implements Comparable<FirewallRule> {
         return true;
     }
 
+    /**
+     * 匹配协议 - 适配 int 类型的 protocol
+     */
     private boolean matchesProtocol(FiveTuple fiveTuple) {
+        int protoInt = fiveTuple.getProtocol();
         switch (protocol) {
-            case TCP: return fiveTuple.getProtocol() == 6;
-            case UDP: return fiveTuple.getProtocol() == 17;
-            case ICMP: return fiveTuple.getProtocol() == 1;
-            default: return true;
+            case TCP:
+                return protoInt == 6;
+            case UDP:
+                return protoInt == 17;
+            case ICMP:
+                return protoInt == 1;
+            case HTTP:
+                return protoInt == 6;  // HTTP 使用 TCP
+            case HTTPS:
+                return protoInt == 6;  // HTTPS 使用 TCP
+            case DNS:
+                return protoInt == 17; // DNS 使用 UDP
+            case DHCP:
+                return protoInt == 17; // DHCP 使用 UDP
+            case ANY:
+                return true;
+            default:
+                return true;
         }
     }
 
+    /**
+     * IP 地址匹配（支持通配符）
+     */
     private boolean matchesIp(String pattern, String ip) {
-        if ("*".equals(pattern)) return true;
+        if (pattern == null || "*".equals(pattern)) return true;
         if (pattern.equals(ip)) return true;
-        if (pattern.endsWith("/*")) {
-            String prefix = pattern.substring(0, pattern.length() - 2);
+        // 支持 CIDR 格式如 "192.168.1.*" 或 "192.168.1.0/24"
+        if (pattern.endsWith("/*") || pattern.endsWith("/24")) {
+            String prefix = pattern.replace("/*", "").replace("/24", "");
             return ip.startsWith(prefix);
+        }
+        // 支持如 "192.168.1." 前缀匹配
+        if (pattern.endsWith(".")) {
+            return ip.startsWith(pattern);
         }
         return false;
     }
 
+    /**
+     * 端口匹配（支持范围）
+     */
     private boolean matchesPort(String range, int port) {
-        if ("*".equals(range)) return true;
-        if (range.contains("-")) {
-            String[] parts = range.split("-");
-            int min = Integer.parseInt(parts[0]);
-            int max = Integer.parseInt(parts[1]);
-            return port >= min && port <= max;
+        if (range == null || "*".equals(range)) return true;
+        try {
+            if (range.contains("-")) {
+                String[] parts = range.split("-");
+                int min = Integer.parseInt(parts[0]);
+                int max = Integer.parseInt(parts[1]);
+                return port >= min && port <= max;
+            }
+            return Integer.parseInt(range) == port;
+        } catch (NumberFormatException e) {
+            return false;
         }
-        return range.equals(String.valueOf(port));
     }
 
     public void incrementHitCount() {
@@ -82,5 +115,11 @@ public class FirewallRule implements Comparable<FirewallRule> {
     @Override
     public int compareTo(FirewallRule other) {
         return Integer.compare(this.priority, other.priority);
+    }
+
+    @Override
+    public String toString() {
+        return String.format("FirewallRule[%s, priority=%d, action=%s, enabled=%s, hits=%d]",
+                name, priority, action, enabled, hitCount);
     }
 }

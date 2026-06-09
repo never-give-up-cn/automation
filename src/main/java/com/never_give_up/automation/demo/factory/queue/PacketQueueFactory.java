@@ -5,13 +5,52 @@ import com.never_give_up.automation.demo.model.BasePacket;
 import lombok.Getter;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.PriorityBlockingQueue;
 
 @Getter
 public class PacketQueueFactory implements INetworkFactory<PacketQueue> {
+
     private final Map<String, PacketQueue> createdQueues = new HashMap<>();
     private int queueCounter = 0;
+    private PacketQueue defaultQueue;
+
+    // ========== DataCartPacket 包装内部类 ==========
+    private static class DataCartPacket extends BasePacket {
+        private final Object originalPacket;
+        private final String packetType;
+
+        public DataCartPacket(Object packet) {
+            this.originalPacket = packet;
+            this.packetType = extractPacketType(packet);
+            this.setPacketType(packetType);
+            this.setPayload(new byte[0]);
+            this.setLayerStack(new ArrayList<>());
+        }
+
+        private String extractPacketType(Object packet) {
+            if (packet == null) return "UNKNOWN";
+            try {
+                java.lang.reflect.Field field = packet.getClass().getDeclaredField("cartType");
+                field.setAccessible(true);
+                return (String) field.get(packet);
+            } catch (Exception e) {
+                return packet.getClass().getSimpleName();
+            }
+        }
+
+        public Object getOriginalPacket() {
+            return originalPacket;
+        }
+
+        @Override
+        public byte[] serialize() {
+            return new byte[0];
+        }
+
+        @Override
+        public void deserialize(byte[] data) {
+            // 不需要实现
+        }
+    }
 
     public enum QueuePolicy {
         FIFO,           // 先进先出
@@ -112,7 +151,6 @@ public class PacketQueueFactory implements INetworkFactory<PacketQueue> {
             return queue.size();
         }
 
-        // 实现 PacketQueue 接口的 capacity() 方法
         @Override
         public int capacity() {
             return capacity;
@@ -183,7 +221,6 @@ public class PacketQueueFactory implements INetworkFactory<PacketQueue> {
             return queue.size();
         }
 
-        // 实现 PacketQueue 接口的 capacity() 方法
         @Override
         public int capacity() {
             return capacity;
@@ -208,6 +245,11 @@ public class PacketQueueFactory implements INetworkFactory<PacketQueue> {
         }
         createdQueues.put(name, queue);
         queueCounter++;
+
+        if (defaultQueue == null) {
+            defaultQueue = queue;
+        }
+
         return queue;
     }
 
@@ -239,6 +281,84 @@ public class PacketQueueFactory implements INetworkFactory<PacketQueue> {
         return new ArrayList<>(createdQueues.values());
     }
 
+    // ========== 便捷的 enqueue/dequeue 方法 ==========
+
+    public boolean enqueue(Object packet) {
+        if (defaultQueue == null) {
+            createDefaultQueue("default");
+        }
+        return enqueue("default", packet);
+    }
+
+    public boolean enqueue(String queueName, Object packet) {
+        PacketQueue queue = createdQueues.get(queueName);
+        if (queue == null) {
+            queue = createFifoQueue(queueName, 100);
+        }
+
+        BasePacket basePacket = toBasePacket(packet);
+        if (basePacket != null) {
+            return queue.enqueue(basePacket);
+        }
+        return false;
+    }
+
+    public Object dequeue() {
+        if (defaultQueue == null) {
+            return null;
+        }
+        return dequeue("default");
+    }
+
+    public Object dequeue(String queueName) {
+        PacketQueue queue = createdQueues.get(queueName);
+        if (queue == null) {
+            return null;
+        }
+        BasePacket packet = queue.dequeue();
+        if (packet instanceof DataCartPacket) {
+            return ((DataCartPacket) packet).getOriginalPacket();
+        }
+        return packet;
+    }
+
+    public int size(String queueName) {
+        PacketQueue queue = createdQueues.get(queueName);
+        return queue != null ? queue.size() : 0;
+    }
+
+    public int size() {
+        return defaultQueue != null ? defaultQueue.size() : 0;
+    }
+
+    public boolean isEmpty() {
+        return defaultQueue == null || defaultQueue.isEmpty();
+    }
+
+    /**
+     * 将 Object 转换为 BasePacket
+     */
+    private BasePacket toBasePacket(Object packet) {
+        if (packet instanceof BasePacket) {
+            return (BasePacket) packet;
+        }
+        return new DataCartPacket(packet);
+    }
+
+    public void setDefaultQueue(String queueName) {
+        defaultQueue = createdQueues.get(queueName);
+    }
+
+    public String getStats() {
+        StringBuilder sb = new StringBuilder();
+        for (PacketQueue queue : createdQueues.values()) {
+            sb.append(String.format("Queue[%s]: size=%d, enqueue=%d, dequeue=%d, drop=%d, capacity=%d\n",
+                    queue.getName(), queue.size(), queue.getEnqueueCount(),
+                    queue.getDequeueCount(), queue.getDropCount(), queue.capacity()));
+        }
+        return sb.toString();
+    }
+
     @Override
     public PacketQueue produce() {
         queueCounter++;
@@ -249,6 +369,7 @@ public class PacketQueueFactory implements INetworkFactory<PacketQueue> {
     public void reset() {
         createdQueues.values().forEach(PacketQueue::clear);
         createdQueues.clear();
+        defaultQueue = null;
         queueCounter = 0;
     }
 

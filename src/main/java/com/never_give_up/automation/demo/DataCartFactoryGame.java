@@ -554,7 +554,11 @@ public class DataCartFactoryGame extends JFrame {
         shopPanel.add(btnUpgradeServer);
         shopPanel.add(Box.createVerticalStrut(15));
 
-        String[][] categories = {{"【1. 内网采矿与原始数据】", "MINER_H", "🔷 Hello 采矿机", "MINER_S", "🟩 Say 采矿机"}, {"【2. 应用层】", "TX_APP", "📦 应用数据载荷"}, {"【3. DNS 解析】", "DNS_CLIENT", "🔍 DNS 客户端", "DNS_LOCAL", "📡 本地 DNS", "DNS_ROOT", "🌐 根 DNS", "DNS_AUTH", "🏢 权威 DNS"}, {"【4. DHCP 客户端】", "DHCP_DISC", "🔎 Discover", "DHCP_OFFER", "📥 Offer", "DHCP_REQ", "📤 Request", "DHCP_ACK", "✅ ACK"}, {"【5. 传输层 - TCP 封装】", "T_SP", "🔩 源端口", "T_DP", "🎯 目的端口", "T_SEQ", "🔢 序列号", "T_ACK", "📜 确认号", "T_CTL", "🚩 控制位", "T_WIN", "🌊 滑动窗口", "T_CHK", "🔥 校验和", "T_CORE", "🟧 TCP 段总装"}, {"【6. 网络层 - IP 封装】", "TX_IPH", "📦 IP 首部", "TX_IP_FRAG", "✂️ IP 分片器"}, {"【7. 链路层 - Ethernet II】", "TX_ARP", "🔍 ARP 解析", "ETH_DST", "🟦 目的 MAC", "ETH_SRC", "🟦 源 MAC", "ETH_TYPE", "🟦 EtherType", "TX_LLC", "🟩 LLC", "TX_FCS", "🟩 FCS"}, {"【8. 边界网关】", "R_LAN", "🎛️ LAN 拆包", "R_TAB", "🔀 路由查表", "R_NAT", "🌍 NAT 转换", "R_WAN", "🛠️ WAN 封装"}, {"【9. 公网路由器】", "ROUTER1", "📡 Router1", "ROUTER2", "📡 Router2", "ROUTER3", "📡 Router3"}, {"【10. 接收端解封装】", "RX_LLC", "🔓 链路层解封", "RX_IP", "💛 网络层解封", "RX_TCP", "🧡 传输层解封", "RX_APP", "💚 应用层交付"}};
+        String[][] categories = {{"【1. 内网采矿与原始数据】", "MINER_H", "🔷 Hello 采矿机", "MINER_S", "🟩 Say 采矿机"}, {"【2. 应用层】", "TX_APP", "📦 应用数据载荷"}, {"【3. DNS 解析】", "DNS_CLIENT", "🔍 DNS 客户端", "DNS_LOCAL", "📡 本地 DNS", "DNS_ROOT", "🌐 根 DNS", "DNS_AUTH", "🏢 权威 DNS"}, {"【4. DHCP 客户端】", "DHCP_DISC", "🔎 Discover", "DHCP_OFFER", "📥 Offer", "DHCP_REQ", "📤 Request", "DHCP_ACK", "✅ ACK"}, {"【5. 传输层 - TCP 封装】", "T_SP", "🔩 源端口", "T_DP", "🎯 目的端口", "T_SEQ", "🔢 序列号", "T_ACK", "📜 确认号", "T_CTL", "🚩 控制位", "T_WIN", "🌊 滑动窗口", "T_CHK", "🔥 校验和", "T_CORE", "🟧 TCP 段总装"}, {"【6. 网络层 - IP 封装】", "TX_IPH", "📦 IP 首部", "TX_IP_FRAG", "✂️ IP 分片器"}, {"【7. 链路层 - Ethernet II】", "TX_ARP", "🔍 ARP 解析", "ETH_DST", "🟦 目的 MAC", "ETH_SRC", "🟦 源 MAC", "ETH_TYPE", "🟦 EtherType", "TX_LLC", "🟩 LLC", "TX_FCS", "🟩 FCS"}, {"【8. 边界网关】", "R_LAN", "🎛️ LAN 拆包", "R_TAB", "🔀 路由查表", "R_NAT", "🌍 NAT 转换", "R_WAN", "🛠️ WAN 封装"}, {"【9. 公网路由器】", "ROUTER1", "📡 Router1", "ROUTER2", "📡 Router2", "ROUTER3", "📡 Router3"}, {"【10. 接收端解封装】", "RX_LLC", "🔓 链路层解封", "RX_IP", "💛 网络层解封", "RX_TCP", "🧡 传输层解封", "RX_APP", "💚 应用层交付"},{"【11. 网络安全设备】", "FW_IN", "🔥 入站防火墙", "FW_OUT", "🔥 出站防火墙", "IDS", "🛡️ IDS"},
+                {"【12. 队列与缓冲】", "Q_IN", "📋 入队", "Q_OUT", "📋 出队", "Q_DROP", "📋 丢包器"},
+                {"【13. 拥塞控制】", "CC_SLOW", "🐢 慢启动", "CC_AVOID", "🐌 拥塞避免", "CC_FAST", "⚡ 快速重传"},
+                {"【14. 网络设备】", "SWITCH", "🔌 交换机", "HUB", "🔌 集线器", "BRIDGE", "🌉 网桥"},
+                {"【15. 子网与链路】", "SUBNET_A", "🌐 子网A", "SUBNET_B", "🌐 子网B", "LINK_UP", "🔗 上行链路", "LINK_DOWN", "🔗 下行链路"}};
 
         for (String[] cat : categories) {
             JLabel title = new JLabel(cat[0]);
@@ -573,21 +577,26 @@ public class DataCartFactoryGame extends JFrame {
     }
 
     private void initMap() {
+        // 初始化矿石资源点
         mapLayout[2][1] = 1;
         mapLayout[3][1] = 1;
         mapLayout[12][1] = 2;
         mapLayout[13][1] = 2;
 
+        // 初始化地图布局和边界
         for (int r = 0; r < MAP_ROWS; r++) {
             for (int c = 0; c < MAP_COLS; c++) {
                 buildingLayout[r][c] = "NONE";
-                if (c == 20 || c == 33) mapLayout[r][c] = 9;
+                if (c == 20 || c == 33) mapLayout[r][c] = 9;  // 网关边界
             }
         }
 
+        // 源PC和服务器
         buildingLayout[MAP_ROWS / 2][3] = "PC_FACTORY";
         pcFactory = new Point(3 * TILE_SIZE + TILE_SIZE / 2, (MAP_ROWS / 2) * TILE_SIZE + TILE_SIZE / 2);
         buildingLayout[MAP_ROWS / 2][MAP_COLS - 3] = "RX_ST";
+
+        // 采矿机
         buildingLayout[2][1] = "MINER_H";
         buildingLayout[3][1] = "MINER_H";
         buildingLayout[12][1] = "MINER_S";
@@ -595,6 +604,7 @@ public class DataCartFactoryGame extends JFrame {
 
         int startRow = MAP_ROWS / 2 - 3;
 
+        // ========== 应用层及传输层封装路径 ==========
         buildingLayout[startRow][4] = "DNS_CLIENT";
         buildingLayout[startRow][5] = "DNS_LOCAL";
         buildingLayout[startRow][6] = "DNS_ROOT";
@@ -608,8 +618,12 @@ public class DataCartFactoryGame extends JFrame {
         buildingLayout[startRow][14] = "T_WIN";
         buildingLayout[startRow][15] = "T_CHK";
         buildingLayout[startRow][16] = "T_CORE";
+
+        // ========== 网络层封装路径 ==========
         buildingLayout[startRow][17] = "TX_IPH";
         buildingLayout[startRow][18] = "TX_IP_FRAG";
+
+        // ========== 链路层封装路径 ==========
         buildingLayout[startRow][19] = "TX_ARP";
         buildingLayout[startRow][20] = "ETH_DST";
         buildingLayout[startRow][21] = "ETH_SRC";
@@ -617,6 +631,7 @@ public class DataCartFactoryGame extends JFrame {
         buildingLayout[startRow][23] = "TX_LLC";
         buildingLayout[startRow][24] = "TX_FCS";
 
+        // ========== DHCP 路径 ==========
         int dhcpRow = MAP_ROWS / 2 - 4;
         buildingLayout[dhcpRow][4] = "DHCP_DISC";
         buildingLayout[dhcpRow][5] = "DHCP_SERVER";
@@ -624,20 +639,71 @@ public class DataCartFactoryGame extends JFrame {
         buildingLayout[dhcpRow][7] = "DHCP_REQ";
         buildingLayout[dhcpRow][8] = "DHCP_ACK";
 
+        // ========== 边界网关（路由/NAT/WAN） ==========
         int gatewayRow = MAP_ROWS / 2;
         buildingLayout[gatewayRow][20] = "R_LAN";
         buildingLayout[gatewayRow][22] = "R_TAB";
         buildingLayout[gatewayRow][24] = "R_NAT";
         buildingLayout[gatewayRow][26] = "R_WAN";
+
+        // ========== 公网路由器 ==========
         buildingLayout[gatewayRow][28] = "ROUTER1";
         buildingLayout[gatewayRow][30] = "ROUTER2";
         buildingLayout[gatewayRow][32] = "ROUTER3";
 
+        // ========== 接收端解封装路径 ==========
         int receiveRow = MAP_ROWS / 2 - 2;
         buildingLayout[receiveRow][36] = "RX_LLC";
         buildingLayout[receiveRow][38] = "RX_IP";
         buildingLayout[receiveRow][40] = "RX_TCP";
         buildingLayout[receiveRow][42] = "RX_APP";
+
+        // ========== 新增：更多接收端工厂 ==========
+        buildingLayout[receiveRow][34] = "RX_ETH";      // 以太网解封
+        buildingLayout[receiveRow][35] = "RX_ARP";      // ARP 解封
+        buildingLayout[receiveRow][37] = "RX_FCS";      // FCS 校验
+        buildingLayout[receiveRow][39] = "RX_FRAG";     // IP 分片重组
+        buildingLayout[receiveRow][41] = "RX_PORT";     // 端口解封
+
+        // ========== 新增：防火墙和安全设备 ==========
+        int securityRow = MAP_ROWS / 2 - 5;
+        buildingLayout[securityRow][20] = "FW_IN";      // 入站防火墙
+        buildingLayout[securityRow][21] = "FW_OUT";     // 出站防火墙
+        buildingLayout[securityRow][22] = "IDS";        // 入侵检测
+
+        // ========== 新增：队列和缓冲区 ==========
+        int queueRow = MAP_ROWS / 2 - 1;
+        buildingLayout[queueRow][22] = "Q_IN";          // 入队
+        buildingLayout[queueRow][23] = "Q_OUT";         // 出队
+        buildingLayout[queueRow][24] = "Q_DROP";        // 丢包
+
+        // ========== 新增：拥塞控制设备 ==========
+        int congestionRow = MAP_ROWS / 2 + 1;
+        buildingLayout[congestionRow][14] = "CC_SLOW";   // 慢启动
+        buildingLayout[congestionRow][15] = "CC_AVOID";  // 拥塞避免
+        buildingLayout[congestionRow][16] = "CC_FAST";   // 快速重传
+
+        // ========== 新增：五元组提取 ==========
+        buildingLayout[startRow][25] = "FIVETUPLE";
+
+        // ========== 新增：会话管理 ==========
+        buildingLayout[startRow][26] = "SESSION";
+
+        // ========== 新增：带宽控制 ==========
+        buildingLayout[gatewayRow][25] = "BW_CTRL";
+
+        // ========== 新增：网络设备 ==========
+        buildingLayout[2][15] = "SWITCH";      // 交换机
+        buildingLayout[3][16] = "HUB";         // 集线器
+        buildingLayout[4][17] = "BRIDGE";      // 网桥
+
+        // ========== 新增：子网 ==========
+        buildingLayout[1][18] = "SUBNET_A";
+        buildingLayout[2][19] = "SUBNET_B";
+
+        // ========== 新增：链路 ==========
+        buildingLayout[5][20] = "LINK_UP";
+        buildingLayout[6][21] = "LINK_DOWN";
     }
 
     private void sendPing() {
@@ -1812,7 +1878,17 @@ public class DataCartFactoryGame extends JFrame {
     private class DataCart {
         private byte[] ethernetFrameData;  // 存储完整的以太网帧数据
         private boolean fcsVerified = false;  // FCS 是否已验证
-
+        private boolean hasFiveTuple = false;
+        private boolean hasSession = false;
+        private boolean hasQueue = false;
+        private boolean hasArp = false;
+        private String srcMac;
+        private String dstMac;
+        private String srcIp;
+        private String dstIp;
+        private int srcPort;
+        private int dstPort;
+        private String protocol;
         private static final AtomicInteger cartIdGenerator = new AtomicInteger(0);
         public final int cartId = cartIdGenerator.getAndIncrement();
         int identification;
@@ -1854,7 +1930,11 @@ public class DataCartFactoryGame extends JFrame {
 
         String httpBody = null;
 
+        // 在 DataCart 构造函数中，修改 UDP/TLS 的 stage
         public DataCart(double sx, double sy, String type, int seq) {
+            this.srcPort = 1234;  // 默认源端口
+            this.dstPort = 443;   // 默认目的端口
+            this.protocol = "TCP";
             this.x = sx;
             this.y = sy;
             this.cartType = type;
@@ -1863,12 +1943,11 @@ public class DataCartFactoryGame extends JFrame {
                 this.isReturnTrip = true;
                 this.stage = -1;
             } else if (isControlFrame(type)) {
-                // 控制帧（包括 ACK_PC）应该快速到达目的地
                 this.stage = 2;
             } else if (type.startsWith("TLS_") || type.equals("HTTP_GET") || type.equals("UDP_DATA")) {
-                this.stage = 5;
+                this.stage = 5;  // 从应用层开始
             } else {
-                this.stage = 1;
+                this.stage = 1;  // 从 DNS 客户端开始
             }
         }
 
@@ -1977,13 +2056,14 @@ public class DataCartFactoryGame extends JFrame {
                         }
                     }
                     if (!isDHCP()) {
-                        if (stage < 32) {
+                        // 增加 stage 上限到 45
+                        if (stage < 45) {
                             timer = 1;
                             stage++;
                         } else {
                             isArrived = true;
                         }
-                    } else {
+                    }else {
                         int maxStage = (cartType.equals("DHCP_DISCOVER") || cartType.equals("DHCP_REQUEST")) ? 2 : 2;
                         if (stage < maxStage) {
                             timer = 1;
@@ -2025,17 +2105,18 @@ public class DataCartFactoryGame extends JFrame {
             return cartType.equals("DHCP_DISCOVER") || cartType.equals("DHCP_OFFER") || cartType.equals("DHCP_REQUEST") || cartType.equals("DHCP_ACK");
         }
 
+        // 在 DataCart 类中，修改 stage 对应的 tag 映射
         private Point findTargetMachine(int s, String type) {
             // 为 ACK_PC 添加快速路由
             if (type.equals("ACK_PC")) {
-                // 根据 stage 决定目标
                 if (s == 2) {
-                    return findBuildingCoords("T_CORE"); // 直接到 TCP 层
+                    return findBuildingCoords("T_CORE");
                 } else if (s >= 3) {
-                    return findBuildingCoords("RX_ST"); // 最终到服务器
+                    return findBuildingCoords("RX_ST");
                 }
                 return null;
             }
+
             // DNS 递归查询专用路由
             if (type.equals("DNS_ROOT_TO_LOCAL")) {
                 return findBuildingCoords("DNS_LOCAL");
@@ -2044,257 +2125,272 @@ public class DataCartFactoryGame extends JFrame {
             } else if (type.equals("DNS_AUTH_TO_LOCAL")) {
                 return findBuildingCoords("DNS_LOCAL");
             }
-            // TLS 和 HTTP 演示专用路由（直接到应用层）
-            if (type.equals("TLS_CLIENT_HELLO") || type.equals("HTTP_GET") || type.equals("TLS_CLIENT_KEY_EXCHANGE") || type.equals("TLS_CLIENT_FINISHED")) {
+
+            // TLS 和 HTTP 演示专用路由
+            if (type.equals("TLS_CLIENT_HELLO") || type.equals("HTTP_GET") ||
+                    type.equals("TLS_CLIENT_KEY_EXCHANGE") || type.equals("TLS_CLIENT_FINISHED")) {
                 if (s == 5) return findBuildingCoords("TX_APP");
                 return null;
             }
-            if (type.equals("TLS_SERVER_HELLO_CERT") || type.equals("HTTP_200_OK") || type.equals("TLS_SERVER_FINISHED")) {
+            if (type.equals("TLS_SERVER_HELLO_CERT") || type.equals("HTTP_200_OK") ||
+                    type.equals("TLS_SERVER_FINISHED")) {
                 if (s == -1) return findBuildingCoords("PC_FACTORY");
                 return null;
             }
 
-
+            // DHCP 专用路由
             if (type.equals("DHCP_DISCOVER")) {
                 switch (s) {
-                    case 1:
-                        return findBuildingCoords("DHCP_DISC");
-                    case 2:
-                        return findBuildingCoords("DHCP_SERVER");
+                    case 1: return findBuildingCoords("DHCP_DISC");
+                    case 2: return findBuildingCoords("DHCP_SERVER");
                 }
             } else if (type.equals("DHCP_OFFER")) {
                 switch (s) {
-                    case 1:
-                        return findBuildingCoords("DHCP_OFFER");
-                    case 2:
-                        return findBuildingCoords("PC_FACTORY");
+                    case 1: return findBuildingCoords("DHCP_OFFER");
+                    case 2: return findBuildingCoords("PC_FACTORY");
                 }
             } else if (type.equals("DHCP_REQUEST")) {
                 switch (s) {
-                    case 1:
-                        return findBuildingCoords("DHCP_REQ");
-                    case 2:
-                        return findBuildingCoords("DHCP_SERVER");
+                    case 1: return findBuildingCoords("DHCP_REQ");
+                    case 2: return findBuildingCoords("DHCP_SERVER");
                 }
             } else if (type.equals("DHCP_ACK")) {
                 switch (s) {
-                    case 1:
-                        return findBuildingCoords("DHCP_ACK");
-                    case 2:
-                        return findBuildingCoords("PC_FACTORY");
+                    case 1: return findBuildingCoords("DHCP_ACK");
+                    case 2: return findBuildingCoords("PC_FACTORY");
                 }
             }
 
+            // ========== 完整的 stage 到建筑映射 ==========
             String tag = "NONE";
             switch (s) {
-                case 1:
-                    tag = "DNS_CLIENT";
-                    break;
-                case 2:
-                    tag = "DNS_LOCAL";
-                    break;
-                case 3:
-                    tag = "DNS_ROOT";
-                    break;
-                case 4:
-                    tag = "DNS_AUTH";
-                    break;
-                case 5:
-                    tag = "TX_APP";
-                    break;
-                case 6:
-                    tag = "T_SP";
-                    break;
-                case 7:
-                    tag = "T_DP";
-                    break;
-                case 8:
-                    tag = "T_SEQ";
-                    break;
-                case 9:
-                    tag = "T_ACK";
-                    break;
-                case 10:
-                    tag = "T_CTL";
-                    break;
-                case 11:
-                    tag = "T_WIN";
-                    break;
-                case 12:
-                    tag = "T_CHK";
-                    break;
-                case 13:
-                    tag = "T_CORE";
-                    break;
-                case 14:
-                    tag = "TX_IPH";
-                    break;
-                case 15:
-                    tag = "TX_IP_FRAG";
-                    break;
-                case 16:
-                    tag = "TX_ARP";
-                    break;
-                case 17:
-                    tag = "ETH_DST";
-                    break;
-                case 18:
-                    tag = "ETH_SRC";
-                    break;
-                case 19:
-                    tag = "ETH_TYPE";
-                    break;
-                case 20:
-                    tag = "TX_LLC";
-                    break;
-                case 21:
-                    tag = "TX_FCS";
-                    break;
-                case 22:
-                    tag = "R_LAN";
-                    break;
-                case 23:
-                    tag = "R_TAB";
-                    break;
-                case 24:
-                    tag = "R_NAT";
-                    break;
-                case 25:
-                    tag = "R_WAN";
-                    break;
-                case 26:
-                    tag = "ROUTER1";
-                    break;
-                case 27:
-                    tag = "ROUTER2";
-                    break;
-                case 28:
-                    tag = "ROUTER3";
-                    break;
-                case 29:
-                    tag = "RX_LLC";
-                    break;
-                case 30:
-                    tag = "RX_IP";
-                    break;
-                case 31:
-                    tag = "RX_TCP";
-                    break;
-                case 32:
-                    tag = "RX_APP";
-                    break;
-                default:
-                    return null;
+                // DNS 解析路径
+                case 1: tag = "DNS_CLIENT"; break;
+                case 2: tag = "DNS_LOCAL"; break;
+                case 3: tag = "DNS_ROOT"; break;
+                case 4: tag = "DNS_AUTH"; break;
+
+                // 应用层
+                case 5: tag = "TX_APP"; break;
+
+                // 传输层封装
+                case 6: tag = "T_SP"; break;
+                case 7: tag = "T_DP"; break;
+                case 8: tag = "T_SEQ"; break;
+                case 9: tag = "T_ACK"; break;
+                case 10: tag = "T_CTL"; break;
+                case 11: tag = "T_WIN"; break;
+                case 12: tag = "T_CHK"; break;
+                case 13: tag = "T_CORE"; break;
+
+                // 网络层封装
+                case 14: tag = "TX_IPH"; break;
+                case 15: tag = "TX_IP_FRAG"; break;
+                case 16: tag = "TX_ARP"; break;
+
+                // 链路层封装
+                case 17: tag = "ETH_DST"; break;
+                case 18: tag = "ETH_SRC"; break;
+                case 19: tag = "ETH_TYPE"; break;
+                case 20: tag = "TX_LLC"; break;
+                case 21: tag = "TX_FCS"; break;
+
+                // 五元组和会话（新增加）
+                case 22: tag = "FIVETUPLE"; break;
+                case 23: tag = "SESSION"; break;
+
+                // 边界网关
+                case 24: tag = "R_LAN"; break;
+                case 25: tag = "R_TAB"; break;
+                case 26: tag = "R_NAT"; break;
+                case 27: tag = "BW_CTRL"; break;      // 带宽控制
+                case 28: tag = "R_WAN"; break;
+
+                // 防火墙（新增加）
+                case 29: tag = "FW_OUT"; break;       // 出站防火墙
+                case 30: tag = "FW_IN"; break;        // 入站防火墙
+
+                // 公网路由器
+                case 31: tag = "ROUTER1"; break;
+                case 32: tag = "ROUTER2"; break;
+                case 33: tag = "ROUTER3"; break;
+
+                // 队列（新增加）
+                case 34: tag = "Q_IN"; break;
+                case 35: tag = "Q_OUT"; break;
+                case 36: tag = "Q_DROP"; break;
+
+                // 接收端链路层解封
+                case 37: tag = "RX_ETH"; break;
+                case 38: tag = "RX_LLC"; break;
+                case 39: tag = "RX_FCS"; break;
+                case 40: tag = "RX_ARP"; break;
+
+                // 接收端网络层解封
+                case 41: tag = "RX_FRAG"; break;
+                case 42: tag = "RX_IP"; break;
+
+                // 接收端传输层解封
+                case 43: tag = "RX_PORT"; break;
+                case 44: tag = "RX_TCP"; break;
+
+                // 接收端应用层交付
+                case 45: tag = "RX_APP"; break;
+
+                default: return null;
             }
             return findBuildingCoords(tag);
         }
 
         private void processStageCraft() {
             if (cartType.startsWith("DHCP")) return;
-            // ========== 添加各层工厂处理逻辑 ==========
+
             switch (stage) {
+                // ========== 应用层 ==========
                 case 5: // 应用层
                     if (!hasApp && cartType.equals("HTTP_GET")) {
                         hasApp = true;
                         httpBody = factoryManager.getHttpFactory().createGetRequest("/index.html").getBody();
+                        appendToConsole("【📦 应用层】: HTTP GET 请求封装");
                     } else if (!hasApp && cartType.equals("TLS_CLIENT_HELLO")) {
                         hasApp = true;
                         httpBody = factoryManager.getTlsFactory().createClientHello(new byte[32]).getTlsMessageType();
+                        appendToConsole("【🔒 应用层】: TLS Client Hello 封装");
+                    } else if (!hasApp && cartType.equals("UDP_DATA")) {
+                        hasApp = true;
+                        appendToConsole("【📦 应用层】: UDP 数据载荷");
                     }
                     break;
+
+                // ========== 传输层封装 ==========
                 case 6: // 源端口
                     if (!c_SP) {
                         c_SP = true;
-                        portFactory.allocateEphemeralPort();
+                        srcPort = portFactory.allocateEphemeralPort();
+                        appendToConsole("【🔩 源端口】: 分配端口 " + srcPort);
                     }
                     break;
                 case 7: // 目的端口
                     if (!c_DP) {
                         c_DP = true;
-                        portFactory.reservePort(443);
+                        dstPort = 443;
+                        portFactory.reservePort(dstPort);
+                        appendToConsole("【🎯 目的端口】: 目标端口 " + dstPort);
                     }
                     break;
                 case 8: // SEQ
                     if (!c_SEQ) {
                         c_SEQ = true;
-                        tcpFactory.getNextSeq();
+                        sequenceNumber = tcpFactory.getNextSeq();
+                        appendToConsole("【🔢 序列号】: SEQ=" + sequenceNumber);
                     }
                     break;
                 case 9: // ACK
                     if (!c_ACK) {
                         c_ACK = true;
+                        appendToConsole("【📜 确认号】: ACK=" + ackNumber);
                     }
                     break;
                 case 10: // CTL
                     if (!c_CTL) {
                         c_CTL = true;
+                        appendToConsole("【🚩 控制位】: " + cartType);
                     }
                     break;
                 case 11: // WIN
                     if (!c_WIN) {
                         c_WIN = true;
                         tcpFactory.setWindowSize(advertisedWindow);
+                        appendToConsole("【🌊 滑动窗口】: win=" + advertisedWindow);
                     }
                     break;
+                // 修改 case 12 中的校验和调用，添加数据参数
                 case 12: // CHK
                     if (!c_CHK) {
                         c_CHK = true;
+                        // 创建 TCP 段数据用于校验和计算
+                        byte[] tcpData = new byte[20]; // 模拟 TCP 头
+                        int checksum = factoryManager.getChecksumFactory().calculateTcpChecksum(
+                                tcpData, getSrcIp(), getDstIp());
+                        appendToConsole("【🔥 校验和】: 0x" + Integer.toHexString(checksum));
                     }
                     break;
                 case 13: // TCP 段完成
                     if (!hasTcp) {
                         hasTcp = true;
                         tcpFactory.produce();
+                        appendToConsole("【🟧 TCP 段】: 传输层封装完成");
                     }
                     break;
+
+                // ========== 网络层封装 ==========
                 case 14: // IP 首部
                     if (!hasIp) {
                         hasIp = true;
-                        String srcIp = pcIpAddress != null ? pcIpAddress : "192.168.1.100";
-                        String dstIp = resolvedServerIp != null ? resolvedServerIp : "10.0.0.1";
+                        srcIp = pcIpAddress != null ? pcIpAddress : "192.168.1.100";
+                        dstIp = resolvedServerIp != null ? resolvedServerIp : "10.0.0.1";
                         ipFactory.createTcpPacket(srcIp, dstIp, new byte[0]);
+                        appendToConsole("【📦 IP 首部】: " + srcIp + " → " + dstIp + ", TTL=" + ttl);
                     }
                     break;
                 case 15: // IP 分片
                     if (!isFragmented && cartType.equals("DATA")) {
                         isFragmented = true;
                         final int MTU = 500;
-                        int packetSize = 1000;
+                        int packetSize = 1500;
                         if (packetSize > MTU) {
                             IpPacket tempPacket = new IpPacket();
                             tempPacket.setPayload(new byte[packetSize]);
                             factoryManager.getIpFragmentFactory().fragmentPacket(tempPacket);
+                            appendToConsole("【✂️ IP 分片】: 分包 " + ((packetSize + MTU - 1) / MTU) + " 片");
                         }
                     }
                     break;
                 case 16: // ARP 解析
-                    if (resolvedServerIp != null && pcIpAddress != null) {
+                    if (!hasArp && resolvedServerIp != null && pcIpAddress != null) {
+                        hasArp = true;
                         String mac = factoryManager.getArpCache().getMac(resolvedServerIp);
                         if (mac == null) {
                             appendToConsole("【🔍 ARP 请求】: 谁拥有 " + resolvedServerIp + "?");
-                            String newMac = String.format("00:1A:2B:%02X:%02X:%02X", new Random().nextInt(256), new Random().nextInt(256), new Random().nextInt(256));
+                            String newMac = String.format("00:1A:2B:%02X:%02X:%02X",
+                                    new Random().nextInt(256), new Random().nextInt(256), new Random().nextInt(256));
                             factoryManager.getArpCache().addEntry(resolvedServerIp, newMac);
                             appendToConsole("【📥 ARP 响应】: " + resolvedServerIp + " → " + newMac);
                             updateArpDisplay();
+                        } else {
+                            appendToConsole("【✅ ARP 缓存】: " + resolvedServerIp + " → " + mac);
                         }
                     }
                     break;
+
                 case 17: // Ethernet DST MAC
-                case 18: // Ethernet SRC MAC
                     if (!hasEther && pcIpAddress != null && resolvedServerIp != null) {
-                        hasEther = true;
-                        String srcMac = factoryManager.getArpCache().getMac(pcIpAddress);
-                        String dstMac = factoryManager.getArpCache().getMac(resolvedServerIp);
-                        ethernetFactory.createIpFrame(srcMac != null ? srcMac : "00:1A:2B:3C:4D:5F", dstMac != null ? dstMac : "00:1A:2B:3C:4D:60");
+                        dstMac = factoryManager.getArpCache().getMac(resolvedServerIp);
+                        if (dstMac == null || dstMac.isEmpty()) {
+                            dstMac = "00:1A:2B:3C:4D:60";  // 默认网关 MAC
+                        }
+                        appendToConsole("【🟦 目的 MAC】: " + dstMac);
+                    }
+                    break;
+                case 18: // Ethernet SRC MAC
+                    if (!hasEther && pcIpAddress != null) {
+                        srcMac = factoryManager.getArpCache().getMac(pcIpAddress);
+                        if (srcMac == null || srcMac.isEmpty()) {
+                            srcMac = "00:1A:2B:3C:4D:5F";  // 默认 PC MAC
+                        }
+                        appendToConsole("【🟦 源 MAC】: " + srcMac);
                     }
                     break;
                 case 19: // EtherType
-                    // 已在 case 17-18 中设置
+                    if (!hasEther) {
+                        hasEther = true;
+                        ethernetFactory.createIpFrame(srcMac, dstMac);
+                        appendToConsole("【🟦 EtherType】: 0x0800 (IPv4)");
+                    }
                     break;
                 case 20: // LLC（可选）
                     if (!hasLlc) {
                         hasLlc = true;
-                        // 添加 LLC 头部（使用默认 IP SAP）
                         factoryManager.getLinkLayerFactory().setLlcHeader();
                         LlcHeader llc = factoryManager.getLinkLayerFactory().getLlcHeader();
                         appendToConsole("【🔗 LLC】: " + llc.toString());
@@ -2303,114 +2399,218 @@ public class DataCartFactoryGame extends JFrame {
                 case 21: // FCS 校验（发送端：计算并附加）
                     if (!hasFcs) {
                         hasFcs = true;
-
-                        // 获取当前正在构建的以太网帧（不含 FCS）
-                        String srcMac = "00:1A:2B:3C:4D:5F";  // PC 的 MAC
-                        String dstMac = "00:1A:2B:3C:4D:60";  // 网关/服务器的 MAC
-
-                        // 模拟网络层数据（IP 包）
                         byte[] networkData = ("IP Packet Data").getBytes();
-
-                        // 构建以太网帧并计算 FCS
-                        byte[] completeFrame = factoryManager.getLinkLayerFactory().buildEthernetFrame(dstMac, srcMac, 0x0800, networkData, hasLlc);
-
-                        // 存储帧数据到 DataCart
+                        byte[] completeFrame = factoryManager.getLinkLayerFactory()
+                                .buildEthernetFrame(dstMac, srcMac, 0x0800, networkData, hasLlc);
                         this.setEthernetFrameData(completeFrame);
-
-                        // 获取 FCS 值用于显示
                         byte[] fcs = factoryManager.getLinkLayerFactory().getCurrentFcs();
-
-                        appendToConsole(String.format("【🔒 FCS 计算】: CRC32 = %02X%02X%02X%02X", fcs[0] & 0xFF, fcs[1] & 0xFF, fcs[2] & 0xFF, fcs[3] & 0xFF));
-                        appendToConsole(String.format("【📦 完整帧】: 总长度 %d 字节 (含 4 字节 FCS)", completeFrame.length));
+                        appendToConsole(String.format("【🔒 FCS 计算】: CRC32 = %02X%02X%02X%02X",
+                                fcs[0] & 0xFF, fcs[1] & 0xFF, fcs[2] & 0xFF, fcs[3] & 0xFF));
+                        appendToConsole(String.format("【📦 完整帧】: %d 字节", completeFrame.length));
                     }
                     break;
 
-                case 22: // LAN 拆包（接收端）
+                // ========== 五元组和会话（新增加） ==========
+                case 22: // 五元组提取
+                    if (!hasFiveTuple) {
+                        hasFiveTuple = true;
+                        protocol = useUdp ? "UDP" : "TCP";
+                        factoryManager.getFiveTupleFactory().extract(srcIp, dstIp, srcPort, dstPort, protocol);
+                        appendToConsole(String.format("【🔢 五元组】: %s %s:%d → %s:%d",
+                                protocol, srcIp, srcPort, dstIp, dstPort));
+                    }
+                    break;
+                case 23: // 会话管理
+                    if (!hasSession) {
+                        hasSession = true;
+                        factoryManager.getSessionFactory().createSession(srcIp, dstIp, srcPort, dstPort);
+                        appendToConsole("【💬 会话】: 创建会话 " + srcIp + ":" + srcPort);
+                    }
+                    break;
+
+                // ========== 边界网关 ==========
+                case 24: // LAN 拆包
                     if (!isReturnTrip) {
-                        // 接收端处理：移除 Ethernet 头部并验证 FCS
                         hasLlc = false;
                         hasFcs = false;
-
-                        // 获取收到的完整以太网帧
                         byte[] receivedFrame = this.getEthernetFrameData();
-
                         if (receivedFrame != null && receivedFrame.length > 0) {
-                            // 验证 FCS 并提取网络层数据
-                            byte[] networkData = factoryManager.getLinkLayerFactory().extractNetworkData(receivedFrame);
-
+                            byte[] networkData = factoryManager.getLinkLayerFactory()
+                                    .extractNetworkData(receivedFrame);
                             if (networkData != null) {
-                                // FCS 校验通过
                                 this.setFcsVerified(true);
-                                String Info = factoryManager.getLinkLayerFactory().getRemoveEthernetHeaderInfo();
-                                appendToConsole(Info);
-                                appendToConsole(String.format("  └─ 提取网络层数据: %d 字节", networkData.length));
+                                String info = factoryManager.getLinkLayerFactory().getRemoveEthernetHeaderInfo();
+                                appendToConsole(info);
                             } else {
-                                // FCS 校验失败，帧损坏
                                 this.setFcsVerified(false);
-                                appendToConsole("【⚠️ FCS 校验失败】: 帧损坏，数据包将被丢弃");
-                                appendToConsole(String.format("  └─ 帧长度: %d 字节 (期望至少 18 字节)", receivedFrame.length));
-
-                                // 标记数据包为丢弃
+                                appendToConsole("【⚠️ FCS 校验失败】: 帧损坏");
                                 this.isDropped = true;
                                 return;
                             }
-                        } else {
-                            // 模拟拆封过程（当没有实际帧数据时）
-                            String Info = factoryManager.getLinkLayerFactory().getRemoveEthernetHeaderInfo();
-                            appendToConsole(Info);
                         }
-
-                        // 重置链路层状态，准备处理下一个包
                         factoryManager.getLinkLayerFactory().resetLinkLayer();
-                    } else {
-                        // 回传包（如 ACK）也需要拆封
-                        hasLlc = false;
-                        hasFcs = false;
-                        appendToConsole("【📥 链路层拆封】: 处理回传数据包");
-                        factoryManager.getLinkLayerFactory().resetLinkLayer();
+                        appendToConsole("【🎛️ LAN 拆包】: 链路层解封完成");
                     }
                     break;
-                case 23: // 路由查表
+                case 25: // 路由查表
                     factoryManager.getRouteTable().lookup(resolvedServerIp);
+                    appendToConsole("【🔀 路由查表】: 目标 " + resolvedServerIp + " 下一跳 8.8.8.8");
                     break;
-                case 24: // NAT 转换
+                case 26: // NAT 转换
                     if (!isNatted && !isReturnTrip) {
                         applyNatMapping();
-                        // factoryManager.getNatFactory().translate(pcIpAddress, 1234);
-                        appendToConsole("【🌍 NAT 转换】: " + pcIpAddress + ":1234 → " + natPublicIp + ":" + natPublicPort);
+                        appendToConsole("【🌍 NAT 转换】: " + srcIp + ":" + srcPort + " → " + natPublicIp + ":" + natPublicPort);
                         updateNatDisplay();
                     }
                     break;
-                case 25: // WAN 封装
-                    if (factoryManager.getBandwidthFactory().shouldDropPacket()) {
-                        appendToConsole("【💥 带宽限制】: 公网丢包模拟");
+                // 修改 case 27 中的带宽控制调用
+                case 27: // 带宽控制
+                    if (factoryManager.getBandwidthFactory() != null &&
+                            factoryManager.getBandwidthFactory().shouldDropPacket()) {
+                        appendToConsole("【💥 带宽限制】: 公网丢包，数据包被丢弃");
+                        this.isDropped = true;
+                        return;
+                    }
+                    appendToConsole("【📊 带宽控制】: 通过");
+                    break;
+                case 28: // WAN 封装
+                    appendToConsole("【🛠️ WAN 封装】: 进入公网传输");
+                    break;
+
+                // ========== 防火墙 ==========
+                case 29: // 出站防火墙
+                    if (srcIp != null && dstIp != null) {
+                        if (!factoryManager.getFirewallFactory().allowOutbound(srcIp, dstIp, srcPort)) {
+                            appendToConsole("【🔥 防火墙】: 出站包被阻断 " + srcIp + " → " + dstIp);
+                            this.isDropped = true;
+                            return;
+                        }
+                        appendToConsole("【🔥 防火墙】: 出站规则通过");
                     }
                     break;
-                case 29: // 剥链路层（接收端）
-                    hasLlc = false;
-                    hasFcs = false;
-                    hasEther = false;
-                    // factoryManager.getLinkLayerFactory().removeEthernetHeader();
+                case 30: // 入站防火墙
+                    if (isReturnTrip && dstIp != null && srcIp != null) {
+                        if (!factoryManager.getFirewallFactory().allowInbound(dstIp, srcIp, dstPort)) {
+                            appendToConsole("【🔥 防火墙】: 入站包被阻断 " + srcIp + " → " + dstIp);
+                            this.isDropped = true;
+                            return;
+                        }
+                        appendToConsole("【🔥 防火墙】: 入站规则通过");
+                    }
                     break;
-                case 30: // 剥网络层（接收端）
+
+                // ========== 公网路由器 ==========
+                case 31: // ROUTER1
+                    ttl--;
+                    appendToConsole("【📡 ROUTER1】: TTL=" + ttl);
+                    if (ttl <= 0) {
+                        appendToConsole("【⚠️ TTL 超时】: 数据包被丢弃");
+                        this.isDropped = true;
+                        return;
+                    }
+                    break;
+                case 32: // ROUTER2
+                    ttl--;
+                    appendToConsole("【📡 ROUTER2】: TTL=" + ttl);
+                    if (ttl <= 0) {
+                        this.isDropped = true;
+                        return;
+                    }
+                    break;
+                case 33: // ROUTER3
+                    ttl--;
+                    appendToConsole("【📡 ROUTER3】: TTL=" + ttl);
+                    if (ttl <= 0) {
+                        this.isDropped = true;
+                        return;
+                    }
+                    break;
+
+                // 修改 case 34 和 35 中的队列调用
+                case 34: // 队列入队
+                    if (!hasQueue && factoryManager.getQueueFactory() != null) {
+                        hasQueue = true;
+                        factoryManager.getQueueFactory().enqueue(this);
+                        appendToConsole("【📋 入队】: 数据包进入队列");
+                    }
+                    break;
+                case 35: // 队列出队
+                    if (hasQueue && factoryManager.getQueueFactory() != null) {
+                        factoryManager.getQueueFactory().dequeue();
+                        appendToConsole("【📋 出队】: 数据包离开队列");
+                        hasQueue = false;
+                    }
+                    break;
+                case 36: // 拥塞控制
+                    if (cartType.equals("DATA") && !useUdp) {
+                        factoryManager.getCongestionControl().congestionAvoidance(cwnd);
+                        appendToConsole("【🐌 拥塞控制】: 调整窗口");
+                    }
+                    break;
+
+                // ========== 接收端链路层解封 ==========
+                case 37: // RX_ETH - 以太网解封
+                    hasEther = false;
+                    appendToConsole("【📡 RX_ETH】: 移除以太网头部");
+                    break;
+                case 38: // RX_LLC - LLC 解封
+                    hasLlc = false;
+                    appendToConsole("【📡 RX_LLC】: 移除 LLC 头部");
+                    break;
+                case 39: // RX_FCS - FCS 校验
+                    if (!fcsVerified && this.getEthernetFrameData() != null) {
+                        boolean valid = factoryManager.getLinkLayerFactory()
+                                .verifyFcs(this.getEthernetFrameData());
+                        if (!valid) {
+                            appendToConsole("【⚠️ RX_FCS】: FCS 校验失败，帧损坏");
+                            this.isDropped = true;
+                            return;
+                        }
+                        this.setFcsVerified(true);
+                    }
+                    appendToConsole("【✓ RX_FCS】: 校验通过");
+                    break;
+                case 40: // RX_ARP - ARP 解析完成
+                    appendToConsole("【📡 RX_ARP】: ARP 解析完成");
+                    break;
+
+                // ========== 接收端网络层解封 ==========
+                case 41: // RX_FRAG - IP 分片重组
+                    if (isFragmented) {
+                        appendToConsole("【🧩 RX_FRAG】: IP 分片重组中");
+                        // 这里可以添加实际的重组逻辑
+                    }
+                    break;
+                case 42: // RX_IP - IP 层解封
                     hasIp = false;
                     if (cartType.equals("DATA") || cartType.equals("HTTP_200_OK")) {
                         IpPacket ipPacket = ipFactory.produce();
                         ipPacket.deserialize(new byte[0]);
+                        appendToConsole("【💛 RX_IP】: 网络层解封完成");
                     }
                     break;
-                case 31: // 剥传输层（接收端）
+
+                // ========== 接收端传输层解封 ==========
+                case 43: // RX_PORT - 端口解封
+                    appendToConsole("【🔌 RX_PORT】: 端口解封完成");
+                    break;
+                case 44: // RX_TCP - TCP 层解封
                     hasTcp = false;
                     if (cartType.equals("DATA") || cartType.equals("HTTP_200_OK")) {
                         TcpPacket tcpPacket = tcpFactory.produce();
                         tcpPacket.deserialize(new byte[0]);
+                        appendToConsole("【🧡 RX_TCP】: 传输层解封完成");
                     }
                     break;
-                case 32: // 应用交付（接收端）
+
+                // ========== 接收端应用层交付 ==========
+                case 45: // RX_APP - 应用层交付
                     hasApp = false;
                     if (cartType.equals("HTTP_200_OK")) {
-                        HttpPacket httpPacket = factoryManager.getHttpFactory().createResponse(200, httpResponseContent);
+                        HttpPacket httpPacket = factoryManager.getHttpFactory()
+                                .createResponse(200, httpResponseContent);
                         httpResponseContent = httpPacket.getBody();
+                        appendToConsole("【💚 RX_APP】: 应用层交付完成");
                     }
                     break;
             }
@@ -2524,6 +2724,120 @@ public class DataCartFactoryGame extends JFrame {
                     } else if (tag.startsWith("MINER_S")) {
                         g2.setColor(Color.GREEN);
                         g2.drawString("🟩 矿机", x + 4, y + 24);
+                    }// 新增：防火墙渲染
+                    else if (tag.equals("FW_IN") || tag.equals("FW_OUT")) {
+                        g2.setColor(new Color(255, 80, 80));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("🔥 " + tag, x + 3, y + 24);
+                    }
+// 新增：IDS 渲染
+                    else if (tag.equals("IDS")) {
+                        g2.setColor(new Color(255, 165, 0));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.BLACK);
+                        g2.drawString("🛡️ IDS", x + 3, y + 24);
+                    }
+// 新增：队列渲染
+                    else if (tag.equals("Q_IN") || tag.equals("Q_OUT") || tag.equals("Q_DROP")) {
+                        g2.setColor(new Color(100, 100, 200));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("📋 " + tag, x + 3, y + 24);
+                    }
+// 新增：拥塞控制渲染
+                    else if (tag.startsWith("CC_")) {
+                        g2.setColor(new Color(0, 200, 200));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.BLACK);
+                        String ccName = tag.equals("CC_SLOW") ? "🐢 慢启动" :
+                                (tag.equals("CC_AVOID") ? "🐌 拥塞避免" : "⚡ 快速重传");
+                        g2.drawString(ccName, x + 2, y + 24);
+                    }
+// 新增：五元组渲染
+                    else if (tag.equals("FIVETUPLE")) {
+                        g2.setColor(new Color(200, 100, 200));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("🔢 五元组", x + 2, y + 24);
+                    }
+// 新增：会话管理渲染
+                    else if (tag.equals("SESSION")) {
+                        g2.setColor(new Color(100, 200, 100));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.BLACK);
+                        g2.drawString("💬 会话", x + 4, y + 24);
+                    }
+// 新增：带宽控制渲染
+                    else if (tag.equals("BW_CTRL")) {
+                        g2.setColor(new Color(200, 200, 0));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.BLACK);
+                        g2.drawString("📊 带宽", x + 4, y + 24);
+                    }
+// 新增：网络设备渲染
+                    else if (tag.equals("SWITCH")) {
+                        g2.setColor(new Color(0, 150, 200));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("🔌 交换机", x + 2, y + 24);
+                    }
+                    else if (tag.equals("HUB")) {
+                        g2.setColor(new Color(150, 100, 50));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("🔌 集线器", x + 2, y + 24);
+                    }
+                    else if (tag.equals("BRIDGE")) {
+                        g2.setColor(new Color(100, 150, 100));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("🌉 网桥", x + 4, y + 24);
+                    }
+// 新增：子网渲染
+                    else if (tag.startsWith("SUBNET_")) {
+                        g2.setColor(new Color(80, 80, 200, 100));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.CYAN);
+                        g2.drawString("🌐 " + tag, x + 2, y + 24);
+                    }
+// 新增：链路渲染
+                    else if (tag.equals("LINK_UP")) {
+                        g2.setColor(new Color(0, 255, 0, 80));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.GREEN);
+                        g2.drawString("🔗 链路↑", x + 4, y + 24);
+                    }
+                    else if (tag.equals("LINK_DOWN")) {
+                        g2.setColor(new Color(255, 0, 0, 80));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.RED);
+                        g2.drawString("🔗 链路↓", x + 4, y + 24);
+                    }
+// 新增：接收端额外工厂
+                    else if (tag.equals("RX_ETH")) {
+                        g2.setColor(new Color(0, 100, 200));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("📡 解ETH", x + 4, y + 24);
+                    }
+                    else if (tag.equals("RX_FCS")) {
+                        g2.setColor(new Color(0, 150, 100));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("✓ FCS", x + 6, y + 24);
+                    }
+                    else if (tag.equals("RX_FRAG")) {
+                        g2.setColor(new Color(200, 100, 0));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("🧩 分片重组", x + 2, y + 24);
+                    }
+                    else if (tag.equals("RX_PORT")) {
+                        g2.setColor(new Color(150, 0, 150));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("🔌 解端口", x + 4, y + 24);
                     }
                 }
             }

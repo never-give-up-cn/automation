@@ -249,7 +249,198 @@ public class FirewallRuleFactory implements INetworkFactory<FirewallRule> {
             rule.incrementHitCount();
             return rule.getAction() == Action.ALLOW || rule.getAction() == Action.LOG;
         }
-        return false;
+        return false;  // 默认拒绝
+    }
+
+    // ========== 新增：便捷的 allowOutbound / allowInbound 方法 ==========
+
+    /**
+     * 检查出站流量是否允许
+     * @param srcIp 源IP
+     * @param dstIp 目标IP
+     * @param srcPort 源端口
+     * @return true 表示允许通过
+     */
+    public boolean allowOutbound(String srcIp, String dstIp, int srcPort) {
+        FiveTuple fiveTuple = new FiveTuple(srcIp, dstIp, srcPort, 0, 6); // 默认 TCP
+        return shouldAllow(fiveTuple, Direction.OUTBOUND);
+    }
+
+    /**
+     * 检查入站流量是否允许
+     * @param dstIp 目标IP（本机）
+     * @param srcIp 源IP（外部）
+     * @param dstPort 目标端口
+     * @return true 表示允许通过
+     */
+    public boolean allowInbound(String dstIp, String srcIp, int dstPort) {
+        FiveTuple fiveTuple = new FiveTuple(srcIp, dstIp, 0, dstPort, 6); // 默认 TCP
+        return shouldAllow(fiveTuple, Direction.INBOUND);
+    }
+
+    /**
+     * 检查出站流量是否允许（带协议）
+     * @param srcIp 源IP
+     * @param dstIp 目标IP
+     * @param srcPort 源端口
+     * @param dstPort 目标端口
+     * @param protocol 协议号 (1=ICMP, 6=TCP, 17=UDP)
+     * @return true 表示允许通过
+     */
+    public boolean allowOutbound(String srcIp, String dstIp, int srcPort, int dstPort, int protocol) {
+        FiveTuple fiveTuple = new FiveTuple(srcIp, dstIp, srcPort, dstPort, protocol);
+        return shouldAllow(fiveTuple, Direction.OUTBOUND);
+    }
+
+    /**
+     * 检查入站流量是否允许（带协议）
+     * @param srcIp 源IP
+     * @param dstIp 目标IP
+     * @param srcPort 源端口
+     * @param dstPort 目标端口
+     * @param protocol 协议号 (1=ICMP, 6=TCP, 17=UDP)
+     * @return true 表示允许通过
+     */
+    public boolean allowInbound(String srcIp, String dstIp, int srcPort, int dstPort, int protocol) {
+        FiveTuple fiveTuple = new FiveTuple(srcIp, dstIp, srcPort, dstPort, protocol);
+        return shouldAllow(fiveTuple, Direction.INBOUND);
+    }
+
+    /**
+     * 检查出站流量是否允许（带协议名称）
+     * @param srcIp 源IP
+     * @param dstIp 目标IP
+     * @param srcPort 源端口
+     * @param dstPort 目标端口
+     * @param protocolName 协议名称 (TCP, UDP, ICMP)
+     * @return true 表示允许通过
+     */
+    public boolean allowOutbound(String srcIp, String dstIp, int srcPort, int dstPort, String protocolName) {
+        int protocol = protocolNameToInt(protocolName);
+        FiveTuple fiveTuple = new FiveTuple(srcIp, dstIp, srcPort, dstPort, protocol);
+        return shouldAllow(fiveTuple, Direction.OUTBOUND);
+    }
+
+    /**
+     * 检查入站流量是否允许（带协议名称）
+     * @param srcIp 源IP
+     * @param dstIp 目标IP
+     * @param srcPort 源端口
+     * @param dstPort 目标端口
+     * @param protocolName 协议名称 (TCP, UDP, ICMP)
+     * @return true 表示允许通过
+     */
+    public boolean allowInbound(String srcIp, String dstIp, int srcPort, int dstPort, String protocolName) {
+        int protocol = protocolNameToInt(protocolName);
+        FiveTuple fiveTuple = new FiveTuple(srcIp, dstIp, srcPort, dstPort, protocol);
+        return shouldAllow(fiveTuple, Direction.INBOUND);
+    }
+
+    /**
+     * 协议名称转协议号
+     */
+    private int protocolNameToInt(String protocolName) {
+        if (protocolName == null) return 0;
+        switch (protocolName.toUpperCase()) {
+            case "TCP": return 6;
+            case "UDP": return 17;
+            case "ICMP": return 1;
+            default: return 0;
+        }
+    }
+
+    /**
+     * 快速添加允许规则
+     */
+    public void addAllowRule(String srcIp, String dstIp, int port, Direction direction) {
+        RuleBuilder builder = new RuleBuilder()
+                .name("Allow " + direction + " " + srcIp + ":" + port + " -> " + dstIp)
+                .priority(100)
+                .action(Action.ALLOW)
+                .direction(direction);
+
+        if (srcIp != null && !srcIp.equals("*")) {
+            builder.sourceIp(srcIp);
+        }
+        if (dstIp != null && !dstIp.equals("*")) {
+            builder.destinationIp(dstIp);
+        }
+        if (port > 0) {
+            builder.destinationPort(String.valueOf(port));
+        }
+
+        createRule(builder);
+    }
+
+    /**
+     * 快速添加拒绝规则
+     */
+    public void addDenyRule(String srcIp, String dstIp, int port, Direction direction) {
+        RuleBuilder builder = new RuleBuilder()
+                .name("Deny " + direction + " " + srcIp + ":" + port + " -> " + dstIp)
+                .priority(50)
+                .action(Action.DENY)
+                .direction(direction);
+
+        if (srcIp != null && !srcIp.equals("*")) {
+            builder.sourceIp(srcIp);
+        }
+        if (dstIp != null && !dstIp.equals("*")) {
+            builder.destinationIp(dstIp);
+        }
+        if (port > 0) {
+            builder.destinationPort(String.valueOf(port));
+        }
+
+        createRule(builder);
+    }
+
+    /**
+     * 初始化默认防火墙规则
+     */
+    public void initDefaultRules() {
+        reset();
+
+        // 允许 HTTP/HTTPS 出站
+        addAllowRule("*", "*", 80, Direction.OUTBOUND);
+        addAllowRule("*", "*", 443, Direction.OUTBOUND);
+
+        // 允许 DNS (UDP 53)
+        RuleBuilder dnsRule = new RuleBuilder()
+                .name("Allow DNS")
+                .priority(100)
+                .action(Action.ALLOW)
+                .protocol(Protocol.DNS)
+                .destinationPort("53")
+                .direction(Direction.OUTBOUND);
+        createRule(dnsRule);
+
+        // 允许 ICMP (Ping)
+        RuleBuilder icmpRule = new RuleBuilder()
+                .name("Allow ICMP")
+                .priority(100)
+                .action(Action.ALLOW)
+                .protocol(Protocol.ICMP)
+                .direction(Direction.BOTH);
+        createRule(icmpRule);
+
+        // 允许 DHCP
+        RuleBuilder dhcpRule = new RuleBuilder()
+                .name("Allow DHCP")
+                .priority(100)
+                .action(Action.ALLOW)
+                .protocol(Protocol.DHCP)
+                .direction(Direction.OUTBOUND);
+        createRule(dhcpRule);
+
+        // 默认拒绝所有
+        RuleBuilder defaultRule = new RuleBuilder()
+                .name("Default Deny")
+                .priority(9999)
+                .action(Action.DENY)
+                .direction(Direction.BOTH)
+                .description("Default deny all");
+        createRule(defaultRule);
     }
 
     @Override

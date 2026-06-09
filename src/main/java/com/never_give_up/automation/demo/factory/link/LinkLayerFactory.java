@@ -16,6 +16,9 @@ public class LinkLayerFactory {
     private static final int ETHERNET_HEADER_LEN = 14;
     private static final int FCS_LEN = 4;
 
+    // 默认 MAC 地址
+    private static final String DEFAULT_MAC = "00:00:00:00:00:00";
+
     // EtherType 常量
     public static final int ETHERTYPE_IPV4 = 0x0800;
     public static final int ETHERTYPE_ARP = 0x0806;
@@ -45,10 +48,14 @@ public class LinkLayerFactory {
 
     public byte[] buildEthernetFrame(String dstMac, String srcMac, int etherType,
                                      byte[] networkData, boolean useLlc) {
-        byte[] dstMacBytes = parseMac(dstMac);
-        byte[] srcMacBytes = parseMac(srcMac);
+        // 添加 null 检查，使用默认值
+        String safeDstMac = dstMac != null ? dstMac : DEFAULT_MAC;
+        String safeSrcMac = srcMac != null ? srcMac : DEFAULT_MAC;
 
-        int totalLen = ETHERNET_HEADER_LEN + networkData.length;
+        byte[] dstMacBytes = parseMac(safeDstMac);
+        byte[] srcMacBytes = parseMac(safeSrcMac);
+
+        int totalLen = ETHERNET_HEADER_LEN + (networkData != null ? networkData.length : 0);
         byte[] frame = new byte[totalLen + FCS_LEN];
         int offset = 0;
 
@@ -63,7 +70,9 @@ public class LinkLayerFactory {
         frame[offset + 1] = (byte) (etherType & 0xFF);
         offset += 2;
         // Payload
-        System.arraycopy(networkData, 0, frame, offset, networkData.length);
+        if (networkData != null && networkData.length > 0) {
+            System.arraycopy(networkData, 0, frame, offset, networkData.length);
+        }
 
         // FCS
         byte[] fcs = calculateFcs(java.util.Arrays.copyOf(frame, totalLen));
@@ -73,7 +82,7 @@ public class LinkLayerFactory {
     }
 
     public byte[] extractNetworkData(byte[] ethernetFrame) {
-        if (!verifyFcs(ethernetFrame)) return null;
+        if (ethernetFrame == null || !verifyFcs(ethernetFrame)) return null;
 
         int etherType = ((ethernetFrame[12] & 0xFF) << 8) | (ethernetFrame[13] & 0xFF);
         currentEtherType = etherType;
@@ -84,7 +93,7 @@ public class LinkLayerFactory {
     }
 
     public boolean verifyFcs(byte[] frame) {
-        if (frame.length < FCS_LEN) return false;
+        if (frame == null || frame.length < FCS_LEN) return false;
         byte[] data = java.util.Arrays.copyOf(frame, frame.length - FCS_LEN);
         byte[] receivedFcs = java.util.Arrays.copyOfRange(frame, frame.length - FCS_LEN, frame.length);
         byte[] calculatedFcs = calculateFcs(data);
@@ -92,26 +101,51 @@ public class LinkLayerFactory {
         return fcsValid;
     }
 
+    /**
+     * 解析 MAC 地址，添加 null 和格式检查
+     */
     private byte[] parseMac(String mac) {
+        if (mac == null || mac.isEmpty()) {
+            return new byte[]{0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+        }
+
         String[] parts = mac.split(":");
+        if (parts.length != 6) {
+            // 如果不是标准格式，尝试其他格式或返回默认值
+            return new byte[]{0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+        }
+
         byte[] result = new byte[6];
-        for (int i = 0; i < 6; i++) {
-            result[i] = (byte) Integer.parseInt(parts[i], 16);
+        try {
+            for (int i = 0; i < 6; i++) {
+                result[i] = (byte) Integer.parseInt(parts[i], 16);
+            }
+        } catch (NumberFormatException e) {
+            // 解析失败，返回默认值
+            return new byte[]{0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
         }
         return result;
     }
 
     private String formatMac(byte[] mac) {
+        if (mac == null || mac.length != 6) return "??:??:??:??:??:??";
         return String.format("%02X:%02X:%02X:%02X:%02X:%02X",
-                mac[0]&0xFF, mac[1]&0xFF, mac[2]&0xFF,
-                mac[3]&0xFF, mac[4]&0xFF, mac[5]&0xFF);
+                mac[0] & 0xFF, mac[1] & 0xFF, mac[2] & 0xFF,
+                mac[3] & 0xFF, mac[4] & 0xFF, mac[5] & 0xFF);
     }
 
     public String getRemoveEthernetHeaderInfo() {
         return String.format("【链路层拆封】MAC: %s → %s, Type: 0x%04X, FCS: %s",
-                currentSrcMac, currentDstMac, currentEtherType, fcsValid ? "✅" : "❌");
+                currentSrcMac != null ? currentSrcMac : "??:??:??:??:??:??",
+                currentDstMac != null ? currentDstMac : "??:??:??:??:??:??",
+                currentEtherType, fcsValid ? "✅" : "❌");
     }
 
     public byte[] getCurrentFcs() { return currentFcs; }
-    public void resetLinkLayer() { fcsValid = false; }
+    public void resetLinkLayer() {
+        fcsValid = false;
+        currentSrcMac = null;
+        currentDstMac = null;
+        currentEtherType = 0;
+    }
 }
