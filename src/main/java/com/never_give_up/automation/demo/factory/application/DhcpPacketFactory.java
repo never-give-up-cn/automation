@@ -5,7 +5,7 @@ import com.never_give_up.automation.demo.model.DhcpPacket;
 
 import java.util.Random;
 
-public class DhcpPacketFactory implements INetworkFactory<DhcpPacket> {
+public class DhcpPacketFactory  implements INetworkFactory<DhcpPacket> {
     private final Random random = new Random();
 
     public DhcpPacket createDiscover(String clientMac) {

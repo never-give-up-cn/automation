@@ -12,10 +12,7 @@ import com.never_give_up.automation.demo.factory.control.BandwidthFactory;
 import com.never_give_up.automation.demo.factory.control.CongestionControlFactory;
 import com.never_give_up.automation.demo.factory.control.SessionFactory;
 import com.never_give_up.automation.demo.factory.device.NetworkDeviceFactory;
-import com.never_give_up.automation.demo.factory.function.ArpCacheFactory;
-import com.never_give_up.automation.demo.factory.function.DnsCacheFactory;
-import com.never_give_up.automation.demo.factory.function.NatMappingFactory;
-import com.never_give_up.automation.demo.factory.function.RouteTableFactory;
+import com.never_give_up.automation.demo.factory.function.*;
 import com.never_give_up.automation.demo.factory.link.ArpPacketFactory;
 import com.never_give_up.automation.demo.factory.link.EthernetFactory;
 import com.never_give_up.automation.demo.factory.link.LinkLayerFactory;
@@ -32,6 +29,7 @@ import lombok.Data;
 
 @Data
 public class FactoryManager {
+    private ChecksumFactory checksumFactory;
     private final IpAddressFactory ipAddressFactory;
     private final MacAddressFactory macFactory;
     private final PortFactory portFactory;
@@ -66,6 +64,7 @@ public class FactoryManager {
         this.macFactory = new MacAddressFactory();
         this.portFactory = new PortFactory();
         this.ipFragmentFactory = new IpFragmentFactory();
+        this.checksumFactory = new ChecksumFactory();
         this.icmpFactory = new IcmpPacketFactory();
         this.fiveTupleFactory = new FiveTupleFactory(ipAddressFactory, portFactory);
         this.bandwidthFactory = new BandwidthFactory(1000, 50, 0.01);
@@ -220,5 +219,10 @@ public class FactoryManager {
 
     public LinkLayerFactory getLinkLayerFactory() {
         return linkLayerFactory;
+    }
+
+    // 添加 getter
+    public ChecksumFactory getChecksumFactory() {
+        return checksumFactory;
     }
 }
