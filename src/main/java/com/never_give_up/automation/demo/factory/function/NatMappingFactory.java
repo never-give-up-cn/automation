@@ -71,4 +71,8 @@ public class NatMappingFactory {
     public int size() {
         return natTable.size();
     }
+
+    public Map<String, NatEntry> getNatTable() {
+        return natTable;
+    }
 }

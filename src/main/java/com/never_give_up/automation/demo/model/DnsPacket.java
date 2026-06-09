@@ -2,6 +2,7 @@ package com.never_give_up.automation.demo.model;
 
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -30,8 +31,21 @@ public class DnsPacket extends BasePacket {
         private String data;
     }
 
-    public boolean isQuery() { return questionCount > 0 && answerCount == 0; }
-    public boolean isResponse() { return answerCount > 0; }
+    public String getIpAddress() {
+        return resolvedIp;
+    }
+
+    public void setIpAddress(String ip) {
+        this.resolvedIp = ip;
+    }
+
+    public boolean isQuery() {
+        return questionCount > 0 && answerCount == 0;
+    }
+
+    public boolean isResponse() {
+        return answerCount > 0;
+    }
 
     @Override
     public byte[] serialize() {

@@ -28,6 +28,10 @@ public class DnsCacheFactory {
         public long getRemainingMs() {
             return Math.max(0, ttl - (System.currentTimeMillis() - createTime));
         }
+
+        public String getIp() {
+            return ipAddress;
+        }
     }
 
     public void addEntry(String domain, String ip, long ttl) {
@@ -53,5 +57,9 @@ public class DnsCacheFactory {
 
     public int size() {
         return cache.size();
+    }
+
+    public Map<String, DnsEntry> getCache() {
+        return cache;
     }
 }

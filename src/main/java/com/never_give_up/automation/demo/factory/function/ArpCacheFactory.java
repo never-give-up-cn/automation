@@ -50,6 +50,10 @@ public class ArpCacheFactory {
         this.timeoutMs = timeoutMs;
     }
 
+    public Map<String, ArpEntry> getCache() {
+        return cache;
+    }
+
     public int size() {
         return cache.size();
     }

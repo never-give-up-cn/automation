@@ -1,5 +1,8 @@
 package com.never_give_up.automation.demo;
 
+import com.never_give_up.automation.demo.adapter.FactoryManager;
+import com.never_give_up.automation.demo.adapter.PacketAdapter;
+
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.spec.SecretKeySpec;
@@ -20,7 +23,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class DataCartFactoryGame extends JFrame {
-
     enum TcpState {
         CLOSED, SYN_SENT, ESTABLISHED,
         FIN_WAIT_1, FIN_WAIT_2, CLOSE_WAIT, LAST_ACK, TIME_WAIT
@@ -89,6 +91,9 @@ public class DataCartFactoryGame extends JFrame {
             this.sendTime = sendTime;
         }
     }
+
+    private FactoryManager factoryManager;
+    private PacketAdapter packetAdapter;
 
     // ========== 新增字段（类成员） ==========
     private Map<IpFragmentKey, List<IpFragment>> fragmentBuffer = new HashMap<>();
@@ -232,6 +237,9 @@ public class DataCartFactoryGame extends JFrame {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         setLayout(new BorderLayout(10, 10));
+
+        factoryManager = new FactoryManager();
+        packetAdapter = new PacketAdapter();
 
         stateTimerWatchdog = System.currentTimeMillis();
         try {
@@ -458,39 +466,43 @@ public class DataCartFactoryGame extends JFrame {
     }
 
     private void initArpCache() {
-        arpCache.put("192.168.1.1", new ArpEntry("192.168.1.1", "00:1A:2B:3C:4D:5E"));
-        arpCache.put("192.168.1.100", new ArpEntry("192.168.1.100", "00:1A:2B:3C:4D:5F"));
-        arpCache.put("10.0.0.1", new ArpEntry("10.0.0.1", "00:1A:2B:3C:4D:60"));
+        factoryManager.getArpCache().addEntry("192.168.1.1", "00:1A:2B:3C:4D:5E");
+        factoryManager.getArpCache().addEntry("192.168.1.100", "00:1A:2B:3C:4D:5F");
+        factoryManager.getArpCache().addEntry("10.0.0.1", "00:1A:2B:3C:4D:60");
     }
 
     private void initDnsCache() {
-        dnsCache.put("www.demo.com", new DnsEntry("www.demo.com", "10.0.0.1", 3600000));
-        dnsCache.put("google.com", new DnsEntry("google.com", "8.8.8.8", 3600000));
+        factoryManager.getDnsCache().addEntry("www.demo.com", "10.0.0.1", 3600000);
+        factoryManager.getDnsCache().addEntry("google.com", "8.8.8.8", 3600000);
     }
 
     private void updateArpDisplay() {
         StringBuilder arpSb = new StringBuilder();
-        for (ArpEntry entry : arpCache.values()) {
-            arpSb.append(String.format("%s → %s\n", entry.ipAddress, entry.macAddress));
-        }
+        factoryManager.getArpCache().getCache().forEach((ip, entry) -> {
+            if (!entry.isExpired(300000)) {
+                arpSb.append(String.format("%s → %s\n", entry.getIpAddress(), entry.getMacAddress()));
+            }
+        });
         txtArpDisplay.setText(arpSb.toString());
     }
 
+
     private void updateDnsDisplay() {
         StringBuilder dnsSb = new StringBuilder();
-        for (DnsEntry entry : dnsCache.values()) {
-            long remainingSec = Math.max(0, entry.getRemainingMs() / 1000);
-            dnsSb.append(String.format("%s → %s (TTL:%ds)\n", entry.domain, entry.ipAddress, remainingSec));
-        }
+        factoryManager.getDnsCache().getCache().forEach((domain, record) -> {
+            long remainingSec = Math.max(0, record.getTtl() / 1000);
+            dnsSb.append(String.format("%s → %s (TTL:%ds)\n", domain, record.getIp(), remainingSec));
+        });
         txtDnsDisplay.setText(dnsSb.toString());
     }
 
     private void updateNatDisplay() {
         StringBuilder natSb = new StringBuilder();
-        for (NatEntry entry : natTable.values()) {
+        factoryManager.getNatFactory().getNatTable().forEach((key, entry) -> {
             natSb.append(String.format("%s:%d → %s:%d\n",
-                    entry.insideIp, entry.insidePort, entry.publicIp, entry.publicPort));
-        }
+                    entry.getInsideIp(), entry.getInsidePort(),
+                    entry.getPublicIp(), entry.getPublicPort()));
+        });
         txtNatDisplay.setText(natSb.toString());
     }
 
@@ -684,22 +696,18 @@ public class DataCartFactoryGame extends JFrame {
         isDnsResolving = true;
         appendToConsole("【🌐 DNS 解析开始】: 查询域名 " + targetDomain);
 
-        DnsEntry cached = dnsCache.get(targetDomain);
-        if (cached != null && !cached.isExpired()) {
-            // 缓存命中，直接完成
-            resolvedServerIp = cached.ipAddress;
+        String cached = factoryManager.getDnsCache().resolve(targetDomain);
+        if (cached != null) {
+            resolvedServerIp = cached;
             isDnsResolved = true;
             isDnsResolving = false;
             appendToConsole("【📚 DNS 缓存命中】: " + targetDomain + " → " + resolvedServerIp);
             performArpResolution(resolvedServerIp);
             if (!useUdp) startTcpHandshake();
             else startUdpTransmission();
-//            updateTaskPanel();
-//            checkTaskCompletion();
             return;
         }
 
-        // 无缓存，发起递归查询第一步：客户端 → 本地 DNS
         DataCart dnsQuery = new DataCart(pcFactory.x, pcFactory.y, "DNS_QUERY", 0);
         dnsQuery.domain = targetDomain;
         pendingDataCarts.add(dnsQuery);
@@ -707,15 +715,16 @@ public class DataCartFactoryGame extends JFrame {
     }
 
     private void performArpResolution(String targetIp) {
-        if (!arpCache.containsKey(targetIp)) {
+        String mac = factoryManager.getArpCache().getMac(targetIp);
+        if (mac == null) {
             appendToConsole("【🔍 ARP 请求】: 谁拥有 " + targetIp + "？");
-            String mac = String.format("00:1A:2B:%02X:%02X:%02X",
+            String newMac = String.format("00:1A:2B:%02X:%02X:%02X",
                     new Random().nextInt(256), new Random().nextInt(256), new Random().nextInt(256));
-            arpCache.put(targetIp, new ArpEntry(targetIp, mac));
-            appendToConsole("【📥 ARP 响应】: " + targetIp + " → " + mac);
+            factoryManager.getArpCache().addEntry(targetIp, newMac);
+            appendToConsole("【📥 ARP 响应】: " + targetIp + " → " + newMac);
             updateArpDisplay();
         } else {
-            appendToConsole("【✅ ARP 缓存命中】: " + targetIp + " → " + arpCache.get(targetIp).macAddress);
+            appendToConsole("【✅ ARP 缓存命中】: " + targetIp + " → " + mac);
         }
     }
 
@@ -1069,7 +1078,10 @@ public class DataCartFactoryGame extends JFrame {
                 case "DHCP_ACK":
                     appendToConsole("【✅ DHCP】: ACK 到达，IP 分配成功！");
                     pcIpAssigned = true;
-                    pcIpAddress = "192.168.1.100";
+                    pcIpAddress = factoryManager.getIpAddressFactory().getDeviceIp("PC");
+                    if (pcIpAddress == null) {
+                        pcIpAddress = factoryManager.getIpAddressFactory().setCustomIp("PC", "192.168.1.100");
+                    }
                     dhcpInProgress = false;
                     dhcpStep = 4;
                     funds += 200;
@@ -1480,6 +1492,9 @@ public class DataCartFactoryGame extends JFrame {
         tlsState = TlsState.IDLE;
         httpSent = false;
         httpResponseContent = "";
+
+        factoryManager.reset();
+
         updateTopLabel();
         canvas.repaint();
     }

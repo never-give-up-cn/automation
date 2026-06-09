@@ -13,7 +13,7 @@ public class IcmpPacket extends BasePacket {
     private int sequenceNumber;
     private long timestamp;
     private byte[] data;
-
+    private int ttl;
     public boolean isEchoRequest() { return type == 8; }
     public boolean isEchoReply() { return type == 0; }
     public boolean isTimeExceeded() { return type == 11; }
