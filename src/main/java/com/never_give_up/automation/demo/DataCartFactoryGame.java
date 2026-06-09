@@ -692,7 +692,22 @@ public class DataCartFactoryGame extends JFrame {
             appendToConsole("【⛔ DNS 阻断】: PC 未获取 IP，等待 DHCP 完成...");
             return;
         }
-        if (isDnsResolved || isDnsResolving) return;
+        if (isDnsResolved) {
+            appendToConsole("【📚 DNS 已解析】: " + targetDomain + " → " + resolvedServerIp);
+            // 如果已经解析完成但连接未建立，触发连接建立
+            if (!useUdp && currentTcpState == TcpState.CLOSED) {
+                performArpResolution(resolvedServerIp);
+                startTcpHandshake();
+            } else if (useUdp && !udpActive) {
+                performArpResolution(resolvedServerIp);
+                startUdpTransmission();
+            }
+            return;
+        }
+        if (isDnsResolving) {
+            appendToConsole("【⏳ DNS 解析中】: 请稍候...");
+            return;
+        }
         isDnsResolving = true;
         appendToConsole("【🌐 DNS 解析开始】: 查询域名 " + targetDomain);
 
@@ -703,8 +718,11 @@ public class DataCartFactoryGame extends JFrame {
             isDnsResolving = false;
             appendToConsole("【📚 DNS 缓存命中】: " + targetDomain + " → " + resolvedServerIp);
             performArpResolution(resolvedServerIp);
-            if (!useUdp) startTcpHandshake();
-            else startUdpTransmission();
+            if (!useUdp && currentTcpState == TcpState.CLOSED) {
+                startTcpHandshake();
+            } else if (useUdp && !udpActive) {
+                startUdpTransmission();
+            }
             return;
         }
 
@@ -832,43 +850,29 @@ public class DataCartFactoryGame extends JFrame {
             }
 
             // 修复后的启动逻辑，支持所有模式
+            // 修复后的启动逻辑，支持所有模式
             if (pcIpAssigned) {
                 if (!useUdp) {
                     // TCP 模式（包含普通TCP和HTTP演示）
                     if (currentTcpState == TcpState.CLOSED) {
                         if (httpDemoEnabled) {
                             // HTTP 演示模式：无需资源，直接启动
-                            if (!isDnsResolved && !isDnsResolving) startDnsResolution();
-                            else if (isDnsResolved) startDnsResolution();
+                            if (!isDnsResolved && !isDnsResolving) {
+                                startDnsResolution();
+                            }
                         } else {
                             // 普通 TCP 模式：需要采矿资源
                             if (helloStock >= 2 && sayStock >= 1) {
-                                if (!isDnsResolved && !isDnsResolving) startDnsResolution();
-                                else if (isDnsResolved) startDnsResolution();
-                            }
-                        }
-                    } else if (currentTcpState == TcpState.ESTABLISHED) {
-                        if (!httpDemoEnabled) {
-                            // 只有普通 TCP 才发送数据包
-                            int effectiveWindow = Math.min(cwnd, rwnd);
-                            while (effectiveWindow > 0 && helloStock >= 2 && sayStock >= 1 && serverReceivedCount < totalDataToTransmit) {
-                                helloStock -= 2;
-                                sayStock -= 1;
-                                int currentSeq = nextSeqNum++;
-                                activeTimers.add(new RetransmissionTask(currentSeq, now));
-                                DataCart dataPkt = new DataCart(pcFactory.x, pcFactory.y, "DATA", currentSeq);
-                                dataPkt.ttl = 64;
-                                pendingDataCarts.add(dataPkt);
-                                sentSeq.add(currentSeq);
-                                appendToConsole(String.format("【📤 发送数据】: SEQ=%d, cwnd=%d, rwnd=%d, TTL=%d", currentSeq, cwnd, rwnd, 64));
+                                if (!isDnsResolved && !isDnsResolving) {
+                                    startDnsResolution();
+                                }
                             }
                         }
                     }
                 } else {
                     // UDP 模式：直接启动（无需资源）
-                    if (!udpActive) {
-                        if (!isDnsResolved && !isDnsResolving) startDnsResolution();
-                        else if (isDnsResolved) startDnsResolution();
+                    if (!udpActive && !isDnsResolved && !isDnsResolving) {
+                        startDnsResolution();
                     }
                 }
             }
@@ -1228,7 +1232,7 @@ public class DataCartFactoryGame extends JFrame {
                         isDnsResolved = true;
                         isDnsResolving = false;
                         dnsCache.put(targetDomain, new DnsEntry(targetDomain, resolvedServerIp, 3600000));
-                        appendToConsole("【📥 本地 DNS】: 缓存结果 " + targetDomain + " → " + resolvedServerIp);
+                        appendToConsole("【 本地 DNS】: 缓存结果 " + targetDomain + " → " + resolvedServerIp);
                         updateDnsDisplay();
 
                         // 向客户端发送最终响应
@@ -1236,6 +1240,7 @@ public class DataCartFactoryGame extends JFrame {
                         finalResp.domain = cart.domain;
                         finalResp.resolvedIp = resolvedServerIp;
                         finalResp.isReturnTrip = true;
+                        finalResp.stage = -1; // 直接返回 PC，不走封装流程
                         pendingDataCarts.add(finalResp);
                         appendToConsole("【 DNS 响应】: 返回给客户端");
                     }
@@ -1269,7 +1274,7 @@ public class DataCartFactoryGame extends JFrame {
                         isDnsResolved = true;
                         isDnsResolving = false;
                         dnsCache.put(targetDomain, new DnsEntry(targetDomain, resolvedServerIp, 3600000));
-                        appendToConsole("【📥 本地 DNS】: 缓存结果 " + targetDomain + " → " + resolvedServerIp);
+                        appendToConsole("【 本地 DNS】: 缓存结果 " + targetDomain + " → " + resolvedServerIp);
                         updateDnsDisplay();
 
                         // 向客户端发送最终响应
@@ -1278,8 +1283,9 @@ public class DataCartFactoryGame extends JFrame {
                         finalResp.domain = cart.domain;
                         finalResp.resolvedIp = resolvedServerIp;
                         finalResp.isReturnTrip = true;
+                        finalResp.stage = -1; // 直接返回 PC，不走封装流程
                         pendingDataCarts.add(finalResp);
-                        appendToConsole("【📬 DNS 响应】: 返回给客户端");
+                        appendToConsole("【 DNS 响应】: 返回给客户端");
                     }
                     break;
                 case "DNS_RESPONSE":
@@ -1288,10 +1294,46 @@ public class DataCartFactoryGame extends JFrame {
                     isDnsResolving = false;
                     dnsCache.put(targetDomain, new DnsEntry(targetDomain, resolvedServerIp, 3600000));
                     updateDnsDisplay();
-                    appendToConsole("【🌐 DNS 解析成功】: " + targetDomain + " → " + resolvedServerIp);
+                    appendToConsole("【 DNS 解析成功】: " + targetDomain + " → " + resolvedServerIp);
                     performArpResolution(resolvedServerIp);
-                    if (!useUdp) startTcpHandshake();
-                    else startUdpTransmission();
+
+                    // 修复：根据当前状态决定启动传输层连接
+                    if (!useUdp) {
+                        // TCP模式：只在CLOSED状态下启动握手
+                        if (currentTcpState == TcpState.CLOSED) {
+                            startTcpHandshake();
+                        } else {
+                            appendToConsole("【⚠️ TCP】: 当前状态为 " + currentTcpState + "，跳过握手");
+                        }
+                    } else {
+                        // UDP模式：只在未激活时启动
+                        if (!udpActive) {
+                            startUdpTransmission();
+                        } else {
+                            appendToConsole("【⚠️ UDP】: 传输已激活，跳过启动");
+                        }
+                    }
+                    return;
+                case "DHCP_OFFER":
+                    appendToConsole("【 DHCP】: Offer 到达客户端");
+                    dhcpStep = 2;
+                    DataCart request = new DataCart(pcFactory.x, pcFactory.y, "DHCP_REQUEST", 0);
+                    request.stage = 1;
+                    pendingDataCarts.add(request);
+                    appendToConsole("【 DHCP】: 发送 Request");
+                    break;
+                case "DHCP_ACK":
+                    appendToConsole("【✅ DHCP】: ACK 到达，IP 分配成功！");
+                    pcIpAssigned = true;
+                    pcIpAddress = factoryManager.getIpAddressFactory().getDeviceIp("PC");
+                    if (pcIpAddress == null) {
+                        pcIpAddress = factoryManager.getIpAddressFactory().setCustomIp("PC", "192.168.1.100");
+                    }
+                    dhcpInProgress = false;
+                    dhcpStep = 4;
+                    funds += 200;
+                    updateTopLabel();
+                    appendToConsole("【 网络就绪】: PC IP = " + pcIpAddress);
                     break;
                 case "SYN":
                 case "DATA":
@@ -1437,14 +1479,42 @@ public class DataCartFactoryGame extends JFrame {
                 case "SYN_ACK":
                     DataCart finalAck = new DataCart(pcFactory.x, pcFactory.y, "ACK_PC", 0);
                     finalAck.ackNumber = cart.sequenceNumber + 1;
+                    finalAck.isReturnTrip = true;
+                    finalAck.stage = -1;
                     pendingDataCarts.add(finalAck);
                     currentTcpState = TcpState.ESTABLISHED;
                     stateTimerWatchdog = System.currentTimeMillis();
                     cwnd = 1;
                     ssthresh = 12;
                     packetsAckedSinceLastIncrease = 0;
-                    appendToConsole("【🤝 三次握手完成】: 收到 SYN-ACK，发送 ACK，连接建立！cwnd=1, ssthresh=12");
+                    appendToConsole("【 三次握手完成】: 收到 SYN-ACK，发送 ACK，连接建立！cwnd=1, ssthresh=12");
                     stateTimerWatchdog = now;
+
+                    // 连接建立后立即触发数据传输
+                    if (httpDemoEnabled && !httpSent) {
+                        // HTTP 演示模式
+                        if (tlsEnabled && tlsState == TlsState.IDLE) {
+                            tlsState = TlsState.CLIENT_HELLO_SENT;
+                            DataCart hello = new DataCart(pcFactory.x, pcFactory.y, "TLS_CLIENT_HELLO", 0);
+                            hello.stage = 5;
+                            pendingDataCarts.add(hello);
+                            appendToConsole("【🔒 TLS】: 发送 Client Hello");
+                        } else if (!tlsEnabled) {
+                            sendHttpGet();
+                        }
+                    } else if (!useUdp && !httpDemoEnabled) {
+                        // 普通 TCP 模式：直接开始发送 DATA
+                        if (helloStock >= 2 && sayStock >= 1) {
+                            helloStock -= 2;
+                            sayStock -= 1;
+                            funds -= 300;
+                            updateTopLabel();
+                            sendDataPackets();
+                            appendToConsole("【📦 普通 TCP】: 资源充足，开始发送数据");
+                        } else {
+                            appendToConsole("【⚠️ 普通 TCP】: 资源不足，等待采矿 (需要 HELLO≥2, SAY≥1)");
+                        }
+                    }
                     break;
                 case "ACK_PC":
                     break;
@@ -1466,6 +1536,17 @@ public class DataCartFactoryGame extends JFrame {
                             if (task.seqNum == cart.sequenceNumber) {
                                 task.isAcked = true;
                                 break;
+                            }
+                        }
+
+                        // 普通 TCP 模式：收到 ACK 后继续发送数据
+                        if (!httpDemoEnabled && !useUdp && currentTcpState == TcpState.ESTABLISHED) {
+                            int effectiveWin = Math.min(cwnd, rwnd);
+                            int unackedCount = sentSeq.size() - ackedSeq.size();
+                            int canSend = effectiveWin - unackedCount;
+
+                            if (canSend > 0 && serverReceivedCount < totalDataToTransmit) {
+                                sendDataPackets();
                             }
                         }
                     }
@@ -1508,6 +1589,7 @@ public class DataCartFactoryGame extends JFrame {
                     break;
             }
         }
+
     }
 
     private void resetTcpSession() {
@@ -1540,7 +1622,22 @@ public class DataCartFactoryGame extends JFrame {
         updateTopLabel();
         canvas.repaint();
     }
+    private void sendDataPackets() {
+        // 普通 TCP 模式：发送 DATA 包
+        int packetsToSend = Math.min(cwnd, totalDataToTransmit - serverReceivedCount);
+        for (int i = 0; i < packetsToSend; i++) {
+            DataCart data = new DataCart(pcFactory.x, pcFactory.y, "DATA", nextSeqNum++);
+            data.ttl = 64;
+            data.advertisedWindow = rwnd;
+            pendingDataCarts.add(data);
+            sentSeq.add(data.sequenceNumber);
 
+            RetransmissionTask task = new RetransmissionTask(data.sequenceNumber, System.currentTimeMillis());
+            activeTimers.add(task);
+
+            appendToConsole(String.format("【📤 TCP 发送】: SEQ=%d (cwnd=%d)", data.sequenceNumber, cwnd));
+        }
+    }
     private void updateTopLabel() {
         int effectiveWin = Math.min(cwnd, rwnd);
         String ipStatus = pcIpAssigned ? pcIpAddress : "未分配";
@@ -1708,6 +1805,7 @@ public class DataCartFactoryGame extends JFrame {
                 this.isReturnTrip = true;
                 this.stage = -1;
             } else if (isControlFrame(type)) {
+                // 控制帧（包括 ACK_PC）应该快速到达目的地
                 this.stage = 2;
             } else if (type.startsWith("TLS_") || type.equals("HTTP_GET") || type.equals("UDP_DATA")) {
                 this.stage = 5;
@@ -1730,6 +1828,26 @@ public class DataCartFactoryGame extends JFrame {
                 timer--;
                 return;
             }
+
+            // 为 ACK_PC 提供快速路径
+            if (cartType.equals("ACK_PC") && !isReturnTrip && stage == 2) {
+                Point target = findBuildingCoords("RX_ST");
+                if (target != null) {
+                    double dx = target.x - x;
+                    double dy = target.y - y;
+                    double dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist <= speed) {
+                        x = target.x;
+                        y = target.y;
+                        isArrived = true;
+                    } else {
+                        x += (dx / dist) * speed;
+                        y += (dy / dist) * speed;
+                    }
+                    return;
+                }
+            }
+
             Point target;
 
             if (stage == -1) {
@@ -1852,6 +1970,16 @@ public class DataCartFactoryGame extends JFrame {
         }
 
         private Point findTargetMachine(int s, String type) {
+            // 为 ACK_PC 添加快速路由
+            if (type.equals("ACK_PC")) {
+                // 根据 stage 决定目标
+                if (s == 2) {
+                    return findBuildingCoords("T_CORE"); // 直接到 TCP 层
+                } else if (s >= 3) {
+                    return findBuildingCoords("RX_ST"); // 最终到服务器
+                }
+                return null;
+            }
             // DNS 递归查询专用路由
             if (type.equals("DNS_ROOT_TO_LOCAL")) {
                 return findBuildingCoords("DNS_LOCAL");
