@@ -750,7 +750,7 @@ public class DataCartFactoryGame extends JFrame {
         syn.sequenceNumber = 100;
         syn.ttl = 64;
         pendingDataCarts.add(syn);
-        appendToConsole("【🤝 三次握手开始】: 发送 SYN (seq=100) 到 " + resolvedServerIp + " (TTL=64)");
+        appendToConsole("【 三次握手开始】: 发送 SYN (seq=100) 到 " + resolvedServerIp + " (TTL=64)");
         updateTopLabel();
     }
 
@@ -770,7 +770,7 @@ public class DataCartFactoryGame extends JFrame {
 
         startDhcpIfNeeded();
 
-        if (!useUdp && now - stateTimerWatchdog > 60000) {
+        if (!useUdp && now - stateTimerWatchdog > 300000) {
             appendToConsole("【⏰ 超时】: 连接超时，重置会话");
             resetTcpSession();
         }
@@ -1008,6 +1008,7 @@ public class DataCartFactoryGame extends JFrame {
 
     private void sendHttpGet() {
         httpSent = true;
+        stateTimerWatchdog = System.currentTimeMillis();
         DataCart get = new DataCart(pcFactory.x, pcFactory.y, "HTTP_GET", 0);
         get.stage = 5;
         pendingDataCarts.add(get);
@@ -1191,12 +1192,52 @@ public class DataCartFactoryGame extends JFrame {
                 case "DNS_RECURSION_ROOT":
                     if (!cart.isReturnTrip && cart.isArrived) {
                         // 到达根 DNS，返回顶级域权威 DNS 地址（模拟为 10.1.1.1）
-                        DataCart rootResp = new DataCart(cart.x, cart.y, "DNS_RECURSION_ROOT_RESP", 0);
+                        DataCart rootResp = new DataCart(cart.x, cart.y, "DNS_ROOT_TO_LOCAL", 0);
                         rootResp.domain = cart.domain;
                         rootResp.resolvedIp = "10.1.1.1"; // 模拟权威 DNS 地址
-                        rootResp.isReturnTrip = true;
+                        rootResp.isReturnTrip = false;
                         pendingDataCarts.add(rootResp);
-                        appendToConsole("【🌐 根 DNS】: 返回顶级域权威 DNS 地址 " + rootResp.resolvedIp);
+                        appendToConsole("【 根 DNS】: 返回顶级域权威 DNS 地址 " + rootResp.resolvedIp);
+                    }
+                    break;
+                case "DNS_ROOT_TO_LOCAL":
+                    if (!cart.isReturnTrip && cart.isArrived) {
+                        // 本地 DNS 收到根回复，向权威 DNS 发起查询
+                        DataCart toAuth = new DataCart(cart.x, cart.y, "DNS_LOCAL_TO_AUTH", 0);
+                        toAuth.domain = cart.domain;
+                        toAuth.isReturnTrip = false;
+                        pendingDataCarts.add(toAuth);
+                        appendToConsole("【 本地 DNS】: 向权威 DNS 查询 " + cart.domain);
+                    }
+                    break;
+                case "DNS_LOCAL_TO_AUTH":
+                    if (!cart.isReturnTrip && cart.isArrived) {
+                        // 权威 DNS 响应最终 IP
+                        DataCart authResp = new DataCart(cart.x, cart.y, "DNS_AUTH_TO_LOCAL", 0);
+                        authResp.domain = cart.domain;
+                        authResp.resolvedIp = "10.0.0.1"; // 目标服务器 IP
+                        authResp.isReturnTrip = false;
+                        pendingDataCarts.add(authResp);
+                        appendToConsole("【🏢 权威 DNS】: " + cart.domain + " → " + authResp.resolvedIp);
+                    }
+                    break;
+                case "DNS_AUTH_TO_LOCAL":
+                    if (!cart.isReturnTrip && cart.isArrived) {
+                        // 本地 DNS 获得最终结果，缓存并返回给客户端
+                        resolvedServerIp = cart.resolvedIp;
+                        isDnsResolved = true;
+                        isDnsResolving = false;
+                        dnsCache.put(targetDomain, new DnsEntry(targetDomain, resolvedServerIp, 3600000));
+                        appendToConsole("【📥 本地 DNS】: 缓存结果 " + targetDomain + " → " + resolvedServerIp);
+                        updateDnsDisplay();
+
+                        // 向客户端发送最终响应
+                        DataCart finalResp = new DataCart(cart.x, cart.y, "DNS_RESPONSE", 0);
+                        finalResp.domain = cart.domain;
+                        finalResp.resolvedIp = resolvedServerIp;
+                        finalResp.isReturnTrip = true;
+                        pendingDataCarts.add(finalResp);
+                        appendToConsole("【 DNS 响应】: 返回给客户端");
                     }
                     break;
                 case "DNS_RECURSION_ROOT_RESP":
@@ -1398,6 +1439,7 @@ public class DataCartFactoryGame extends JFrame {
                     finalAck.ackNumber = cart.sequenceNumber + 1;
                     pendingDataCarts.add(finalAck);
                     currentTcpState = TcpState.ESTABLISHED;
+                    stateTimerWatchdog = System.currentTimeMillis();
                     cwnd = 1;
                     ssthresh = 12;
                     packetsAckedSinceLastIncrease = 0;
@@ -1810,6 +1852,15 @@ public class DataCartFactoryGame extends JFrame {
         }
 
         private Point findTargetMachine(int s, String type) {
+            // DNS 递归查询专用路由
+            if (type.equals("DNS_ROOT_TO_LOCAL")) {
+                return findBuildingCoords("DNS_LOCAL");
+            } else if (type.equals("DNS_LOCAL_TO_AUTH")) {
+                return findBuildingCoords("DNS_AUTH");
+            } else if (type.equals("DNS_AUTH_TO_LOCAL")) {
+                return findBuildingCoords("DNS_LOCAL");
+            }
+
             if (type.equals("DHCP_DISCOVER")) {
                 switch (s) {
                     case 1:
