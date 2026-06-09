@@ -59,20 +59,20 @@ public class IpFragmentFactory {
                 fragment.getPayload()
         ));
 
-        boolean allReceived = fragments.stream().noneMatch(IpFragment::isMoreFragments);
+        boolean allReceived = fragments.stream().noneMatch(IpFragment::moreFragments);
         if (!allReceived) {
             return null;
         }
 
-        fragments.sort((a, b) -> Integer.compare(a.getOffset(), b.getOffset()));
+        fragments.sort((a, b) -> Integer.compare(a.offset(), b.offset()));
 
-        int totalLength = fragments.stream().mapToInt(f -> f.getData().length).sum();
+        int totalLength = fragments.stream().mapToInt(f -> f.data().length).sum();
         byte[] reassembled = new byte[totalLength];
         int offset = 0;
 
         for (IpFragment frag : fragments) {
-            System.arraycopy(frag.getData(), 0, reassembled, offset, frag.getData().length);
-            offset += frag.getData().length;
+            System.arraycopy(frag.data(), 0, reassembled, offset, frag.data().length);
+            offset += frag.data().length;
         }
 
         IpPacket reassembledPacket = new IpPacket();
@@ -90,8 +90,11 @@ public class IpFragmentFactory {
         return reassembledPacket;
     }
 
-    private record IpFragment(int offset, boolean moreFragments, byte[] data) {}
-
+    private record IpFragment(int offset, boolean moreFragments, byte[] data) {
+        public boolean isMoreFragments() {
+            return moreFragments;
+        }
+    }
     public void clearBuffer() {
         fragmentBuffer.clear();
     }
