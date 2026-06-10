@@ -344,6 +344,10 @@ public class DataCartFactoryGame extends JFrame {
     private long lastProbeTime = 0;
     private final long PROBE_INTERVAL = 3000;
 
+    private int dnsRetryCount = 0;
+    private long lastDnsQueryTime = 0;
+    private final long DNS_TIMEOUT = 10000; // 10秒超时
+
     private List<RetransmissionTask> activeTimers = new CopyOnWriteArrayList<>();
     private Map<String, ArpEntry> arpCache = new ConcurrentHashMap<>();
     private Map<String, DnsEntry> dnsCache = new ConcurrentHashMap<>();
@@ -1179,7 +1183,6 @@ public class DataCartFactoryGame extends JFrame {
         }
         if (isDnsResolved) {
             appendToConsole("【📚 DNS 已解析】: " + targetDomain + " → " + resolvedServerIp);
-            // 如果已经解析完成但连接未建立，触发连接建立
             if (!useUdp && currentTcpState == TcpState.CLOSED) {
                 performArpResolution(resolvedServerIp);
                 startTcpHandshake();
@@ -1190,10 +1193,33 @@ public class DataCartFactoryGame extends JFrame {
             return;
         }
         if (isDnsResolving) {
-            appendToConsole("【⏳ DNS 解析中】: 请稍候...");
+            // 检查超时
+            if (System.currentTimeMillis() - lastDnsQueryTime > DNS_TIMEOUT) {
+                appendToConsole("【⚠️ DNS 超时】: 重试 (" + (dnsRetryCount + 1) + "/3)");
+                dnsRetryCount++;
+                if (dnsRetryCount >= 3) {
+                    appendToConsole("【❌ DNS 失败】: 无法解析域名 " + targetDomain + "，使用默认 IP");
+                    resolvedServerIp = "10.0.0.1";
+                    isDnsResolved = true;
+                    isDnsResolving = false;
+                    performArpResolution(resolvedServerIp);
+                    if (!useUdp && currentTcpState == TcpState.CLOSED) {
+                        startTcpHandshake();
+                    } else if (useUdp && !udpActive) {
+                        startUdpTransmission();
+                    }
+                    return;
+                }
+                isDnsResolving = false;
+                startDnsResolution();
+            } else {
+                appendToConsole("【⏳ DNS 解析中】: 请稍候...");
+            }
             return;
         }
+
         isDnsResolving = true;
+        lastDnsQueryTime = System.currentTimeMillis();
         appendToConsole("【🌐 DNS 解析开始】: 查询域名 " + targetDomain);
 
         String cached = factoryManager.getDnsCache().resolve(targetDomain);
@@ -1201,6 +1227,7 @@ public class DataCartFactoryGame extends JFrame {
             resolvedServerIp = cached;
             isDnsResolved = true;
             isDnsResolving = false;
+            dnsRetryCount = 0;
             appendToConsole("【📚 DNS 缓存命中】: " + targetDomain + " → " + resolvedServerIp);
             performArpResolution(resolvedServerIp);
             if (!useUdp && currentTcpState == TcpState.CLOSED) {
@@ -1285,9 +1312,17 @@ public class DataCartFactoryGame extends JFrame {
 
         startDhcpIfNeeded();
 
+        // 修改超时处理，增加状态检查避免重复重置
         if (!useUdp && now - stateTimerWatchdog > 300000) {
-            appendToConsole("【⏰ 超时】: 连接超时，重置会话");
-            resetTcpSession();
+            // 如果正在 DNS 解析中，不要重置，而是重试 DNS
+            if (isDnsResolving) {
+                appendToConsole("【⏰ DNS 超时】: 重新尝试 DNS 解析");
+                isDnsResolving = false;
+                startDnsResolution();
+            } else {
+                appendToConsole("【⏰ 连接超时】: 重置会话");
+                resetTcpSession();
+            }
         }
 
         if (serverBufferCount > 0 && (now - lastServerConsumeTime >= serverDecodeDelay)) {
@@ -1597,6 +1632,7 @@ public class DataCartFactoryGame extends JFrame {
             }
         } else {
             switch (cart.cartType) {
+                // 修改 DNS_RESPONSE 的处理
                 case "DNS_RESPONSE":
                     resolvedServerIp = cart.resolvedIp;
                     isDnsResolved = true;
@@ -1605,8 +1641,17 @@ public class DataCartFactoryGame extends JFrame {
                     updateDnsDisplay();
                     appendToConsole("【 DNS 解析成功】: " + targetDomain + " → " + resolvedServerIp);
                     performArpResolution(resolvedServerIp);
-                    if (!useUdp) startTcpHandshake();
-                    else startUdpTransmission();
+
+                    // 修复：延迟一点再开始握手，避免状态混乱
+                    Timer startTimer = new Timer(100, ev -> {
+                        if (!useUdp && currentTcpState == TcpState.CLOSED) {
+                            startTcpHandshake();
+                        } else if (useUdp && !udpActive) {
+                            startUdpTransmission();
+                        }
+                    });
+                    startTimer.setRepeats(false);
+                    startTimer.start();
                     return;
                 case "DHCP_OFFER":
                     appendToConsole("【 DHCP】: Offer 到达客户端");
@@ -1628,6 +1673,12 @@ public class DataCartFactoryGame extends JFrame {
                     funds += 200;
                     updateTopLabel();
                     appendToConsole("【 网络就绪】: PC IP = " + pcIpAddress);
+
+                    // 如果启用了 HTTP 演示，自动启动 DNS 解析
+                    if (httpDemoEnabled && !isDnsResolved && !isDnsResolving) {
+                        appendToConsole("【🔄 自动启动】: 开始 DNS 解析");
+                        startDnsResolution();
+                    }
                     break;
             }
         }
@@ -2126,6 +2177,12 @@ public class DataCartFactoryGame extends JFrame {
     }
 
     private void resetTcpSession() {
+        // 重置 DNS 相关状态
+        isDnsResolving = false;
+        isDnsResolved = false;
+        resolvedServerIp = null;
+        dnsRetryCount = 0;
+        lastDnsQueryTime = 0;
         currentTcpState = TcpState.CLOSED;
         serverReceivedCount = 0;
         serverBufferCount = 0;
