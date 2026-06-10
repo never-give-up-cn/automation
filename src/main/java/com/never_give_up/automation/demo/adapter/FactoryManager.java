@@ -26,7 +26,7 @@ import com.never_give_up.automation.demo.factory.topology.SubnetFactory;
 import com.never_give_up.automation.demo.factory.transport.TcpPacketFactory;
 import com.never_give_up.automation.demo.factory.transport.UdpPacketFactory;
 
-// ===================== 新增 18 个核心工厂 =====================
+// 前18个工厂
 import com.never_give_up.automation.demo.factory.option.IpOptionFactory;
 import com.never_give_up.automation.demo.factory.option.TcpOptionFactory;
 import com.never_give_up.automation.demo.factory.checksum.UdpChecksumFactory;
@@ -45,6 +45,23 @@ import com.never_give_up.automation.demo.factory.vlan.VlanFactory;
 import com.never_give_up.automation.demo.factory.tunnel.TunnelFactory;
 import com.never_give_up.automation.demo.factory.multicast.IgmpFactory;
 import com.never_give_up.automation.demo.factory.nd.NdpFactory;
+
+// ===================== 本次新增 14 个超级工厂 =====================
+import com.never_give_up.automation.demo.factory.physical.BitStreamFactory;
+import com.never_give_up.automation.demo.factory.physical.PhysicalChannelFactory;
+import com.never_give_up.automation.demo.factory.link.PppoeFactory;
+import com.never_give_up.automation.demo.factory.link.MacSecFactory;
+import com.never_give_up.automation.demo.factory.route.OspfPacketFactory;
+import com.never_give_up.automation.demo.factory.route.BgpPacketFactory;
+import com.never_give_up.automation.demo.factory.qos.QosTrafficFactory;
+import com.never_give_up.automation.demo.factory.transition.Nat64Factory;
+import com.never_give_up.automation.demo.factory.transport.TcpReassemblyFactory;
+import com.never_give_up.automation.demo.factory.attack.TransportAttackFactory;
+import com.never_give_up.automation.demo.factory.application.NtpPacketFactory;
+import com.never_give_up.automation.demo.factory.application.SnmpPacketFactory;
+import com.never_give_up.automation.demo.factory.application.Http23PacketFactory;
+import com.never_give_up.automation.demo.factory.security.ipsec.IpsecFactory;
+
 import lombok.Data;
 
 @Data
@@ -79,7 +96,7 @@ public class FactoryManager {
     private final FirewallRuleFactory firewallFactory;
     private LinkLayerFactory linkLayerFactory;
 
-    // ===================== 新增 18 个工厂成员变量 =====================
+    // 前18个工厂
     private final IpOptionFactory ipOptionFactory;
     private final TcpOptionFactory tcpOptionFactory;
     private final UdpChecksumFactory udpChecksumFactory;
@@ -99,7 +116,24 @@ public class FactoryManager {
     private final IgmpFactory igmpFactory;
     private final NdpFactory ndpFactory;
 
+    // ===================== 本次新增 14 个工厂成员变量 =====================
+    private final BitStreamFactory bitStreamFactory;
+    private final PhysicalChannelFactory physicalChannelFactory;
+    private final PppoeFactory pppoeFactory;
+    private final MacSecFactory macSecFactory;
+    private final OspfPacketFactory ospfPacketFactory;
+    private final BgpPacketFactory bgpPacketFactory;
+    private final QosTrafficFactory qosTrafficFactory;
+    private final Nat64Factory nat64Factory;
+    private final TcpReassemblyFactory tcpReassemblyFactory;
+    private final TransportAttackFactory transportAttackFactory;
+    private final NtpPacketFactory ntpPacketFactory;
+    private final SnmpPacketFactory snmpPacketFactory;
+    private final Http23PacketFactory http23PacketFactory;
+    private final IpsecFactory ipsecFactory;
+
     public FactoryManager() {
+        // 基础初始化
         this.ipAddressFactory = new IpAddressFactory();
         this.macFactory = new MacAddressFactory();
         this.portFactory = new PortFactory();
@@ -130,7 +164,7 @@ public class FactoryManager {
         this.firewallFactory = new FirewallRuleFactory();
         linkLayerFactory = new LinkLayerFactory();
 
-        // ===================== 初始化 18 个新工厂 =====================
+        // 前18个工厂初始化
         this.ipOptionFactory = new IpOptionFactory();
         this.tcpOptionFactory = new TcpOptionFactory();
         this.udpChecksumFactory = new UdpChecksumFactory();
@@ -149,6 +183,22 @@ public class FactoryManager {
         this.tunnelFactory = new TunnelFactory();
         this.igmpFactory = new IgmpFactory();
         this.ndpFactory = new NdpFactory();
+
+        // ===================== 新增14个工厂初始化 =====================
+        this.bitStreamFactory = new BitStreamFactory();
+        this.physicalChannelFactory = new PhysicalChannelFactory();
+        this.pppoeFactory = new PppoeFactory();
+        this.macSecFactory = new MacSecFactory();
+        this.ospfPacketFactory = new OspfPacketFactory();
+        this.bgpPacketFactory = new BgpPacketFactory();
+        this.qosTrafficFactory = new QosTrafficFactory();
+        this.nat64Factory = new Nat64Factory();
+        this.tcpReassemblyFactory = new TcpReassemblyFactory();
+        this.transportAttackFactory = new TransportAttackFactory();
+        this.ntpPacketFactory = new NtpPacketFactory();
+        this.snmpPacketFactory = new SnmpPacketFactory();
+        this.http23PacketFactory = new Http23PacketFactory();
+        this.ipsecFactory = new IpsecFactory();
     }
 
     public void reset() {
@@ -164,5 +214,4 @@ public class FactoryManager {
         subnetFactory.reset();
         queueFactory.reset();
     }
-
 }
