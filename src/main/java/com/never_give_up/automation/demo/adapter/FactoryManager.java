@@ -25,6 +25,26 @@ import com.never_give_up.automation.demo.factory.topology.LinkFactory;
 import com.never_give_up.automation.demo.factory.topology.SubnetFactory;
 import com.never_give_up.automation.demo.factory.transport.TcpPacketFactory;
 import com.never_give_up.automation.demo.factory.transport.UdpPacketFactory;
+
+// ===================== 新增 18 个核心工厂 =====================
+import com.never_give_up.automation.demo.factory.option.IpOptionFactory;
+import com.never_give_up.automation.demo.factory.option.TcpOptionFactory;
+import com.never_give_up.automation.demo.factory.checksum.UdpChecksumFactory;
+import com.never_give_up.automation.demo.factory.icmp.IcmpErrorFactory;
+import com.never_give_up.automation.demo.factory.link.EthernetPaddingFactory;
+import com.never_give_up.automation.demo.factory.route.IpForwardFactory;
+import com.never_give_up.automation.demo.factory.timer.TcpTimerFactory;
+import com.never_give_up.automation.demo.factory.window.TcpWindowFactory;
+import com.never_give_up.automation.demo.factory.connection.TcpConnectionFactory;
+import com.never_give_up.automation.demo.factory.dns.DnsRecursiveFactory;
+import com.never_give_up.automation.demo.factory.dhcp.DhcpFullPacketFactory;
+import com.never_give_up.automation.demo.factory.tls.TlsHandshakeFactory;
+import com.never_give_up.automation.demo.factory.serialize.PacketSerializerFactory;
+import com.never_give_up.automation.demo.factory.interfacee.NetworkInterfaceFactory;
+import com.never_give_up.automation.demo.factory.vlan.VlanFactory;
+import com.never_give_up.automation.demo.factory.tunnel.TunnelFactory;
+import com.never_give_up.automation.demo.factory.multicast.IgmpFactory;
+import com.never_give_up.automation.demo.factory.nd.NdpFactory;
 import lombok.Data;
 
 @Data
@@ -59,6 +79,26 @@ public class FactoryManager {
     private final FirewallRuleFactory firewallFactory;
     private LinkLayerFactory linkLayerFactory;
 
+    // ===================== 新增 18 个工厂成员变量 =====================
+    private final IpOptionFactory ipOptionFactory;
+    private final TcpOptionFactory tcpOptionFactory;
+    private final UdpChecksumFactory udpChecksumFactory;
+    private final IcmpErrorFactory icmpErrorFactory;
+    private final EthernetPaddingFactory ethernetPaddingFactory;
+    private final IpForwardFactory ipForwardFactory;
+    private final TcpTimerFactory tcpTimerFactory;
+    private final TcpWindowFactory tcpWindowFactory;
+    private final TcpConnectionFactory tcpConnectionFactory;
+    private final DnsRecursiveFactory dnsRecursiveFactory;
+    private final DhcpFullPacketFactory dhcpFullPacketFactory;
+    private final TlsHandshakeFactory tlsHandshakeFactory;
+    private final PacketSerializerFactory packetSerializerFactory;
+    private final NetworkInterfaceFactory networkInterfaceFactory;
+    private final VlanFactory vlanFactory;
+    private final TunnelFactory tunnelFactory;
+    private final IgmpFactory igmpFactory;
+    private final NdpFactory ndpFactory;
+
     public FactoryManager() {
         this.ipAddressFactory = new IpAddressFactory();
         this.macFactory = new MacAddressFactory();
@@ -89,6 +129,26 @@ public class FactoryManager {
         this.queueFactory = new PacketQueueFactory();
         this.firewallFactory = new FirewallRuleFactory();
         linkLayerFactory = new LinkLayerFactory();
+
+        // ===================== 初始化 18 个新工厂 =====================
+        this.ipOptionFactory = new IpOptionFactory();
+        this.tcpOptionFactory = new TcpOptionFactory();
+        this.udpChecksumFactory = new UdpChecksumFactory();
+        this.icmpErrorFactory = new IcmpErrorFactory();
+        this.ethernetPaddingFactory = new EthernetPaddingFactory();
+        this.ipForwardFactory = new IpForwardFactory();
+        this.tcpTimerFactory = new TcpTimerFactory();
+        this.tcpWindowFactory = new TcpWindowFactory();
+        this.tcpConnectionFactory = new TcpConnectionFactory();
+        this.dnsRecursiveFactory = new DnsRecursiveFactory();
+        this.dhcpFullPacketFactory = new DhcpFullPacketFactory();
+        this.tlsHandshakeFactory = new TlsHandshakeFactory();
+        this.packetSerializerFactory = new PacketSerializerFactory();
+        this.networkInterfaceFactory = new NetworkInterfaceFactory();
+        this.vlanFactory = new VlanFactory();
+        this.tunnelFactory = new TunnelFactory();
+        this.igmpFactory = new IgmpFactory();
+        this.ndpFactory = new NdpFactory();
     }
 
     public void reset() {
@@ -103,126 +163,78 @@ public class FactoryManager {
         linkFactory.reset();
         subnetFactory.reset();
         queueFactory.reset();
-//        firewallFactory.reset();
     }
 
-    // Getters for new factories
-    public NetworkDeviceFactory getDeviceFactory() {
-        return deviceFactory;
+    // ===================== 给所有新工厂生成 Getter =====================
+    public IpOptionFactory getIpOptionFactory() {
+        return ipOptionFactory;
     }
 
-    public LinkFactory getLinkFactory() {
-        return linkFactory;
+    public TcpOptionFactory getTcpOptionFactory() {
+        return tcpOptionFactory;
     }
 
-    public SubnetFactory getSubnetFactory() {
-        return subnetFactory;
+    public UdpChecksumFactory getUdpChecksumFactory() {
+        return udpChecksumFactory;
     }
 
-    public PacketQueueFactory getQueueFactory() {
-        return queueFactory;
+    public IcmpErrorFactory getIcmpErrorFactory() {
+        return icmpErrorFactory;
     }
 
-    public FirewallRuleFactory getFirewallFactory() {
-        return firewallFactory;
+    public EthernetPaddingFactory getEthernetPaddingFactory() {
+        return ethernetPaddingFactory;
     }
 
-    // Getters for all factories
-    public IpAddressFactory getIpAddressFactory() {
-        return ipAddressFactory;
+    public IpForwardFactory getIpForwardFactory() {
+        return ipForwardFactory;
     }
 
-    public MacAddressFactory getMacFactory() {
-        return macFactory;
+    public TcpTimerFactory getTcpTimerFactory() {
+        return tcpTimerFactory;
     }
 
-    public PortFactory getPortFactory() {
-        return portFactory;
+    public TcpWindowFactory getTcpWindowFactory() {
+        return tcpWindowFactory;
     }
 
-    public TcpPacketFactory getTcpFactory() {
-        return tcpFactory;
+    public TcpConnectionFactory getTcpConnectionFactory() {
+        return tcpConnectionFactory;
     }
 
-    public UdpPacketFactory getUdpFactory() {
-        return udpFactory;
+    public DnsRecursiveFactory getDnsRecursiveFactory() {
+        return dnsRecursiveFactory;
     }
 
-    public IpPacketFactory getIpPacketFactory() {
-        return ipPacketFactory;
+    public DhcpFullPacketFactory getDhcpFullPacketFactory() {
+        return dhcpFullPacketFactory;
     }
 
-    public EthernetFactory getEtherFactory() {
-        return etherFactory;
+    public TlsHandshakeFactory getTlsHandshakeFactory() {
+        return tlsHandshakeFactory;
     }
 
-    public ArpPacketFactory getArpFactory() {
-        return arpFactory;
+    public PacketSerializerFactory getPacketSerializerFactory() {
+        return packetSerializerFactory;
     }
 
-    public DnsPacketFactory getDnsFactory() {
-        return dnsFactory;
+    public NetworkInterfaceFactory getNetworkInterfaceFactory() {
+        return networkInterfaceFactory;
     }
 
-    public DhcpPacketFactory getDhcpFactory() {
-        return dhcpFactory;
+    public VlanFactory getVlanFactory() {
+        return vlanFactory;
     }
 
-    public HttpPacketFactory getHttpFactory() {
-        return httpFactory;
+    public TunnelFactory getTunnelFactory() {
+        return tunnelFactory;
     }
 
-    public TlsPacketFactory getTlsFactory() {
-        return tlsFactory;
+    public IgmpFactory getIgmpFactory() {
+        return igmpFactory;
     }
 
-    public ArpCacheFactory getArpCache() {
-        return arpCache;
-    }
-
-    public DnsCacheFactory getDnsCache() {
-        return dnsCache;
-    }
-
-    public NatMappingFactory getNatFactory() {
-        return natFactory;
-    }
-
-    public RouteTableFactory getRouteTable() {
-        return routeTable;
-    }
-
-    public CongestionControlFactory getCongestionControl() {
-        return congestionControl;
-    }
-
-    // 添加 getter 方法
-    public IpFragmentFactory getIpFragmentFactory() {
-        return ipFragmentFactory;
-    }
-
-    public IcmpPacketFactory getIcmpFactory() {
-        return icmpFactory;
-    }
-
-    public FiveTupleFactory getFiveTupleFactory() {
-        return fiveTupleFactory;
-    }
-
-    public BandwidthFactory getBandwidthFactory() {
-        return bandwidthFactory;
-    }
-
-    public SessionFactory getSessionFactory() {
-        return sessionFactory;
-    }
-
-    public LinkLayerFactory getLinkLayerFactory() {
-        return linkLayerFactory;
-    }
-
-    // 添加 getter
-    public ChecksumFactory getChecksumFactory() {
-        return checksumFactory;
+    public NdpFactory getNdpFactory() {
+        return ndpFactory;
     }
 }
