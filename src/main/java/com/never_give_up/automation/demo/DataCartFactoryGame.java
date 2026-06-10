@@ -6,19 +6,67 @@ import com.never_give_up.automation.demo.core.ProtocolConst;
 import com.never_give_up.automation.demo.factory.application.Http23PacketFactory;
 import com.never_give_up.automation.demo.factory.application.NtpPacketFactory;
 import com.never_give_up.automation.demo.factory.application.SnmpPacketFactory;
+import com.never_give_up.automation.demo.factory.application.auth.DiameterPacketFactory;
+import com.never_give_up.automation.demo.factory.application.auth.RadiusPacketFactory;
+import com.never_give_up.automation.demo.factory.application.ftp.FtpPacketFactory;
+import com.never_give_up.automation.demo.factory.application.ldap.LdapPacketFactory;
+import com.never_give_up.automation.demo.factory.application.mail.ImapPacketFactory;
+import com.never_give_up.automation.demo.factory.application.mail.Pop3PacketFactory;
+import com.never_give_up.automation.demo.factory.application.mail.SmtpPacketFactory;
+import com.never_give_up.automation.demo.factory.application.rtp.RtcpPacketFactory;
+import com.never_give_up.automation.demo.factory.application.rtp.RtpPacketFactory;
+import com.never_give_up.automation.demo.factory.application.sip.SipPacketFactory;
+import com.never_give_up.automation.demo.factory.application.ssh.SshPacketFactory;
+import com.never_give_up.automation.demo.factory.application.telnet.TelnetPacketFactory;
 import com.never_give_up.automation.demo.factory.attack.TransportAttackFactory;
+import com.never_give_up.automation.demo.factory.balance.LbHealthCheckFactory;
+import com.never_give_up.automation.demo.factory.balance.LbIpHashFactory;
+import com.never_give_up.automation.demo.factory.balance.LbLeastConnFactory;
+import com.never_give_up.automation.demo.factory.balance.LbRoundRobinFactory;
 import com.never_give_up.automation.demo.factory.function.NatMappingFactory;
-import com.never_give_up.automation.demo.factory.link.LlcHeader;
-import com.never_give_up.automation.demo.factory.link.MacSecFactory;
-import com.never_give_up.automation.demo.factory.link.PppoeFactory;
+import com.never_give_up.automation.demo.factory.icmp.IcmpPingFactory;
+import com.never_give_up.automation.demo.factory.icmp.IcmpTracerouteFactory;
+import com.never_give_up.automation.demo.factory.link.*;
+import com.never_give_up.automation.demo.factory.monitor.IpfixFactory;
+import com.never_give_up.automation.demo.factory.monitor.NetFlowFactory;
+import com.never_give_up.automation.demo.factory.monitor.SflowFactory;
+import com.never_give_up.automation.demo.factory.multicast.DvmrpFactory;
+import com.never_give_up.automation.demo.factory.multicast.MldFactory;
+import com.never_give_up.automation.demo.factory.multicast.PimSmFactory;
+import com.never_give_up.automation.demo.factory.nat.NatHairpinningFactory;
+import com.never_give_up.automation.demo.factory.nat.NatHolePunchFactory;
+import com.never_give_up.automation.demo.factory.nat.PcpFactory;
+import com.never_give_up.automation.demo.factory.nat.UpnpFactory;
+import com.never_give_up.automation.demo.factory.network.ipv6.Ipv6FragmentFactory;
+import com.never_give_up.automation.demo.factory.network.ipv6.Ipv6NeighborDiscovery;
+import com.never_give_up.automation.demo.factory.network.ipv6.Ipv6OptionFactory;
+import com.never_give_up.automation.demo.factory.network.ipv6.Ipv6PacketFactory;
 import com.never_give_up.automation.demo.factory.physical.BitStreamFactory;
 import com.never_give_up.automation.demo.factory.physical.PhysicalChannelFactory;
 import com.never_give_up.automation.demo.factory.qos.QosTrafficFactory;
 import com.never_give_up.automation.demo.factory.route.BgpPacketFactory;
 import com.never_give_up.automation.demo.factory.route.OspfPacketFactory;
+import com.never_give_up.automation.demo.factory.security.*;
+import com.never_give_up.automation.demo.factory.security.crypto.CrlFactory;
+import com.never_give_up.automation.demo.factory.security.crypto.OcspFactory;
+import com.never_give_up.automation.demo.factory.security.crypto.PkiFactory;
+import com.never_give_up.automation.demo.factory.security.crypto.X509Factory;
+import com.never_give_up.automation.demo.factory.security.ipsec.IpsecAhFactory;
+import com.never_give_up.automation.demo.factory.security.ipsec.IpsecEspFactory;
 import com.never_give_up.automation.demo.factory.security.ipsec.IpsecFactory;
+import com.never_give_up.automation.demo.factory.security.ipsec.IpsecIkeFactory;
+import com.never_give_up.automation.demo.factory.security.tls.DtlsFactory;
+import com.never_give_up.automation.demo.factory.tool.*;
 import com.never_give_up.automation.demo.factory.transition.Nat64Factory;
 import com.never_give_up.automation.demo.factory.transport.TcpReassemblyFactory;
+import com.never_give_up.automation.demo.factory.transport.tcp.TcpEcnFactory;
+import com.never_give_up.automation.demo.factory.transport.tcp.TcpFastOpenFactory;
+import com.never_give_up.automation.demo.factory.transport.tcp.TcpKeepAliveFactory;
+import com.never_give_up.automation.demo.factory.transport.tcp.TcpSackFactory;
+import com.never_give_up.automation.demo.factory.vpn.L2tpFactory;
+import com.never_give_up.automation.demo.factory.vpn.OpenVpnFactory;
+import com.never_give_up.automation.demo.factory.vpn.SstpFactory;
+import com.never_give_up.automation.demo.factory.vpn.WireguardFactory;
 import com.never_give_up.automation.demo.model.HttpPacket;
 import com.never_give_up.automation.demo.model.IpPacket;
 import com.never_give_up.automation.demo.model.TcpPacket;
@@ -135,6 +183,100 @@ public class DataCartFactoryGame extends JFrame {
     private com.never_give_up.automation.demo.factory.network.IpPacketFactory ipFactory;
     private com.never_give_up.automation.demo.factory.link.EthernetFactory ethernetFactory;
     private com.never_give_up.automation.demo.factory.address.PortFactory portFactory;
+
+    // ===================== 新增：IPv6 协议栈工厂 =====================
+    private Ipv6PacketFactory ipv6PacketFactory;
+    private Ipv6FragmentFactory ipv6FragmentFactory;
+    private Ipv6OptionFactory ipv6OptionFactory;
+    private Ipv6NeighborDiscovery ipv6NeighborDiscovery;
+
+    // ===================== 新增：多播路由工厂 =====================
+    private PimSmFactory pimSmFactory;
+    private MldFactory mldFactory;
+    private DvmrpFactory dvmrpFactory;
+
+    // ===================== 新增：TCP 增强工厂 =====================
+    private TcpKeepAliveFactory tcpKeepAliveFactory;
+    private TcpSackFactory tcpSackFactory;
+    private TcpEcnFactory tcpEcnFactory;
+    private TcpFastOpenFactory tcpFastOpenFactory;
+
+    // ===================== 新增：链路层增强工厂 =====================
+    private LldpFactory lldpFactory;
+    private StpFactory stpFactory;
+    private LACPFactory lacpFactory;
+    private MplsFactory mplsFactory;
+
+    // ===================== 新增：应用层协议工厂 =====================
+    private FtpPacketFactory ftpPacketFactory;
+    private SmtpPacketFactory smtpPacketFactory;
+    private Pop3PacketFactory pop3PacketFactory;
+    private ImapPacketFactory imapPacketFactory;
+    private SshPacketFactory sshPacketFactory;
+    private TelnetPacketFactory telnetPacketFactory;
+    private RtpPacketFactory rtpPacketFactory;
+    private RtcpPacketFactory rtcpPacketFactory;
+    private SipPacketFactory sipPacketFactory;
+    private RadiusPacketFactory radiusPacketFactory;
+    private DiameterPacketFactory diameterPacketFactory;
+    private LdapPacketFactory ldapPacketFactory;
+
+    // ===================== 新增：NAT 增强工厂 =====================
+    private NatHairpinningFactory natHairpinningFactory;
+    private NatHolePunchFactory natHolePunchFactory;
+    private UpnpFactory upnpFactory;
+    private PcpFactory pcpFactory;
+
+    // ===================== 新增：负载均衡工厂 =====================
+    private LbRoundRobinFactory lbRoundRobinFactory;
+    private LbLeastConnFactory lbLeastConnFactory;
+    private LbIpHashFactory lbIpHashFactory;
+    private LbHealthCheckFactory lbHealthCheckFactory;
+
+    // ===================== 新增：监控管理工厂 =====================
+    private NetFlowFactory netFlowFactory;
+    private SflowFactory sflowFactory;
+    private IpfixFactory ipfixFactory;
+    private IcmpPingFactory icmpPingFactory;
+    private IcmpTracerouteFactory icmpTracerouteFactory;
+
+    // ===================== 新增：VPN 隧道工厂 =====================
+    private IpsecIkeFactory ipsecIkeFactory;
+    private IpsecEspFactory ipsecEspFactory;
+    private IpsecAhFactory ipsecAhFactory;
+    private OpenVpnFactory openVpnFactory;
+    private WireguardFactory wireguardFactory;
+    private L2tpFactory l2tpFactory;
+    private SstpFactory sstpFactory;
+
+    // ===================== 新增：安全防火墙工厂 =====================
+    private DpiFactory dpiFactory;
+    private IpsFactory ipsFactory;
+    private WafFactory wafFactory;
+    private DdosMitigationFactory ddosMitigationFactory;
+    private RateLimitFactory rateLimitFactory;
+
+    // ===================== 新增：加密证书工厂 =====================
+    private X509Factory x509Factory;
+    private CrlFactory crlFactory;
+    private OcspFactory ocspFactory;
+    private PkiFactory pkiFactory;
+    private DtlsFactory dtlsFactory;
+
+    // ===================== 新增：访问控制工厂 =====================
+    private AclFactory aclFactory;
+    private MacAuthFactory macAuthFactory;
+    private Dot1xFactory dot1xFactory;
+
+    // ===================== 新增：诊断工具工厂 =====================
+    private NetstatFactory netstatFactory;
+    private IpconfigFactory ipconfigFactory;
+    private RoutePrintFactory routePrintFactory;
+    private NslookupFactory nslookupFactory;
+    private ArpCommandFactory arpCommandFactory;
+    private TelnetClientFactory telnetClientFactory;
+    private CurlFactory curlFactory;
+    private WgetFactory wgetFactory;
 
     // ========== 新增字段（类成员） ==========
     private Map<IpFragmentKey, List<IpFragment>> fragmentBuffer = new HashMap<>();
@@ -299,6 +441,88 @@ public class DataCartFactoryGame extends JFrame {
         this.snmpPacketFactory = factoryManager.getSnmpPacketFactory();
         this.http23PacketFactory = factoryManager.getHttp23PacketFactory();
         this.ipsecFactory = factoryManager.getIpsecFactory();
+
+        // ===================== 初始化新增工厂 =====================
+        this.ipv6PacketFactory = factoryManager.getIpv6PacketFactory();
+        this.ipv6FragmentFactory = factoryManager.getIpv6FragmentFactory();
+        this.ipv6OptionFactory = factoryManager.getIpv6OptionFactory();
+        this.ipv6NeighborDiscovery = factoryManager.getIpv6NeighborDiscovery();
+
+        this.pimSmFactory = factoryManager.getPimSmFactory();
+        this.mldFactory = factoryManager.getMldFactory();
+        this.dvmrpFactory = factoryManager.getDvmrpFactory();
+
+        this.tcpKeepAliveFactory = factoryManager.getTcpKeepAliveFactory();
+        this.tcpSackFactory = factoryManager.getTcpSackFactory();
+        this.tcpEcnFactory = factoryManager.getTcpEcnFactory();
+        this.tcpFastOpenFactory = factoryManager.getTcpFastOpenFactory();
+
+        this.lldpFactory = factoryManager.getLldpFactory();
+        this.stpFactory = factoryManager.getStpFactory();
+        this.lacpFactory = factoryManager.getLacpFactory();
+        this.mplsFactory = factoryManager.getMplsFactory();
+
+        this.ftpPacketFactory = factoryManager.getFtpPacketFactory();
+        this.smtpPacketFactory = factoryManager.getSmtpPacketFactory();
+        this.pop3PacketFactory = factoryManager.getPop3PacketFactory();
+        this.imapPacketFactory = factoryManager.getImapPacketFactory();
+        this.sshPacketFactory = factoryManager.getSshPacketFactory();
+        this.telnetPacketFactory = factoryManager.getTelnetPacketFactory();
+        this.rtpPacketFactory = factoryManager.getRtpPacketFactory();
+        this.rtcpPacketFactory = factoryManager.getRtcpPacketFactory();
+        this.sipPacketFactory = factoryManager.getSipPacketFactory();
+        this.radiusPacketFactory = factoryManager.getRadiusPacketFactory();
+        this.diameterPacketFactory = factoryManager.getDiameterPacketFactory();
+        this.ldapPacketFactory = factoryManager.getLdapPacketFactory();
+
+        this.natHairpinningFactory = factoryManager.getNatHairpinningFactory();
+        this.natHolePunchFactory = factoryManager.getNatHolePunchFactory();
+        this.upnpFactory = factoryManager.getUpnpFactory();
+        this.pcpFactory = factoryManager.getPcpFactory();
+
+        this.lbRoundRobinFactory = factoryManager.getLbRoundRobinFactory();
+        this.lbLeastConnFactory = factoryManager.getLbLeastConnFactory();
+        this.lbIpHashFactory = factoryManager.getLbIpHashFactory();
+        this.lbHealthCheckFactory = factoryManager.getLbHealthCheckFactory();
+
+        this.netFlowFactory = factoryManager.getNetFlowFactory();
+        this.sflowFactory = factoryManager.getSflowFactory();
+        this.ipfixFactory = factoryManager.getIpfixFactory();
+        this.icmpPingFactory = factoryManager.getIcmpPingFactory();
+        this.icmpTracerouteFactory = factoryManager.getIcmpTracerouteFactory();
+
+        this.ipsecIkeFactory = factoryManager.getIpsecIkeFactory();
+        this.ipsecEspFactory = factoryManager.getIpsecEspFactory();
+        this.ipsecAhFactory = factoryManager.getIpsecAhFactory();
+        this.openVpnFactory = factoryManager.getOpenVpnFactory();
+        this.wireguardFactory = factoryManager.getWireguardFactory();
+        this.l2tpFactory = factoryManager.getL2tpFactory();
+        this.sstpFactory = factoryManager.getSstpFactory();
+
+        this.dpiFactory = factoryManager.getDpiFactory();
+        this.ipsFactory = factoryManager.getIpsFactory();
+        this.wafFactory = factoryManager.getWafFactory();
+        this.ddosMitigationFactory = factoryManager.getDdosMitigationFactory();
+        this.rateLimitFactory = factoryManager.getRateLimitFactory();
+
+        this.x509Factory = factoryManager.getX509Factory();
+        this.crlFactory = factoryManager.getCrlFactory();
+        this.ocspFactory = factoryManager.getOcspFactory();
+        this.pkiFactory = factoryManager.getPkiFactory();
+        this.dtlsFactory = factoryManager.getDtlsFactory();
+
+        this.aclFactory = factoryManager.getAclFactory();
+        this.macAuthFactory = factoryManager.getMacAuthFactory();
+        this.dot1xFactory = factoryManager.getDot1xFactory();
+
+        this.netstatFactory = factoryManager.getNetstatFactory();
+        this.ipconfigFactory = factoryManager.getIpconfigFactory();
+        this.routePrintFactory = factoryManager.getRoutePrintFactory();
+        this.nslookupFactory = factoryManager.getNslookupFactory();
+        this.arpCommandFactory = factoryManager.getArpCommandFactory();
+        this.telnetClientFactory = factoryManager.getTelnetClientFactory();
+        this.curlFactory = factoryManager.getCurlFactory();
+        this.wgetFactory = factoryManager.getWgetFactory();
 
         stateTimerWatchdog = System.currentTimeMillis();
         try {
@@ -641,7 +865,11 @@ public class DataCartFactoryGame extends JFrame {
                 {"【25. 应用层协议】",
                         "NTP", "🕐 NTP时间同步(72)",
                         "SNMP", "📊 SNMP管理(73)",
-                        "HTTP23", "📡 HTTP/2.3协议(74)"},};
+                        "HTTP23", "📡 HTTP/2.3协议(74)"}, {"【26. IPv6 协议栈】", "IPV6", "🌐 IPv6 封装(76)", "IPV6_FRAG", "✂️ IPv6分片(77)", "IPV6_OPTION", "🔧 IPv6选项(78)", "IPV6_ND", "📡 IPv6邻居发现(79)"},
+                {"【27. TCP 高级特性】", "TCP_KEEPALIVE", "🔁 Keep-Alive(80)", "TCP_SACK", "📊 SACK(81)", "TCP_ECN", "⚠️ ECN(82)", "TCP_FASTOPEN", "🚀 FastOpen(83)"},
+                {"【28. 应用层协议】", "FTP", "📁 FTP(84)", "SMTP", "📧 SMTP(85)", "POP3", "📬 POP3(86)", "IMAP", "📨 IMAP(87)", "SSH", "🔐 SSH(88)", "TELNET", "💻 Telnet(89)", "RTP", "🎵 RTP(90)", "SIP", "📞 SIP(91)", "RADIUS", "🔑 RADIUS(92)"},
+                {"【29. 安全防护】", "DPI", "🔍 DPI深度检测(96)", "WAF", "🛡️ WAF防火墙(97)", "DDOS", "💥 DDoS防护(98)", "RATELIMIT", "⏱️ 速率限制(99)", "ACL", "🚫 访问控制(100)"}
+                ,};
 
         for (String[] cat : categories) {
             JLabel title = new JLabel(cat[0]);
@@ -823,6 +1051,75 @@ public class DataCartFactoryGame extends JFrame {
         buildingLayout[newRow2][13] = "SNMP";            // SNMP 管理
         buildingLayout[newRow2][14] = "HTTP23";          // HTTP/2.3
         buildingLayout[newRow2][15] = "IPSEC";           // IPsec 安全
+        // ===================== IPv6 建筑（放在行 2-3）=====================
+        int ipv6Row = 2;
+        buildingLayout[ipv6Row][30] = "IPV6";
+        buildingLayout[ipv6Row][31] = "IPV6_FRAG";
+        buildingLayout[ipv6Row+1][30] = "IPV6_OPTION";
+        buildingLayout[ipv6Row+1][31] = "IPV6_ND";
+
+// ===================== TCP 增强建筑（放在行 3-4）=====================
+        int tcpRow = 3;
+        buildingLayout[tcpRow][33] = "TCP_KEEPALIVE";
+        buildingLayout[tcpRow][34] = "TCP_SACK";
+        buildingLayout[tcpRow+1][33] = "TCP_ECN";
+        buildingLayout[tcpRow+1][34] = "TCP_FASTOPEN";
+
+// ===================== 应用层协议建筑（放在行 12-15）=====================
+        int appRow = 12;
+        buildingLayout[appRow][25] = "FTP";
+        buildingLayout[appRow][26] = "SMTP";
+        buildingLayout[appRow][27] = "POP3";
+        buildingLayout[appRow][28] = "IMAP";
+        buildingLayout[appRow+1][25] = "SSH";
+        buildingLayout[appRow+1][26] = "TELNET";
+        buildingLayout[appRow+1][27] = "RTP";
+        buildingLayout[appRow+1][28] = "SIP";
+        buildingLayout[appRow+2][25] = "RADIUS";
+        buildingLayout[appRow+2][26] = "DIAMETER";
+        buildingLayout[appRow+2][27] = "LDAP";
+
+// ===================== 安全防护建筑（放在行 15-17）=====================
+        int secRow = 15;
+        buildingLayout[secRow][30] = "DPI";
+        buildingLayout[secRow][31] = "WAF";
+        buildingLayout[secRow+1][30] = "DDOS";
+        buildingLayout[secRow+1][31] = "RATELIMIT";
+        buildingLayout[secRow+2][30] = "ACL";
+
+// ===================== NAT 增强建筑（放在行 17-18）=====================
+        int natRow = 17;
+        buildingLayout[natRow][35] = "NAT_HAIRPIN";
+        buildingLayout[natRow][36] = "NAT_HOLE";
+        buildingLayout[natRow+1][35] = "UPNP";
+        buildingLayout[natRow+1][36] = "PCP";
+
+// ===================== 负载均衡建筑（放在行 4-5）=====================
+        int lbRow = 4;
+        buildingLayout[lbRow][36] = "LB_RR";
+        buildingLayout[lbRow][37] = "LB_LC";
+        buildingLayout[lbRow+1][36] = "LB_IPHASH";
+        buildingLayout[lbRow+1][37] = "LB_HC";
+
+// ===================== VPN 隧道建筑（放在行 18-19）=====================
+        int vpnRow = 18;
+        buildingLayout[vpnRow][38] = "IPSEC_IKE";
+        buildingLayout[vpnRow][39] = "IPSEC_ESP";
+        buildingLayout[vpnRow][40] = "OPENVPN";
+        buildingLayout[vpnRow+1][38] = "WIREGUARD";
+        buildingLayout[vpnRow+1][39] = "L2TP";
+        buildingLayout[vpnRow+1][40] = "SSTP";
+
+// ===================== 诊断工具建筑（放在行 5-6）=====================
+        int toolRow = 5;
+        buildingLayout[toolRow][38] = "NETSTAT";
+        buildingLayout[toolRow][39] = "IPCONFIG";
+        buildingLayout[toolRow][40] = "ROUTEPRINT";
+        buildingLayout[toolRow+1][38] = "NSLOOKUP";
+        buildingLayout[toolRow+1][39] = "ARPCMD";
+        buildingLayout[toolRow+1][40] = "CURL";
+        buildingLayout[toolRow+2][38] = "WGET";
+        buildingLayout[toolRow+2][39] = "TELNET_CLIENT";
     }
 
     private void sendPing() {
@@ -2012,6 +2309,141 @@ public class DataCartFactoryGame extends JFrame {
         private boolean hasSnmp = false;           // SNMP 已处理
         private boolean hasHttp23 = false;         // HTTP/2.3 已处理
         private boolean hasIpsec = false;          // IPsec 已加密
+        // ===================== 新增：IPv6 相关字段 =====================
+        private boolean hasIpv6 = false;
+        private boolean hasIpv6Fragment = false;
+        private boolean hasIpv6Option = false;
+        private boolean hasIpv6Nd = false;
+        private byte[] ipv6SrcAddr = new byte[16];
+        private byte[] ipv6DstAddr = new byte[16];
+
+        // ===================== 新增：TCP 增强字段 =====================
+        private boolean hasKeepAlive = false;
+        private boolean hasSack = false;
+        private boolean hasEcn = false;
+        private boolean hasFastOpen = false;
+
+        // ===================== 新增：应用层协议字段 =====================
+        private boolean hasFtp = false;
+        private boolean hasSmtp = false;
+        private boolean hasPop3 = false;
+        private boolean hasImap = false;
+        private boolean hasSsh = false;
+        private boolean hasTelnet = false;
+        private boolean hasRtp = false;
+        private boolean hasSip = false;
+        private boolean hasRadius = false;
+        private String ftpUser = null;
+        private String smtpFrom = null;
+        private String smtpTo = null;
+        private int rtpSeq = 0;
+
+        // ===================== 新增：安全相关字段 =====================
+        private boolean hasDpi = false;
+        private boolean isBlockedByWaf = false;
+        private boolean isRateLimited = false;
+        private boolean isIpsecSecured = false;
+
+        // ===================== 新增：VPN/隧道字段 =====================
+        private boolean hasIpsecIke = false;
+        private boolean hasIpsecEsp = false;
+        private boolean hasOpenVpn = false;
+        private boolean hasWireguard = false;
+        private boolean hasL2tp = false;
+
+        // ===================== 新增：IPv6 协议栈工厂 =====================
+        private transient Ipv6PacketFactory ipv6PacketFactory;
+        private transient Ipv6FragmentFactory ipv6FragmentFactory;
+        private transient Ipv6OptionFactory ipv6OptionFactory;
+        private transient Ipv6NeighborDiscovery ipv6NeighborDiscovery;
+
+        // ===================== 新增：多播路由工厂 =====================
+        private transient PimSmFactory pimSmFactory;
+        private transient MldFactory mldFactory;
+        private transient DvmrpFactory dvmrpFactory;
+
+        // ===================== 新增：TCP 增强工厂 =====================
+        private transient TcpKeepAliveFactory tcpKeepAliveFactory;
+        private transient TcpSackFactory tcpSackFactory;
+        private transient TcpEcnFactory tcpEcnFactory;
+        private transient TcpFastOpenFactory tcpFastOpenFactory;
+
+        // ===================== 新增：链路层增强工厂 =====================
+        private transient LldpFactory lldpFactory;
+        private transient StpFactory stpFactory;
+        private transient LACPFactory lacpFactory;
+        private transient MplsFactory mplsFactory;
+
+        // ===================== 新增：应用层协议工厂 =====================
+        private transient FtpPacketFactory ftpPacketFactory;
+        private transient SmtpPacketFactory smtpPacketFactory;
+        private transient Pop3PacketFactory pop3PacketFactory;
+        private transient ImapPacketFactory imapPacketFactory;
+        private transient SshPacketFactory sshPacketFactory;
+        private transient TelnetPacketFactory telnetPacketFactory;
+        private transient RtpPacketFactory rtpPacketFactory;
+        private transient RtcpPacketFactory rtcpPacketFactory;
+        private transient SipPacketFactory sipPacketFactory;
+        private transient RadiusPacketFactory radiusPacketFactory;
+        private transient DiameterPacketFactory diameterPacketFactory;
+        private transient LdapPacketFactory ldapPacketFactory;
+
+        // ===================== 新增：NAT 增强工厂 =====================
+        private transient NatHairpinningFactory natHairpinningFactory;
+        private transient NatHolePunchFactory natHolePunchFactory;
+        private transient UpnpFactory upnpFactory;
+        private transient PcpFactory pcpFactory;
+
+        // ===================== 新增：负载均衡工厂 =====================
+        private transient LbRoundRobinFactory lbRoundRobinFactory;
+        private transient LbLeastConnFactory lbLeastConnFactory;
+        private transient LbIpHashFactory lbIpHashFactory;
+        private transient LbHealthCheckFactory lbHealthCheckFactory;
+
+        // ===================== 新增：监控管理工厂 =====================
+        private transient NetFlowFactory netFlowFactory;
+        private transient SflowFactory sflowFactory;
+        private transient IpfixFactory ipfixFactory;
+        private transient IcmpPingFactory icmpPingFactory;
+        private transient IcmpTracerouteFactory icmpTracerouteFactory;
+
+        // ===================== 新增：VPN 隧道工厂 =====================
+        private transient IpsecIkeFactory ipsecIkeFactory;
+        private transient IpsecEspFactory ipsecEspFactory;
+        private transient IpsecAhFactory ipsecAhFactory;
+        private transient OpenVpnFactory openVpnFactory;
+        private transient WireguardFactory wireguardFactory;
+        private transient L2tpFactory l2tpFactory;
+        private transient SstpFactory sstpFactory;
+
+        // ===================== 新增：安全防火墙工厂 =====================
+        private transient DpiFactory dpiFactory;
+        private transient IpsFactory ipsFactory;
+        private transient WafFactory wafFactory;
+        private transient DdosMitigationFactory ddosMitigationFactory;
+        private transient RateLimitFactory rateLimitFactory;
+
+        // ===================== 新增：加密证书工厂 =====================
+        private transient X509Factory x509Factory;
+        private transient CrlFactory crlFactory;
+        private transient OcspFactory ocspFactory;
+        private transient PkiFactory pkiFactory;
+        private transient DtlsFactory dtlsFactory;
+
+        // ===================== 新增：访问控制工厂 =====================
+        private transient AclFactory aclFactory;
+        private transient MacAuthFactory macAuthFactory;
+        private transient Dot1xFactory dot1xFactory;
+
+        // ===================== 新增：诊断工具工厂 =====================
+        private transient NetstatFactory netstatFactory;
+        private transient IpconfigFactory ipconfigFactory;
+        private transient RoutePrintFactory routePrintFactory;
+        private transient NslookupFactory nslookupFactory;
+        private transient ArpCommandFactory arpCommandFactory;
+        private transient TelnetClientFactory telnetClientFactory;
+        private transient CurlFactory curlFactory;
+        private transient WgetFactory wgetFactory;
 
         // 新工厂实例引用
         private transient BitStreamFactory bitStreamFactory;
@@ -2159,6 +2591,89 @@ public class DataCartFactoryGame extends JFrame {
                 this.http23PacketFactory = factoryManager.getHttp23PacketFactory();
                 this.ipsecFactory = factoryManager.getIpsecFactory();
             }
+            // ===================== 初始化新增工厂引用 =====================
+            if (factoryManager != null) {
+                this.ipv6PacketFactory = factoryManager.getIpv6PacketFactory();
+                this.ipv6FragmentFactory = factoryManager.getIpv6FragmentFactory();
+                this.ipv6OptionFactory = factoryManager.getIpv6OptionFactory();
+                this.ipv6NeighborDiscovery = factoryManager.getIpv6NeighborDiscovery();
+
+                this.pimSmFactory = factoryManager.getPimSmFactory();
+                this.mldFactory = factoryManager.getMldFactory();
+                this.dvmrpFactory = factoryManager.getDvmrpFactory();
+
+                this.tcpKeepAliveFactory = factoryManager.getTcpKeepAliveFactory();
+                this.tcpSackFactory = factoryManager.getTcpSackFactory();
+                this.tcpEcnFactory = factoryManager.getTcpEcnFactory();
+                this.tcpFastOpenFactory = factoryManager.getTcpFastOpenFactory();
+
+                this.lldpFactory = factoryManager.getLldpFactory();
+                this.stpFactory = factoryManager.getStpFactory();
+                this.lacpFactory = factoryManager.getLacpFactory();
+                this.mplsFactory = factoryManager.getMplsFactory();
+
+                this.ftpPacketFactory = factoryManager.getFtpPacketFactory();
+                this.smtpPacketFactory = factoryManager.getSmtpPacketFactory();
+                this.pop3PacketFactory = factoryManager.getPop3PacketFactory();
+                this.imapPacketFactory = factoryManager.getImapPacketFactory();
+                this.sshPacketFactory = factoryManager.getSshPacketFactory();
+                this.telnetPacketFactory = factoryManager.getTelnetPacketFactory();
+                this.rtpPacketFactory = factoryManager.getRtpPacketFactory();
+                this.rtcpPacketFactory = factoryManager.getRtcpPacketFactory();
+                this.sipPacketFactory = factoryManager.getSipPacketFactory();
+                this.radiusPacketFactory = factoryManager.getRadiusPacketFactory();
+                this.diameterPacketFactory = factoryManager.getDiameterPacketFactory();
+                this.ldapPacketFactory = factoryManager.getLdapPacketFactory();
+
+                this.natHairpinningFactory = factoryManager.getNatHairpinningFactory();
+                this.natHolePunchFactory = factoryManager.getNatHolePunchFactory();
+                this.upnpFactory = factoryManager.getUpnpFactory();
+                this.pcpFactory = factoryManager.getPcpFactory();
+
+                this.lbRoundRobinFactory = factoryManager.getLbRoundRobinFactory();
+                this.lbLeastConnFactory = factoryManager.getLbLeastConnFactory();
+                this.lbIpHashFactory = factoryManager.getLbIpHashFactory();
+                this.lbHealthCheckFactory = factoryManager.getLbHealthCheckFactory();
+
+                this.netFlowFactory = factoryManager.getNetFlowFactory();
+                this.sflowFactory = factoryManager.getSflowFactory();
+                this.ipfixFactory = factoryManager.getIpfixFactory();
+                this.icmpPingFactory = factoryManager.getIcmpPingFactory();
+                this.icmpTracerouteFactory = factoryManager.getIcmpTracerouteFactory();
+
+                this.ipsecIkeFactory = factoryManager.getIpsecIkeFactory();
+                this.ipsecEspFactory = factoryManager.getIpsecEspFactory();
+                this.ipsecAhFactory = factoryManager.getIpsecAhFactory();
+                this.openVpnFactory = factoryManager.getOpenVpnFactory();
+                this.wireguardFactory = factoryManager.getWireguardFactory();
+                this.l2tpFactory = factoryManager.getL2tpFactory();
+                this.sstpFactory = factoryManager.getSstpFactory();
+
+                this.dpiFactory = factoryManager.getDpiFactory();
+                this.ipsFactory = factoryManager.getIpsFactory();
+                this.wafFactory = factoryManager.getWafFactory();
+                this.ddosMitigationFactory = factoryManager.getDdosMitigationFactory();
+                this.rateLimitFactory = factoryManager.getRateLimitFactory();
+
+                this.x509Factory = factoryManager.getX509Factory();
+                this.crlFactory = factoryManager.getCrlFactory();
+                this.ocspFactory = factoryManager.getOcspFactory();
+                this.pkiFactory = factoryManager.getPkiFactory();
+                this.dtlsFactory = factoryManager.getDtlsFactory();
+
+                this.aclFactory = factoryManager.getAclFactory();
+                this.macAuthFactory = factoryManager.getMacAuthFactory();
+                this.dot1xFactory = factoryManager.getDot1xFactory();
+
+                this.netstatFactory = factoryManager.getNetstatFactory();
+                this.ipconfigFactory = factoryManager.getIpconfigFactory();
+                this.routePrintFactory = factoryManager.getRoutePrintFactory();
+                this.nslookupFactory = factoryManager.getNslookupFactory();
+                this.arpCommandFactory = factoryManager.getArpCommandFactory();
+                this.telnetClientFactory = factoryManager.getTelnetClientFactory();
+                this.curlFactory = factoryManager.getCurlFactory();
+                this.wgetFactory = factoryManager.getWgetFactory();
+            }
         }
 
         private String getSrcIp() {
@@ -2274,8 +2789,8 @@ public class DataCartFactoryGame extends JFrame {
                         }
                     }
                     if (!isDHCP()) {
-                        // 增加 stage 上限到 75
-                        if (stage < 75) {
+                        // 增加 stage 上限到 100
+                        if (stage < 100) {
                             timer = 1;
                             stage++;
                         } else {
@@ -2644,7 +3159,72 @@ public class DataCartFactoryGame extends JFrame {
                 case 75:
                     tag = "IPSEC";
                     break;           // IPsec
-
+                case 76:
+                    tag = "IPV6";
+                    break;
+                case 77:
+                    tag = "IPV6_FRAG";
+                    break;
+                case 78:
+                    tag = "IPV6_OPTION";
+                    break;
+                case 79:
+                    tag = "IPV6_ND";
+                    break;
+                case 80:
+                    tag = "TCP_KEEPALIVE";
+                    break;
+                case 81:
+                    tag = "TCP_SACK";
+                    break;
+                case 82:
+                    tag = "TCP_ECN";
+                    break;
+                case 83:
+                    tag = "TCP_FASTOPEN";
+                    break;
+                case 84:
+                    tag = "FTP";
+                    break;
+                case 85:
+                    tag = "SMTP";
+                    break;
+                case 86:
+                    tag = "POP3";
+                    break;
+                case 87:
+                    tag = "IMAP";
+                    break;
+                case 88:
+                    tag = "SSH";
+                    break;
+                case 89:
+                    tag = "TELNET";
+                    break;
+                case 90:
+                    tag = "RTP";
+                    break;
+                case 91:
+                    tag = "SIP";
+                    break;
+                case 92:
+                    tag = "RADIUS";
+                    break;
+                case 96:
+                    tag = "DPI";
+                    break;
+                case 97:
+                    tag = "WAF";
+                    break;
+                case 98:
+                    tag = "DDOS";
+                    break;
+                case 99:
+                    tag = "RATELIMIT";
+                    break;
+                case 100:
+                    tag = "ACL";
+                    break;
                 default:
                     return null;
             }
@@ -3320,6 +3900,206 @@ public class DataCartFactoryGame extends JFrame {
                         appendToConsole(String.format("【🔒 IPsec】: ESP 头部 (SPI=0x%08X)", spi));
                     }
                     break;
+                // ===================== 新增：IPv6 协议栈处理 stage 76-79 =====================
+                case 76: // IPv6 数据包封装
+                    if (!hasIpv6 && ipv6PacketFactory != null) {
+                        hasIpv6 = true;
+                        byte[] ipv6Packet = ipv6PacketFactory.buildIpv6Packet(new byte[64]);
+                        appendToConsole("【🌐 IPv6】: IPv6 数据包封装完成");
+                    }
+                    break;
+
+                case 77: // IPv6 分片
+                    if (!hasIpv6Fragment && ipv6FragmentFactory != null && cartType.equals("DATA")) {
+                        hasIpv6Fragment = true;
+                        List<byte[]> fragments = ipv6FragmentFactory.fragmentPacket(new byte[1500]);
+                        appendToConsole(String.format("【✂️ IPv6分片】: 分包 %d 片", fragments.size()));
+                    }
+                    break;
+
+                case 78: // IPv6 扩展选项
+                    if (!hasIpv6Option && ipv6OptionFactory != null) {
+                        hasIpv6Option = true;
+                        ipv6OptionFactory.addOption(0x03, new byte[]{0x01, 0x02});
+                        byte[] options = ipv6OptionFactory.buildOptions();
+                        appendToConsole(String.format("【🔧 IPv6选项】: %d 字节", options.length));
+                    }
+                    break;
+
+                case 79: // IPv6 邻居发现
+                    if (!hasIpv6Nd && ipv6NeighborDiscovery != null && resolvedServerIp != null && resolvedServerIp.contains(":")) {
+                        hasIpv6Nd = true;
+                        ipv6NeighborDiscovery.addNeighbor(resolvedServerIp, "00:11:22:33:44:55");
+                        appendToConsole("【📡 IPv6 ND】: 邻居发现完成");
+                    }
+                    break;
+
+// ===================== 新增：TCP 增强处理 stage 80-83 =====================
+                case 80: // TCP Keep-Alive
+                    if (!hasKeepAlive && tcpKeepAliveFactory != null && !useUdp) {
+                        hasKeepAlive = true;
+                        byte[] keepAlive = tcpKeepAliveFactory.buildKeepAliveOption();
+                        appendToConsole("【🔁 TCP Keep-Alive】: 保活选项已添加");
+                    }
+                    break;
+
+                case 81: // TCP SACK
+                    if (!hasSack && tcpSackFactory != null && !useUdp) {
+                        hasSack = true;
+                        tcpSackFactory.addBlock(1000, 1200);
+                        byte[] sackOpt = tcpSackFactory.buildSackOption();
+                        appendToConsole(String.format("【📊 TCP SACK】: 选择性确认选项 (%d字节)", sackOpt.length));
+                    }
+                    break;
+
+                case 82: // TCP ECN
+                    if (!hasEcn && tcpEcnFactory != null && !useUdp) {
+                        hasEcn = true;
+                        byte[] ecnFlag = tcpEcnFactory.buildEcnFlag();
+                        appendToConsole("【⚠️ TCP ECN】: 显式拥塞通知已启用");
+                    }
+                    break;
+
+                case 83: // TCP Fast Open
+                    if (!hasFastOpen && tcpFastOpenFactory != null && !useUdp) {
+                        hasFastOpen = true;
+                        byte[] tfo = tcpFastOpenFactory.buildTfoOption();
+                        appendToConsole("【🚀 TCP Fast Open】: TFO 选项已添加");
+                    }
+                    break;
+
+// ===================== 新增：应用层协议处理 stage 84-95 =====================
+                case 84: // FTP
+                    if (!hasFtp && ftpPacketFactory != null && cartType.equals("FTP")) {
+                        hasFtp = true;
+                        byte[] userCmd = ftpPacketFactory.buildFtpCommand("USER anonymous");
+                        byte[] passCmd = ftpPacketFactory.buildFtpCommand("PASS test@example.com");
+                        appendToConsole("【📁 FTP】: USER/PASS 命令已发送");
+                    }
+                    break;
+
+                case 85: // SMTP
+                    if (!hasSmtp && smtpPacketFactory != null && cartType.equals("SMTP")) {
+                        hasSmtp = true;
+                        byte[] ehlo = smtpPacketFactory.buildEhlo("mail.example.com");
+                        byte[] mailFrom = smtpPacketFactory.buildMailFrom("sender@example.com");
+                        byte[] rcptTo = smtpPacketFactory.buildRcptTo("receiver@example.com");
+                        appendToConsole("【📧 SMTP】: EHLO/MAIL FROM/RCPT TO 已发送");
+                    }
+                    break;
+
+                case 86: // POP3
+                    if (!hasPop3 && pop3PacketFactory != null && cartType.equals("POP3")) {
+                        hasPop3 = true;
+                        byte[] user = pop3PacketFactory.buildUserCmd("testuser");
+                        byte[] pass = pop3PacketFactory.buildPassCmd("password");
+                        byte[] list = pop3PacketFactory.buildListCmd();
+                        appendToConsole("【📬 POP3】: USER/PASS/LIST 命令已发送");
+                    }
+                    break;
+
+                case 87: // IMAP
+                    if (!hasImap && imapPacketFactory != null && cartType.equals("IMAP")) {
+                        hasImap = true;
+                        byte[] login = imapPacketFactory.buildLogin("testuser", "password");
+                        appendToConsole("【📨 IMAP】: LOGIN 命令已发送");
+                    }
+                    break;
+
+                case 88: // SSH
+                    if (!hasSsh && sshPacketFactory != null && cartType.equals("SSH")) {
+                        hasSsh = true;
+                        byte[] banner = sshPacketFactory.buildVersionBanner();
+                        byte[] kex = sshPacketFactory.buildKexInit();
+                        appendToConsole("【🔐 SSH】: 版本协商 + KEX 初始化");
+                    }
+                    break;
+
+                case 89: // Telnet
+                    if (!hasTelnet && telnetPacketFactory != null && cartType.equals("TELNET")) {
+                        hasTelnet = true;
+                        byte[] neg = telnetPacketFactory.buildNegotiate();
+                        appendToConsole("【💻 Telnet】: 选项协商完成");
+                    }
+                    break;
+
+                case 90: // RTP/RTCP
+                    if (!hasRtp && rtpPacketFactory != null && cartType.equals("RTP")) {
+                        hasRtp = true;
+                        byte[] rtpData = rtpPacketFactory.buildRtpPacket("Audio Data".getBytes());
+                        byte[] rtcpData = rtcpPacketFactory.buildSenderReport(12345);
+                        appendToConsole(String.format("【🎵 RTP】: RTP包+RTCP报告 (%d+%d字节)", rtpData.length, rtcpData.length));
+                    }
+                    break;
+
+                case 91: // SIP
+                    if (!hasSip && sipPacketFactory != null && cartType.equals("SIP")) {
+                        hasSip = true;
+                        byte[] invite = sipPacketFactory.buildInvite("sip:user@example.com");
+                        appendToConsole("【📞 SIP】: INVITE 请求已发送");
+                    }
+                    break;
+
+                case 92: // RADIUS
+                    if (!hasRadius && radiusPacketFactory != null && cartType.equals("RADIUS")) {
+                        hasRadius = true;
+                        byte[] radiusReq = radiusPacketFactory.buildAccessRequest("testuser", "password");
+                        appendToConsole("【🔑 RADIUS】: Access-Request 已发送");
+                    }
+                    break;
+
+// ===================== 新增：安全防护处理 stage 96-100 =====================
+                case 96: // DPI 深度包检测
+                    if (!hasDpi && dpiFactory != null) {
+                        hasDpi = true;
+                        DpiFactory.AppProto proto = dpiFactory.detectProtocol(new byte[64]);
+                        appendToConsole(String.format("【🔍 DPI】: 检测到协议 %s", proto));
+                    }
+                    break;
+
+                case 97: // WAF 检测
+                    if (wafFactory != null && cartType.equals("HTTP_GET")) {
+                        if (!wafFactory.checkHttpContent(httpBody != null ? httpBody : "")) {
+                            isBlockedByWaf = true;
+                            appendToConsole("【🛡️ WAF】: SQL注入/XSS 攻击被拦截！");
+                            this.isDropped = true;
+                            return;
+                        }
+                        appendToConsole("【🛡️ WAF】: HTTP 内容检查通过");
+                    }
+                    break;
+
+                case 98: // DDoS 缓解
+                    if (ddosMitigationFactory != null && getSrcIp() != null) {
+                        if (!ddosMitigationFactory.checkTraffic(getSrcIp())) {
+                            appendToConsole("【💥 DDoS缓解】: 源IP " + getSrcIp() + " 流量超限，已限流");
+                            this.isDropped = true;
+                            return;
+                        }
+                    }
+                    break;
+
+                case 99: // 速率限制
+                    if (rateLimitFactory != null) {
+                        String key = getSrcIp() + ":" + cartType;
+                        if (!rateLimitFactory.allow(key)) {
+                            appendToConsole("【⏱️ 速率限制】: " + key + " 超过限制，已丢弃");
+                            this.isDropped = true;
+                            return;
+                        }
+                    }
+                    break;
+
+                case 100: // ACL 访问控制
+                    if (aclFactory != null && getSrcIp() != null && getDstIp() != null) {
+                        boolean permit = aclFactory.match(getSrcIp(), getDstIp(), protocol);
+                        if (!permit) {
+                            appendToConsole("【🚫 ACL】: " + getSrcIp() + " → " + getDstIp() + " 被拒绝");
+                            this.isDropped = true;
+                            return;
+                        }
+                    }
+                    break;
             }
         }
     }
@@ -3659,6 +4439,297 @@ public class DataCartFactoryGame extends JFrame {
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
                         g2.drawString("🔒 IPsec", x + 6, y + 24);
+                    }
+// ===================== 新增：IPv6 建筑渲染 =====================
+                    else if (tag.equals("IPV6")) {
+                        g2.setColor(new Color(80, 80, 180));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("🌐 IPv6", x + 6, y + 24);
+                    }
+                    else if (tag.equals("IPV6_FRAG")) {
+                        g2.setColor(new Color(80, 100, 180));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("✂️ IPv6分片", x + 2, y + 24);
+                    }
+                    else if (tag.equals("IPV6_OPTION")) {
+                        g2.setColor(new Color(100, 80, 180));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("🔧 IPv6选项", x + 2, y + 24);
+                    }
+                    else if (tag.equals("IPV6_ND")) {
+                        g2.setColor(new Color(60, 100, 160));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("📡 IPv6 ND", x + 4, y + 24);
+                    }
+
+// ===================== 新增：TCP 增强建筑渲染 =====================
+                    else if (tag.equals("TCP_KEEPALIVE")) {
+                        g2.setColor(new Color(100, 150, 100));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("🔁 KeepAlive", x + 2, y + 24);
+                    }
+                    else if (tag.equals("TCP_SACK")) {
+                        g2.setColor(new Color(120, 140, 100));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("📊 SACK", x + 6, y + 24);
+                    }
+                    else if (tag.equals("TCP_ECN")) {
+                        g2.setColor(new Color(140, 120, 100));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("⚠️ ECN", x + 8, y + 24);
+                    }
+                    else if (tag.equals("TCP_FASTOPEN")) {
+                        g2.setColor(new Color(160, 100, 100));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("🚀 FastOpen", x + 2, y + 24);
+                    }
+
+// ===================== 新增：应用层协议建筑渲染 =====================
+                    else if (tag.equals("FTP")) {
+                        g2.setColor(new Color(100, 100, 180));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("📁 FTP", x + 8, y + 24);
+                    }
+                    else if (tag.equals("SMTP")) {
+                        g2.setColor(new Color(120, 100, 160));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("📧 SMTP", x + 6, y + 24);
+                    }
+                    else if (tag.equals("POP3")) {
+                        g2.setColor(new Color(140, 100, 140));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("📬 POP3", x + 6, y + 24);
+                    }
+                    else if (tag.equals("IMAP")) {
+                        g2.setColor(new Color(160, 100, 120));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("📨 IMAP", x + 6, y + 24);
+                    }
+                    else if (tag.equals("SSH")) {
+                        g2.setColor(new Color(100, 140, 140));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("🔐 SSH", x + 8, y + 24);
+                    }
+                    else if (tag.equals("TELNET")) {
+                        g2.setColor(new Color(120, 120, 120));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("💻 Telnet", x + 4, y + 24);
+                    }
+                    else if (tag.equals("RTP")) {
+                        g2.setColor(new Color(100, 160, 120));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("🎵 RTP", x + 8, y + 24);
+                    }
+                    else if (tag.equals("SIP")) {
+                        g2.setColor(new Color(140, 140, 100));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("📞 SIP", x + 8, y + 24);
+                    }
+                    else if (tag.equals("RADIUS")) {
+                        g2.setColor(new Color(160, 120, 100));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("🔑 RADIUS", x + 4, y + 24);
+                    }
+                    else if (tag.equals("DIAMETER")) {
+                        g2.setColor(new Color(180, 100, 100));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("💎 Diameter", x + 2, y + 24);
+                    }
+                    else if (tag.equals("LDAP")) {
+                        g2.setColor(new Color(100, 180, 100));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("📋 LDAP", x + 6, y + 24);
+                    }
+
+// ===================== 新增：NAT 增强建筑渲染 =====================
+                    else if (tag.equals("NAT_HAIRPIN")) {
+                        g2.setColor(new Color(180, 140, 80));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.BLACK);
+                        g2.drawString("↩️ NAT发夹", x + 2, y + 24);
+                    }
+                    else if (tag.equals("NAT_HOLE")) {
+                        g2.setColor(new Color(160, 120, 60));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.BLACK);
+                        g2.drawString("🕳️ NAT穿透", x + 2, y + 24);
+                    }
+                    else if (tag.equals("UPNP")) {
+                        g2.setColor(new Color(140, 100, 40));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("🔌 UPnP", x + 6, y + 24);
+                    }
+                    else if (tag.equals("PCP")) {
+                        g2.setColor(new Color(120, 80, 20));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("📡 PCP", x + 8, y + 24);
+                    }
+
+// ===================== 新增：负载均衡建筑渲染 =====================
+                    else if (tag.equals("LB_RR")) {
+                        g2.setColor(new Color(80, 180, 140));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.BLACK);
+                        g2.drawString("🔄 轮询LB", x + 4, y + 24);
+                    }
+                    else if (tag.equals("LB_LC")) {
+                        g2.setColor(new Color(60, 160, 120));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("📊 最少连接", x + 2, y + 24);
+                    }
+                    else if (tag.equals("LB_IPHASH")) {
+                        g2.setColor(new Color(40, 140, 100));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("🔢 IP哈希", x + 4, y + 24);
+                    }
+                    else if (tag.equals("LB_HC")) {
+                        g2.setColor(new Color(20, 120, 80));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("❤️ 健康检查", x + 2, y + 24);
+                    }
+
+// ===================== 新增：VPN 隧道建筑渲染 =====================
+                    else if (tag.equals("IPSEC_IKE")) {
+                        g2.setColor(new Color(100, 80, 140));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("🔑 IKE", x + 8, y + 24);
+                    }
+                    else if (tag.equals("IPSEC_ESP")) {
+                        g2.setColor(new Color(120, 80, 160));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("🔒 ESP", x + 8, y + 24);
+                    }
+                    else if (tag.equals("OPENVPN")) {
+                        g2.setColor(new Color(100, 100, 160));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("🔓 OpenVPN", x + 2, y + 24);
+                    }
+                    else if (tag.equals("WIREGUARD")) {
+                        g2.setColor(new Color(80, 120, 140));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("🔒 WireGuard", x + 2, y + 24);
+                    }
+                    else if (tag.equals("L2TP")) {
+                        g2.setColor(new Color(60, 140, 120));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("🔌 L2TP", x + 8, y + 24);
+                    }
+                    else if (tag.equals("SSTP")) {
+                        g2.setColor(new Color(40, 160, 100));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.BLACK);
+                        g2.drawString("🌐 SSTP", x + 8, y + 24);
+                    }
+
+// ===================== 新增：安全防护建筑渲染 =====================
+                    else if (tag.equals("DPI")) {
+                        g2.setColor(new Color(180, 80, 80));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("🔍 DPI", x + 8, y + 24);
+                    }
+                    else if (tag.equals("WAF")) {
+                        g2.setColor(new Color(200, 60, 60));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("🛡️ WAF", x + 6, y + 24);
+                    }
+                    else if (tag.equals("DDOS")) {
+                        g2.setColor(new Color(220, 40, 40));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("💥 DDoS防护", x + 2, y + 24);
+                    }
+                    else if (tag.equals("RATELIMIT")) {
+                        g2.setColor(new Color(160, 100, 80));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("⏱️ 限速", x + 8, y + 24);
+                    }
+                    else if (tag.equals("ACL")) {
+                        g2.setColor(new Color(140, 120, 80));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("🚫 ACL", x + 8, y + 24);
+                    }
+
+// ===================== 新增：诊断工具建筑渲染 =====================
+                    else if (tag.equals("NETSTAT")) {
+                        g2.setColor(new Color(80, 140, 180));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("📊 netstat", x + 4, y + 24);
+                    }
+                    else if (tag.equals("IPCONFIG")) {
+                        g2.setColor(new Color(60, 120, 160));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("⚙️ ipconfig", x + 2, y + 24);
+                    }
+                    else if (tag.equals("ROUTEPRINT")) {
+                        g2.setColor(new Color(40, 100, 140));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("🗺️ route", x + 6, y + 24);
+                    }
+                    else if (tag.equals("NSLOOKUP")) {
+                        g2.setColor(new Color(60, 100, 180));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("🔍 nslookup", x + 2, y + 24);
+                    }
+                    else if (tag.equals("ARPCMD")) {
+                        g2.setColor(new Color(40, 80, 160));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("📋 arp", x + 8, y + 24);
+                    }
+                    else if (tag.equals("CURL")) {
+                        g2.setColor(new Color(80, 180, 160));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.BLACK);
+                        g2.drawString("🌐 curl", x + 8, y + 24);
+                    }
+                    else if (tag.equals("WGET")) {
+                        g2.setColor(new Color(60, 160, 140));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.BLACK);
+                        g2.drawString("⬇️ wget", x + 6, y + 24);
+                    }
+                    else if (tag.equals("TELNET_CLIENT")) {
+                        g2.setColor(new Color(40, 140, 120));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.BLACK);
+                        g2.drawString("💻 telnet", x + 4, y + 24);
                     }
 
                 }
