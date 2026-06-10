@@ -33,6 +33,10 @@ public class IpPacket extends BasePacket {
 
     @Override
     public void deserialize(byte[] data) {
+        // 🔥 增加空数组判断
+        if (data == null || data.length < 10) {
+            return;
+        }
         version = (data[0] >> 4) & 0xF;
         ttl = data[8] & 0xFF;
         protocol = data[9] & 0xFF;

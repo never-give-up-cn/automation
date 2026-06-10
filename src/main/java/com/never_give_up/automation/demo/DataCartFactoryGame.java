@@ -2,6 +2,7 @@ package com.never_give_up.automation.demo;
 
 import com.never_give_up.automation.demo.adapter.FactoryManager;
 import com.never_give_up.automation.demo.adapter.PacketAdapter;
+import com.never_give_up.automation.demo.core.ProtocolConst;
 import com.never_give_up.automation.demo.factory.function.NatMappingFactory;
 import com.never_give_up.automation.demo.factory.link.LlcHeader;
 import com.never_give_up.automation.demo.model.HttpPacket;
@@ -2480,12 +2481,18 @@ public class DataCartFactoryGame extends JFrame {
                 // ========== 防火墙 ==========
                 case 29: // 出站防火墙
                     if (srcIp != null && dstIp != null) {
-                        if (!factoryManager.getFirewallFactory().allowOutbound(srcIp, dstIp, srcPort)) {
+                        // ✅ 修复：使用当前数据包的真实协议（TCP/UDP）
+                        String protoName = this.protocol;
+                        boolean allowed = factoryManager.getFirewallFactory()
+                                .allowOutbound(srcIp, dstIp, srcPort, dstPort, protoName);
+
+                        if (!allowed) {
                             appendToConsole("【🔥 防火墙】: 出站包被阻断 " + srcIp + " → " + dstIp);
                             this.isDropped = true;
                             return;
+                        } else {
+                            appendToConsole("【🔥 防火墙】: 出站规则通过 ✅");
                         }
-                        appendToConsole("【🔥 防火墙】: 出站规则通过");
                     }
                     break;
                 case 30: // 入站防火墙
@@ -2585,7 +2592,8 @@ public class DataCartFactoryGame extends JFrame {
                     hasIp = false;
                     if (cartType.equals("DATA") || cartType.equals("HTTP_200_OK")) {
                         IpPacket ipPacket = ipFactory.produce();
-                        ipPacket.deserialize(new byte[0]);
+                        // 🔥 修复：不要传空数组，传一个标准IP头长度的字节数组
+                        ipPacket.deserialize(new byte[ProtocolConst.IP_HEADER_SIZE]);
                         appendToConsole("【💛 RX_IP】: 网络层解封完成");
                     }
                     break;
