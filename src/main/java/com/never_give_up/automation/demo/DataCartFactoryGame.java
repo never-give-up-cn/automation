@@ -1055,15 +1055,15 @@ public class DataCartFactoryGame extends JFrame {
         int ipv6Row = 2;
         buildingLayout[ipv6Row][30] = "IPV6";
         buildingLayout[ipv6Row][31] = "IPV6_FRAG";
-        buildingLayout[ipv6Row+1][30] = "IPV6_OPTION";
-        buildingLayout[ipv6Row+1][31] = "IPV6_ND";
+        buildingLayout[ipv6Row + 1][30] = "IPV6_OPTION";
+        buildingLayout[ipv6Row + 1][31] = "IPV6_ND";
 
 // ===================== TCP 增强建筑（放在行 3-4）=====================
         int tcpRow = 3;
         buildingLayout[tcpRow][33] = "TCP_KEEPALIVE";
         buildingLayout[tcpRow][34] = "TCP_SACK";
-        buildingLayout[tcpRow+1][33] = "TCP_ECN";
-        buildingLayout[tcpRow+1][34] = "TCP_FASTOPEN";
+        buildingLayout[tcpRow + 1][33] = "TCP_ECN";
+        buildingLayout[tcpRow + 1][34] = "TCP_FASTOPEN";
 
 // ===================== 应用层协议建筑（放在行 12-15）=====================
         int appRow = 12;
@@ -1071,55 +1071,55 @@ public class DataCartFactoryGame extends JFrame {
         buildingLayout[appRow][26] = "SMTP";
         buildingLayout[appRow][27] = "POP3";
         buildingLayout[appRow][28] = "IMAP";
-        buildingLayout[appRow+1][25] = "SSH";
-        buildingLayout[appRow+1][26] = "TELNET";
-        buildingLayout[appRow+1][27] = "RTP";
-        buildingLayout[appRow+1][28] = "SIP";
-        buildingLayout[appRow+2][25] = "RADIUS";
-        buildingLayout[appRow+2][26] = "DIAMETER";
-        buildingLayout[appRow+2][27] = "LDAP";
+        buildingLayout[appRow + 1][25] = "SSH";
+        buildingLayout[appRow + 1][26] = "TELNET";
+        buildingLayout[appRow + 1][27] = "RTP";
+        buildingLayout[appRow + 1][28] = "SIP";
+        buildingLayout[appRow + 2][25] = "RADIUS";
+        buildingLayout[appRow + 2][26] = "DIAMETER";
+        buildingLayout[appRow + 2][27] = "LDAP";
 
 // ===================== 安全防护建筑（放在行 15-17）=====================
         int secRow = 15;
         buildingLayout[secRow][30] = "DPI";
         buildingLayout[secRow][31] = "WAF";
-        buildingLayout[secRow+1][30] = "DDOS";
-        buildingLayout[secRow+1][31] = "RATELIMIT";
-        buildingLayout[secRow+2][30] = "ACL";
+        buildingLayout[secRow + 1][30] = "DDOS";
+        buildingLayout[secRow + 1][31] = "RATELIMIT";
+        buildingLayout[secRow + 2][30] = "ACL";
 
 // ===================== NAT 增强建筑（放在行 17-18）=====================
         int natRow = 17;
         buildingLayout[natRow][35] = "NAT_HAIRPIN";
         buildingLayout[natRow][36] = "NAT_HOLE";
-        buildingLayout[natRow+1][35] = "UPNP";
-        buildingLayout[natRow+1][36] = "PCP";
+        buildingLayout[natRow + 1][35] = "UPNP";
+        buildingLayout[natRow + 1][36] = "PCP";
 
 // ===================== 负载均衡建筑（放在行 4-5）=====================
         int lbRow = 4;
         buildingLayout[lbRow][36] = "LB_RR";
         buildingLayout[lbRow][37] = "LB_LC";
-        buildingLayout[lbRow+1][36] = "LB_IPHASH";
-        buildingLayout[lbRow+1][37] = "LB_HC";
+        buildingLayout[lbRow + 1][36] = "LB_IPHASH";
+        buildingLayout[lbRow + 1][37] = "LB_HC";
 
 // ===================== VPN 隧道建筑（放在行 18-19）=====================
         int vpnRow = 18;
         buildingLayout[vpnRow][38] = "IPSEC_IKE";
         buildingLayout[vpnRow][39] = "IPSEC_ESP";
         buildingLayout[vpnRow][40] = "OPENVPN";
-        buildingLayout[vpnRow+1][38] = "WIREGUARD";
-        buildingLayout[vpnRow+1][39] = "L2TP";
-        buildingLayout[vpnRow+1][40] = "SSTP";
+        buildingLayout[vpnRow + 1][38] = "WIREGUARD";
+        buildingLayout[vpnRow + 1][39] = "L2TP";
+        buildingLayout[vpnRow + 1][40] = "SSTP";
 
 // ===================== 诊断工具建筑（放在行 5-6）=====================
         int toolRow = 5;
         buildingLayout[toolRow][38] = "NETSTAT";
         buildingLayout[toolRow][39] = "IPCONFIG";
         buildingLayout[toolRow][40] = "ROUTEPRINT";
-        buildingLayout[toolRow+1][38] = "NSLOOKUP";
-        buildingLayout[toolRow+1][39] = "ARPCMD";
-        buildingLayout[toolRow+1][40] = "CURL";
-        buildingLayout[toolRow+2][38] = "WGET";
-        buildingLayout[toolRow+2][39] = "TELNET_CLIENT";
+        buildingLayout[toolRow + 1][38] = "NSLOOKUP";
+        buildingLayout[toolRow + 1][39] = "ARPCMD";
+        buildingLayout[toolRow + 1][40] = "CURL";
+        buildingLayout[toolRow + 2][38] = "WGET";
+        buildingLayout[toolRow + 2][39] = "TELNET_CLIENT";
     }
 
     private void sendPing() {
@@ -4148,7 +4148,7 @@ public class DataCartFactoryGame extends JFrame {
             }
             g2.setColor(Color.WHITE);
             g2.setFont(new Font("微软雅黑", Font.BOLD, 14));
-            g2.drawString("🚦 公网车辆: " + wanCarCount + "/" + WAN_BOTTLE_NECK_MAX, 22 * TILE_SIZE, 30);
+            g2.drawString("[CAR] 公网车辆: " + wanCarCount + "/" + WAN_BOTTLE_NECK_MAX, 22 * TILE_SIZE, 30);
 
             for (int r = 0; r < MAP_ROWS; r++) {
                 for (int c = 0; c < MAP_COLS; c++) {
@@ -4167,12 +4167,12 @@ public class DataCartFactoryGame extends JFrame {
                         g2.setColor(new Color(0, 130, 200));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("💻 源PC", x + 4, y + 24);
+                        g2.drawString("[PC] 源PC", x + 4, y + 24);
                     } else if (tag.equals("RX_ST")) {
                         g2.setColor(new Color(190, 30, 50));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.YELLOW);
-                        g2.drawString("🏛️ 服务器", x + 2, y + 24);
+                        g2.drawString("[SRV] 服务器", x + 2, y + 24);
                         for (int b = 0; b < serverBufferCount; b++) {
                             g2.setColor(Color.RED);
                             g2.fillRect(x + 4 + (b * 6), y + 4, 5, 6);
@@ -4207,531 +4207,573 @@ public class DataCartFactoryGame extends JFrame {
                         g2.drawString(tag, x + 3, y + 24);
                     } else if (tag.startsWith("MINER_H")) {
                         g2.setColor(Color.CYAN);
-                        g2.drawString("🔷 矿机", x + 4, y + 24);
+                        g2.drawString("[H] 矿机", x + 4, y + 24);
                     } else if (tag.startsWith("MINER_S")) {
                         g2.setColor(Color.GREEN);
-                        g2.drawString("🟩 矿机", x + 4, y + 24);
-                    }// 新增：防火墙渲染
-                    else if (tag.equals("FW_IN") || tag.equals("FW_OUT")) {
+                        g2.drawString("[S] 矿机", x + 4, y + 24);
+                    } else if (tag.equals("FW_IN") || tag.equals("FW_OUT")) {
                         g2.setColor(new Color(255, 80, 80));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("🔥 " + tag, x + 3, y + 24);
-                    }
-// 新增：IDS 渲染
-                    else if (tag.equals("IDS")) {
+                        g2.drawString("[FW] " + tag, x + 3, y + 24);
+                    } else if (tag.equals("IDS")) {
                         g2.setColor(new Color(255, 165, 0));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.BLACK);
-                        g2.drawString("🛡️ IDS", x + 3, y + 24);
-                    }
-// 新增：队列渲染
-                    else if (tag.equals("Q_IN") || tag.equals("Q_OUT") || tag.equals("Q_DROP")) {
+                        g2.drawString("[IDS] IDS", x + 3, y + 24);
+                    } else if (tag.equals("Q_IN") || tag.equals("Q_OUT") || tag.equals("Q_DROP")) {
                         g2.setColor(new Color(100, 100, 200));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("📋 " + tag, x + 3, y + 24);
-                    }
-// 新增：拥塞控制渲染
-                    else if (tag.startsWith("CC_")) {
+                        g2.drawString("[Q] " + tag, x + 3, y + 24);
+                    } else if (tag.startsWith("CC_")) {
                         g2.setColor(new Color(0, 200, 200));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.BLACK);
-                        String ccName = tag.equals("CC_SLOW") ? "🐢 慢启动" :
-                                (tag.equals("CC_AVOID") ? "🐌 拥塞避免" : "⚡ 快速重传");
+                        String ccName = tag.equals("CC_SLOW") ? "[SS] 慢启动" :
+                                (tag.equals("CC_AVOID") ? "[CA] 拥塞避免" : "[FR] 快速重传");
                         g2.drawString(ccName, x + 2, y + 24);
-                    }
-// 新增：五元组渲染
-                    else if (tag.equals("FIVETUPLE")) {
+                    } else if (tag.equals("FIVETUPLE")) {
                         g2.setColor(new Color(200, 100, 200));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("🔢 五元组", x + 2, y + 24);
-                    }
-// 新增：会话管理渲染
-                    else if (tag.equals("SESSION")) {
+                        g2.drawString("[5T] 五元组", x + 2, y + 24);
+                    } else if (tag.equals("SESSION")) {
                         g2.setColor(new Color(100, 200, 100));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.BLACK);
-                        g2.drawString("💬 会话", x + 4, y + 24);
-                    }
-// 新增：带宽控制渲染
-                    else if (tag.equals("BW_CTRL")) {
+                        g2.drawString("[SES] 会话", x + 4, y + 24);
+                    } else if (tag.equals("BW_CTRL")) {
                         g2.setColor(new Color(200, 200, 0));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.BLACK);
-                        g2.drawString("📊 带宽", x + 4, y + 24);
-                    }
-// 新增：网络设备渲染
-                    else if (tag.equals("SWITCH")) {
+                        g2.drawString("[BW] 带宽", x + 4, y + 24);
+                    } else if (tag.equals("SWITCH")) {
                         g2.setColor(new Color(0, 150, 200));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("🔌 交换机", x + 2, y + 24);
+                        g2.drawString("[SW] 交换机", x + 2, y + 24);
                     } else if (tag.equals("HUB")) {
                         g2.setColor(new Color(150, 100, 50));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("🔌 集线器", x + 2, y + 24);
+                        g2.drawString("[HB] 集线器", x + 2, y + 24);
                     } else if (tag.equals("BRIDGE")) {
                         g2.setColor(new Color(100, 150, 100));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("🌉 网桥", x + 4, y + 24);
-                    }
-// 新增：子网渲染
-                    else if (tag.startsWith("SUBNET_")) {
+                        g2.drawString("[BR] 网桥", x + 4, y + 24);
+                    } else if (tag.startsWith("SUBNET_")) {
                         g2.setColor(new Color(80, 80, 200, 100));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.CYAN);
-                        g2.drawString("🌐 " + tag, x + 2, y + 24);
-                    }
-// 新增：链路渲染
-                    else if (tag.equals("LINK_UP")) {
+                        g2.drawString("[NET] " + tag, x + 2, y + 24);
+                    } else if (tag.equals("LINK_UP")) {
                         g2.setColor(new Color(0, 255, 0, 80));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.GREEN);
-                        g2.drawString("🔗 链路↑", x + 4, y + 24);
+                        g2.drawString("[LINK] 链路↑", x + 4, y + 24);
                     } else if (tag.equals("LINK_DOWN")) {
                         g2.setColor(new Color(255, 0, 0, 80));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.RED);
-                        g2.drawString("🔗 链路↓", x + 4, y + 24);
-                    }
-// 新增：接收端额外工厂
-                    else if (tag.equals("RX_ETH")) {
+                        g2.drawString("[LINK] 链路↓", x + 4, y + 24);
+                    } else if (tag.equals("RX_ETH")) {
                         g2.setColor(new Color(0, 100, 200));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("📡 解ETH", x + 4, y + 24);
+                        g2.drawString("[RX] 解ETH", x + 4, y + 24);
                     } else if (tag.equals("RX_FCS")) {
                         g2.setColor(new Color(0, 150, 100));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("✓ FCS", x + 6, y + 24);
+                        g2.drawString("[OK] FCS", x + 6, y + 24);
                     } else if (tag.equals("RX_FRAG")) {
                         g2.setColor(new Color(200, 100, 0));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("🧩 分片重组", x + 2, y + 24);
+                        g2.drawString("[FR] 分片重组", x + 2, y + 24);
                     } else if (tag.equals("RX_PORT")) {
                         g2.setColor(new Color(150, 0, 150));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("🔌 解端口", x + 4, y + 24);
+                        g2.drawString("[PT] 解端口", x + 4, y + 24);
                     } else if (tag.equals("TCP_OPTION")) {
                         g2.setColor(new Color(100, 100, 200));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("🔧 TCP选项", x + 2, y + 24);
+                        g2.drawString("[TCP] TCP选项", x + 2, y + 24);
                     } else if (tag.equals("IP_OPTION")) {
                         g2.setColor(new Color(200, 100, 200));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("🔧 IP选项", x + 4, y + 24);
+                        g2.drawString("[IP] IP选项", x + 4, y + 24);
                     } else if (tag.equals("ETH_PADDING")) {
                         g2.setColor(new Color(100, 200, 100));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.BLACK);
-                        g2.drawString("📦 填充", x + 6, y + 24);
+                        g2.drawString("[PAD] 填充", x + 6, y + 24);
                     } else if (tag.equals("UDP_CHECKSUM")) {
                         g2.setColor(new Color(0, 150, 200));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("🔢 UDP校验", x + 2, y + 24);
+                        g2.drawString("[UDP] UDP校验", x + 2, y + 24);
                     } else if (tag.equals("IP_FORWARD")) {
                         g2.setColor(new Color(200, 150, 0));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.BLACK);
-                        g2.drawString("🔄 IP转发", x + 4, y + 24);
+                        g2.drawString("[FWD] IP转发", x + 4, y + 24);
                     } else if (tag.equals("TCP_WINDOW")) {
                         g2.setColor(new Color(0, 100, 150));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("📊 TCP窗口", x + 2, y + 24);
+                        g2.drawString("[WIN] TCP窗口", x + 2, y + 24);
                     } else if (tag.equals("TCP_TIMER")) {
                         g2.setColor(new Color(150, 100, 0));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("⏱️ TCP定时", x + 2, y + 24);
+                        g2.drawString("[TMR] TCP定时", x + 2, y + 24);
                     } else if (tag.equals("DHCP_FULL")) {
                         g2.setColor(new Color(0, 200, 100));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.BLACK);
-                        g2.drawString("📡 DHCP完整", x + 2, y + 24);
+                        g2.drawString("[DHCP] DHCP完整", x + 2, y + 24);
                     } else if (tag.equals("TLS_HANDSHAKE")) {
                         g2.setColor(new Color(200, 100, 0));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("🔒 TLS握手", x + 4, y + 24);
+                        g2.drawString("[TLS] TLS握手", x + 4, y + 24);
                     } else if (tag.equals("SERIALIZE")) {
                         g2.setColor(new Color(150, 150, 150));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.BLACK);
-                        g2.drawString("💾 序列化", x + 6, y + 24);
-                    } else if (tag.equals("BIT_STREAM")) { // 新增：物理层设备渲染
+                        g2.drawString("[SER] 序列化", x + 6, y + 24);
+                    } else if (tag.equals("BIT_STREAM")) {
                         g2.setColor(new Color(150, 150, 0));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("📡 比特流", x + 4, y + 24);
+                        g2.drawString("[BIT] 比特流", x + 4, y + 24);
                     } else if (tag.equals("PHY_CHANNEL")) {
                         g2.setColor(new Color(100, 100, 0));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("📡 物理信道", x + 4, y + 24);
+                        g2.drawString("[PHY] 物理信道", x + 4, y + 24);
                     } else if (tag.equals("PPPOE")) {
                         g2.setColor(new Color(0, 150, 200));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.BLACK);
-                        g2.drawString("🔌 PPPoE", x + 6, y + 24);
+                        g2.drawString("[PPPoE] PPPoE", x + 2, y + 24);
                     } else if (tag.equals("MACSEC")) {
                         g2.setColor(new Color(0, 200, 150));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.BLACK);
-                        g2.drawString("🔐 MACsec", x + 4, y + 24);
+                        g2.drawString("[MACsec] MACsec", x + 2, y + 24);
                     } else if (tag.equals("OSPF")) {
                         g2.setColor(new Color(0, 150, 100));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("🌐 OSPF", x + 6, y + 24);
+                        g2.drawString("[OSPF] OSPF", x + 4, y + 24);
                     } else if (tag.equals("BGP")) {
                         g2.setColor(new Color(0, 100, 150));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("🌐 BGP", x + 6, y + 24);
+                        g2.drawString("[BGP] BGP", x + 6, y + 24);
                     } else if (tag.equals("QOS")) {
                         g2.setColor(new Color(200, 100, 100));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("🎯 QoS", x + 8, y + 24);
+                        g2.drawString("[QoS] QoS", x + 8, y + 24);
                     } else if (tag.equals("NAT64")) {
                         g2.setColor(new Color(100, 100, 200));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("🌍 NAT64", x + 4, y + 24);
+                        g2.drawString("[NAT64] NAT64", x + 4, y + 24);
                     } else if (tag.equals("TCP_REASSEMBLY")) {
                         g2.setColor(new Color(150, 80, 150));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("🔧 TCP重组", x + 4, y + 24);
+                        g2.drawString("[RE] TCP重组", x + 4, y + 24);
                     } else if (tag.equals("ATTACK")) {
                         g2.setColor(new Color(200, 50, 50));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("⚠️ 攻击检测", x + 4, y + 24);
+                        g2.drawString("[ATT] 攻击检测", x + 4, y + 24);
                     } else if (tag.equals("NTP")) {
                         g2.setColor(new Color(0, 200, 200));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.BLACK);
-                        g2.drawString("🕐 NTP", x + 8, y + 24);
+                        g2.drawString("[NTP] NTP", x + 8, y + 24);
                     } else if (tag.equals("SNMP")) {
                         g2.setColor(new Color(0, 150, 150));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("📊 SNMP", x + 6, y + 24);
+                        g2.drawString("[SNMP] SNMP", x + 4, y + 24);
                     } else if (tag.equals("HTTP23")) {
                         g2.setColor(new Color(50, 150, 200));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("📡 HTTP/2.3", x + 2, y + 24);
+                        g2.drawString("[H2] HTTP/2.3", x + 2, y + 24);
                     } else if (tag.equals("IPSEC")) {
                         g2.setColor(new Color(50, 100, 150));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("🔒 IPsec", x + 6, y + 24);
-                    }
-// ===================== 新增：IPv6 建筑渲染 =====================
-                    else if (tag.equals("IPV6")) {
+                        g2.drawString("[IPSEC] IPsec", x + 4, y + 24);
+                    } else if (tag.equals("IPV6")) {
                         g2.setColor(new Color(80, 80, 180));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("🌐 IPv6", x + 6, y + 24);
-                    }
-                    else if (tag.equals("IPV6_FRAG")) {
+                        g2.drawString("[V6] IPv6", x + 6, y + 24);
+                    } else if (tag.equals("IPV6_FRAG")) {
                         g2.setColor(new Color(80, 100, 180));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("✂️ IPv6分片", x + 2, y + 24);
-                    }
-                    else if (tag.equals("IPV6_OPTION")) {
+                        g2.drawString("[FRAG] IPv6分片", x + 2, y + 24);
+                    } else if (tag.equals("IPV6_OPTION")) {
                         g2.setColor(new Color(100, 80, 180));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("🔧 IPv6选项", x + 2, y + 24);
-                    }
-                    else if (tag.equals("IPV6_ND")) {
+                        g2.drawString("[OPT] IPv6选项", x + 2, y + 24);
+                    } else if (tag.equals("IPV6_ND")) {
                         g2.setColor(new Color(60, 100, 160));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("📡 IPv6 ND", x + 4, y + 24);
-                    }
-
-// ===================== 新增：TCP 增强建筑渲染 =====================
-                    else if (tag.equals("TCP_KEEPALIVE")) {
+                        g2.drawString("[ND] IPv6 ND", x + 4, y + 24);
+                    } else if (tag.equals("TCP_KEEPALIVE")) {
                         g2.setColor(new Color(100, 150, 100));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("🔁 KeepAlive", x + 2, y + 24);
-                    }
-                    else if (tag.equals("TCP_SACK")) {
+                        g2.drawString("[KA] KeepAlive", x + 2, y + 24);
+                    } else if (tag.equals("TCP_SACK")) {
                         g2.setColor(new Color(120, 140, 100));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("📊 SACK", x + 6, y + 24);
-                    }
-                    else if (tag.equals("TCP_ECN")) {
+                        g2.drawString("[SACK] SACK", x + 4, y + 24);
+                    } else if (tag.equals("TCP_ECN")) {
                         g2.setColor(new Color(140, 120, 100));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("⚠️ ECN", x + 8, y + 24);
-                    }
-                    else if (tag.equals("TCP_FASTOPEN")) {
+                        g2.drawString("[ECN] ECN", x + 8, y + 24);
+                    } else if (tag.equals("TCP_FASTOPEN")) {
                         g2.setColor(new Color(160, 100, 100));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("🚀 FastOpen", x + 2, y + 24);
-                    }
-
-// ===================== 新增：应用层协议建筑渲染 =====================
-                    else if (tag.equals("FTP")) {
+                        g2.drawString("[FO] FastOpen", x + 2, y + 24);
+                    } else if (tag.equals("FTP")) {
                         g2.setColor(new Color(100, 100, 180));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("📁 FTP", x + 8, y + 24);
-                    }
-                    else if (tag.equals("SMTP")) {
+                        g2.drawString("[FTP] FTP", x + 8, y + 24);
+                    } else if (tag.equals("SMTP")) {
                         g2.setColor(new Color(120, 100, 160));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("📧 SMTP", x + 6, y + 24);
-                    }
-                    else if (tag.equals("POP3")) {
+                        g2.drawString("[SMTP] SMTP", x + 4, y + 24);
+                    } else if (tag.equals("POP3")) {
                         g2.setColor(new Color(140, 100, 140));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("📬 POP3", x + 6, y + 24);
-                    }
-                    else if (tag.equals("IMAP")) {
+                        g2.drawString("[POP3] POP3", x + 4, y + 24);
+                    } else if (tag.equals("IMAP")) {
                         g2.setColor(new Color(160, 100, 120));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("📨 IMAP", x + 6, y + 24);
-                    }
-                    else if (tag.equals("SSH")) {
+                        g2.drawString("[IMAP] IMAP", x + 4, y + 24);
+                    } else if (tag.equals("SSH")) {
                         g2.setColor(new Color(100, 140, 140));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("🔐 SSH", x + 8, y + 24);
-                    }
-                    else if (tag.equals("TELNET")) {
+                        g2.drawString("[SSH] SSH", x + 8, y + 24);
+                    } else if (tag.equals("TELNET")) {
                         g2.setColor(new Color(120, 120, 120));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("💻 Telnet", x + 4, y + 24);
-                    }
-                    else if (tag.equals("RTP")) {
+                        g2.drawString("[TEL] Telnet", x + 4, y + 24);
+                    } else if (tag.equals("RTP")) {
                         g2.setColor(new Color(100, 160, 120));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("🎵 RTP", x + 8, y + 24);
-                    }
-                    else if (tag.equals("SIP")) {
+                        g2.drawString("[RTP] RTP", x + 8, y + 24);
+                    } else if (tag.equals("SIP")) {
                         g2.setColor(new Color(140, 140, 100));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("📞 SIP", x + 8, y + 24);
-                    }
-                    else if (tag.equals("RADIUS")) {
+                        g2.drawString("[SIP] SIP", x + 8, y + 24);
+                    } else if (tag.equals("RADIUS")) {
                         g2.setColor(new Color(160, 120, 100));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("🔑 RADIUS", x + 4, y + 24);
-                    }
-                    else if (tag.equals("DIAMETER")) {
+                        g2.drawString("[RAD] RADIUS", x + 4, y + 24);
+                    } else if (tag.equals("DIAMETER")) {
                         g2.setColor(new Color(180, 100, 100));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("💎 Diameter", x + 2, y + 24);
-                    }
-                    else if (tag.equals("LDAP")) {
+                        g2.drawString("[DIA] Diameter", x + 2, y + 24);
+                    } else if (tag.equals("LDAP")) {
                         g2.setColor(new Color(100, 180, 100));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("📋 LDAP", x + 6, y + 24);
-                    }
-
-// ===================== 新增：NAT 增强建筑渲染 =====================
-                    else if (tag.equals("NAT_HAIRPIN")) {
+                        g2.drawString("[LDA] LDAP", x + 6, y + 24);
+                    } else if (tag.equals("NAT_HAIRPIN")) {
                         g2.setColor(new Color(180, 140, 80));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.BLACK);
-                        g2.drawString("↩️ NAT发夹", x + 2, y + 24);
-                    }
-                    else if (tag.equals("NAT_HOLE")) {
+                        g2.drawString("[NH] NAT发夹", x + 2, y + 24);
+                    } else if (tag.equals("NAT_HOLE")) {
                         g2.setColor(new Color(160, 120, 60));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.BLACK);
-                        g2.drawString("🕳️ NAT穿透", x + 2, y + 24);
-                    }
-                    else if (tag.equals("UPNP")) {
+                        g2.drawString("[HP] NAT穿透", x + 2, y + 24);
+                    } else if (tag.equals("UPNP")) {
                         g2.setColor(new Color(140, 100, 40));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("🔌 UPnP", x + 6, y + 24);
-                    }
-                    else if (tag.equals("PCP")) {
+                        g2.drawString("[UPnP] UPnP", x + 4, y + 24);
+                    } else if (tag.equals("PCP")) {
                         g2.setColor(new Color(120, 80, 20));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("📡 PCP", x + 8, y + 24);
-                    }
-
-// ===================== 新增：负载均衡建筑渲染 =====================
-                    else if (tag.equals("LB_RR")) {
+                        g2.drawString("[PCP] PCP", x + 8, y + 24);
+                    } else if (tag.equals("LB_RR")) {
                         g2.setColor(new Color(80, 180, 140));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.BLACK);
-                        g2.drawString("🔄 轮询LB", x + 4, y + 24);
-                    }
-                    else if (tag.equals("LB_LC")) {
+                        g2.drawString("[RR] 轮询LB", x + 4, y + 24);
+                    } else if (tag.equals("LB_LC")) {
                         g2.setColor(new Color(60, 160, 120));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("📊 最少连接", x + 2, y + 24);
-                    }
-                    else if (tag.equals("LB_IPHASH")) {
+                        g2.drawString("[LC] 最少连接", x + 2, y + 24);
+                    } else if (tag.equals("LB_IPHASH")) {
                         g2.setColor(new Color(40, 140, 100));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("🔢 IP哈希", x + 4, y + 24);
-                    }
-                    else if (tag.equals("LB_HC")) {
+                        g2.drawString("[IPH] IP哈希", x + 4, y + 24);
+                    } else if (tag.equals("LB_HC")) {
                         g2.setColor(new Color(20, 120, 80));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("❤️ 健康检查", x + 2, y + 24);
-                    }
-
-// ===================== 新增：VPN 隧道建筑渲染 =====================
-                    else if (tag.equals("IPSEC_IKE")) {
+                        g2.drawString("[HC] 健康检查", x + 2, y + 24);
+                    } else if (tag.equals("IPSEC_IKE")) {
                         g2.setColor(new Color(100, 80, 140));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("🔑 IKE", x + 8, y + 24);
-                    }
-                    else if (tag.equals("IPSEC_ESP")) {
+                        g2.drawString("[IKE] IKE", x + 8, y + 24);
+                    } else if (tag.equals("IPSEC_ESP")) {
                         g2.setColor(new Color(120, 80, 160));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("🔒 ESP", x + 8, y + 24);
-                    }
-                    else if (tag.equals("OPENVPN")) {
+                        g2.drawString("[ESP] ESP", x + 8, y + 24);
+                    } else if (tag.equals("OPENVPN")) {
                         g2.setColor(new Color(100, 100, 160));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("🔓 OpenVPN", x + 2, y + 24);
-                    }
-                    else if (tag.equals("WIREGUARD")) {
+                        g2.drawString("[OVPN] OpenVPN", x + 2, y + 24);
+                    } else if (tag.equals("WIREGUARD")) {
                         g2.setColor(new Color(80, 120, 140));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("🔒 WireGuard", x + 2, y + 24);
-                    }
-                    else if (tag.equals("L2TP")) {
+                        g2.drawString("[WG] WireGuard", x + 2, y + 24);
+                    } else if (tag.equals("L2TP")) {
                         g2.setColor(new Color(60, 140, 120));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("🔌 L2TP", x + 8, y + 24);
-                    }
-                    else if (tag.equals("SSTP")) {
+                        g2.drawString("[L2] L2TP", x + 8, y + 24);
+                    } else if (tag.equals("SSTP")) {
                         g2.setColor(new Color(40, 160, 100));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.BLACK);
-                        g2.drawString("🌐 SSTP", x + 8, y + 24);
-                    }
-
-// ===================== 新增：安全防护建筑渲染 =====================
-                    else if (tag.equals("DPI")) {
+                        g2.drawString("[SSTP] SSTP", x + 6, y + 24);
+                    } else if (tag.equals("DPI")) {
                         g2.setColor(new Color(180, 80, 80));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("🔍 DPI", x + 8, y + 24);
-                    }
-                    else if (tag.equals("WAF")) {
+                        g2.drawString("[DPI] DPI", x + 8, y + 24);
+                    } else if (tag.equals("WAF")) {
                         g2.setColor(new Color(200, 60, 60));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("🛡️ WAF", x + 6, y + 24);
-                    }
-                    else if (tag.equals("DDOS")) {
+                        g2.drawString("[WAF] WAF", x + 8, y + 24);
+                    } else if (tag.equals("DDOS")) {
                         g2.setColor(new Color(220, 40, 40));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("💥 DDoS防护", x + 2, y + 24);
-                    }
-                    else if (tag.equals("RATELIMIT")) {
+                        g2.drawString("[DDoS] DDoS防护", x + 2, y + 24);
+                    } else if (tag.equals("RATELIMIT")) {
                         g2.setColor(new Color(160, 100, 80));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("⏱️ 限速", x + 8, y + 24);
-                    }
-                    else if (tag.equals("ACL")) {
+                        g2.drawString("[RL] 限速", x + 8, y + 24);
+                    } else if (tag.equals("ACL")) {
                         g2.setColor(new Color(140, 120, 80));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("🚫 ACL", x + 8, y + 24);
-                    }
-
-// ===================== 新增：诊断工具建筑渲染 =====================
-                    else if (tag.equals("NETSTAT")) {
+                        g2.drawString("[ACL] ACL", x + 8, y + 24);
+                    } else if (tag.equals("NETSTAT")) {
                         g2.setColor(new Color(80, 140, 180));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("📊 netstat", x + 4, y + 24);
-                    }
-                    else if (tag.equals("IPCONFIG")) {
+                        g2.drawString("[STAT] netstat", x + 4, y + 24);
+                    } else if (tag.equals("IPCONFIG")) {
                         g2.setColor(new Color(60, 120, 160));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("⚙️ ipconfig", x + 2, y + 24);
-                    }
-                    else if (tag.equals("ROUTEPRINT")) {
+                        g2.drawString("[IPCFG] ipconfig", x + 2, y + 24);
+                    } else if (tag.equals("ROUTEPRINT")) {
                         g2.setColor(new Color(40, 100, 140));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("🗺️ route", x + 6, y + 24);
-                    }
-                    else if (tag.equals("NSLOOKUP")) {
+                        g2.drawString("[RT] route", x + 8, y + 24);
+                    } else if (tag.equals("NSLOOKUP")) {
                         g2.setColor(new Color(60, 100, 180));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("🔍 nslookup", x + 2, y + 24);
-                    }
-                    else if (tag.equals("ARPCMD")) {
+                        g2.drawString("[NS] nslookup", x + 4, y + 24);
+                    } else if (tag.equals("ARPCMD")) {
                         g2.setColor(new Color(40, 80, 160));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
-                        g2.drawString("📋 arp", x + 8, y + 24);
-                    }
-                    else if (tag.equals("CURL")) {
+                        g2.drawString("[ARP] arp", x + 8, y + 24);
+                    } else if (tag.equals("CURL")) {
                         g2.setColor(new Color(80, 180, 160));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.BLACK);
-                        g2.drawString("🌐 curl", x + 8, y + 24);
-                    }
-                    else if (tag.equals("WGET")) {
+                        g2.drawString("[CURL] curl", x + 6, y + 24);
+                    } else if (tag.equals("WGET")) {
                         g2.setColor(new Color(60, 160, 140));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.BLACK);
-                        g2.drawString("⬇️ wget", x + 6, y + 24);
-                    }
-                    else if (tag.equals("TELNET_CLIENT")) {
+                        g2.drawString("[WGET] wget", x + 6, y + 24);
+                    } else if (tag.equals("TELNET_CLIENT")) {
                         g2.setColor(new Color(40, 140, 120));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.BLACK);
-                        g2.drawString("💻 telnet", x + 4, y + 24);
+                        g2.drawString("[TEL] telnet", x + 6, y + 24);
+                    } else if (tag.equals("LLDP")) {
+                        g2.setColor(new Color(0, 180, 180));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.BLACK);
+                        g2.drawString("[LLDP] LLDP", x + 4, y + 24);
+                    } else if (tag.equals("STP")) {
+                        g2.setColor(new Color(0, 160, 160));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.BLACK);
+                        g2.drawString("[STP] STP", x + 8, y + 24);
+                    } else if (tag.equals("LACP")) {
+                        g2.setColor(new Color(0, 140, 140));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("[LACP] LACP", x + 4, y + 24);
+                    } else if (tag.equals("MPLS")) {
+                        g2.setColor(new Color(0, 120, 120));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("[MPLS] MPLS", x + 4, y + 24);
+                    } else if (tag.equals("PIM_SM")) {
+                        g2.setColor(new Color(180, 100, 180));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("[PIM] PIM-SM", x + 4, y + 24);
+                    } else if (tag.equals("MLD")) {
+                        g2.setColor(new Color(160, 80, 160));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("[MLD] MLD", x + 8, y + 24);
+                    } else if (tag.equals("DVMRP")) {
+                        g2.setColor(new Color(140, 60, 140));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("[DVMRP] DVMRP", x + 2, y + 24);
+                    } else if (tag.equals("NETFLOW")) {
+                        g2.setColor(new Color(80, 180, 200));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.BLACK);
+                        g2.drawString("[NF] NetFlow", x + 4, y + 24);
+                    } else if (tag.equals("SFLOW")) {
+                        g2.setColor(new Color(60, 160, 180));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.BLACK);
+                        g2.drawString("[SF] sFlow", x + 8, y + 24);
+                    } else if (tag.equals("IPFIX")) {
+                        g2.setColor(new Color(40, 140, 160));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("[IPFIX] IPFIX", x + 2, y + 24);
+                    } else if (tag.equals("ICMP_PING")) {
+                        g2.setColor(new Color(80, 200, 80));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.BLACK);
+                        g2.drawString("[PING] PING", x + 6, y + 24);
+                    } else if (tag.equals("ICMP_TRACE")) {
+                        g2.setColor(new Color(60, 180, 60));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.BLACK);
+                        g2.drawString("[TR] Traceroute", x + 2, y + 24);
+                    } else if (tag.equals("X509")) {
+                        g2.setColor(new Color(180, 180, 100));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.BLACK);
+                        g2.drawString("[X509] X.509", x + 4, y + 24);
+                    } else if (tag.equals("CRL")) {
+                        g2.setColor(new Color(160, 160, 80));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.BLACK);
+                        g2.drawString("[CRL] CRL", x + 8, y + 24);
+                    } else if (tag.equals("OCSP")) {
+                        g2.setColor(new Color(140, 140, 60));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.BLACK);
+                        g2.drawString("[OCSP] OCSP", x + 4, y + 24);
+                    } else if (tag.equals("PKI")) {
+                        g2.setColor(new Color(120, 120, 40));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("[PKI] PKI", x + 8, y + 24);
+                    } else if (tag.equals("DTLS")) {
+                        g2.setColor(new Color(100, 100, 20));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("[DTLS] DTLS", x + 4, y + 24);
+                    } else if (tag.equals("IPS")) {
+                        g2.setColor(new Color(200, 80, 100));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("[IPS] IPS", x + 8, y + 24);
+                    } else if (tag.equals("MAC_AUTH")) {
+                        g2.setColor(new Color(180, 100, 120));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("[MAC] MAC认证", x + 2, y + 24);
+                    } else if (tag.equals("DOT1X")) {
+                        g2.setColor(new Color(160, 120, 140));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("[1X] 802.1X", x + 4, y + 24);
+                    } else if (tag.equals("VLAN_TAG")) {
+                        g2.setColor(new Color(255, 140, 0));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.BLACK);
+                        g2.drawString("[VLAN] VLAN", x + 6, y + 24);
+                    } else if (tag.equals("TUNNEL_GRE")) {
+                        g2.setColor(new Color(100, 200, 100));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.BLACK);
+                        g2.drawString("[GRE] GRE", x + 8, y + 24);
+                    } else if (tag.equals("IGMP_MCAST")) {
+                        g2.setColor(new Color(0, 200, 200));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.BLACK);
+                        g2.drawString("[IGMP] IGMP", x + 4, y + 24);
+                    } else if (tag.equals("NDP_DISC")) {
+                        g2.setColor(new Color(0, 150, 150));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("[NDP] NDP", x + 8, y + 24);
+                    } else if (tag.equals("DNS_RECURSIVE")) {
+                        g2.setColor(new Color(0, 100, 150));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("[RDNS] 递归DNS", x + 2, y + 24);
                     }
-
                 }
             }
 
@@ -4793,12 +4835,12 @@ public class DataCartFactoryGame extends JFrame {
                 }
 
                 g2.setFont(new Font("微软雅黑", Font.BOLD, 10));
-                String direction = cart.isReturnTrip ? "◀ 回传" : (cart.waitInQueueTimer > 0 ? "⚠️ 排队" : "▶ 发送");
+                String direction = cart.isReturnTrip ? "[R] 回传" : (cart.waitInQueueTimer > 0 ? "[W] 排队" : "[S] 发送");
                 String nameTag = cart.cartType;
                 if (cart.isRetransmission && cart.cartType.equals("DATA")) nameTag = "重传-" + cart.sequenceNumber;
                 String label = String.format("%s %s TTL:%d", nameTag, direction, cart.ttl);
                 if (cart.domain != null && !cart.domain.isEmpty()) label += " [" + cart.domain + "]";
-                if (cart.resolvedIp != null) label += " → " + cart.resolvedIp;
+                if (cart.resolvedIp != null) label += " -> " + cart.resolvedIp;
 
                 g2.setColor(new Color(0, 0, 0, 180));
                 g2.fillRect(cx - 55, cy - 25, g2.getFontMetrics().stringWidth(label) + 8, 16);

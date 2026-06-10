@@ -23,12 +23,27 @@ public class AclFactory {
         ruleList.add(rule);
     }
 
+    // ✅ 修复：支持 0.0.0.0 = 任意IP，支持 null 匹配
     public boolean match(String sIp, String dIp, String proto) {
+        // 没有规则 = 默认允许
+        if (ruleList.isEmpty()) {
+            return true;
+        }
+
         for (AclRule r : ruleList) {
-            if (r.srcIp.equals(sIp) && r.dstIp.equals(dIp) && r.proto.equals(proto)) {
+            // 源IP匹配（支持任意）
+            boolean srcMatch = r.srcIp.equals("0.0.0.0") || r.srcIp.equals(sIp);
+            // 目标IP匹配（支持任意）
+            boolean dstMatch = r.dstIp.equals("0.0.0.0") || r.dstIp.equals(dIp);
+            // 协议匹配（支持任意）
+            boolean protoMatch = r.proto.equals("ANY") || r.proto.equals(proto);
+
+            if (srcMatch && dstMatch && protoMatch) {
                 return r.permit;
             }
         }
+
+        // 默认拒绝
         return false;
     }
 
