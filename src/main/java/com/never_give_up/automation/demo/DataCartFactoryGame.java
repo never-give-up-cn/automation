@@ -2482,9 +2482,8 @@ public class DataCartFactoryGame extends JFrame {
                 case 29: // 出站防火墙
                     if (srcIp != null && dstIp != null) {
                         // ✅ 修复：使用当前数据包的真实协议（TCP/UDP）
-                        String protoName = this.protocol;
                         boolean allowed = factoryManager.getFirewallFactory()
-                                .allowOutbound(srcIp, dstIp, srcPort, dstPort, protoName);
+                                .allowOutbound(srcIp, dstIp, srcPort, dstPort, protocol);
 
                         if (!allowed) {
                             appendToConsole("【🔥 防火墙】: 出站包被阻断 " + srcIp + " → " + dstIp);
@@ -2497,7 +2496,7 @@ public class DataCartFactoryGame extends JFrame {
                     break;
                 case 30: // 入站防火墙
                     if (isReturnTrip && dstIp != null && srcIp != null) {
-                        if (!factoryManager.getFirewallFactory().allowInbound(dstIp, srcIp, dstPort)) {
+                        if (!factoryManager.getFirewallFactory().allowInbound(srcIp, dstIp, srcPort, dstPort, Integer.parseInt(protocol))) {
                             appendToConsole("【🔥 防火墙】: 入站包被阻断 " + srcIp + " → " + dstIp);
                             this.isDropped = true;
                             return;

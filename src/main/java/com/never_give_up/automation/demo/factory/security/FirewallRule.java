@@ -78,12 +78,18 @@ public class FirewallRule implements Comparable<FirewallRule> {
     private boolean matchesIp(String pattern, String ip) {
         if (pattern == null || "*".equals(pattern)) return true;
         if (pattern.equals(ip)) return true;
-        // 支持 CIDR 格式如 "192.168.1.*" 或 "192.168.1.0/24"
-        if (pattern.endsWith("/*") || pattern.endsWith("/24")) {
-            String prefix = pattern.replace("/*", "").replace("/24", "");
+
+        // 针对 /24 网段，截取到最后一个点号 "."，即 "192.168.1."
+        if (pattern.endsWith("/24")) {
+            String prefix = pattern.substring(0, pattern.lastIndexOf(".") + 1);
+            return ip.startsWith(prefix); // "192.168.1.100".startsWith("192.168.1.") -> true
+        }
+
+        if (pattern.endsWith("/*")) {
+            String prefix = pattern.replace("/*", "");
             return ip.startsWith(prefix);
         }
-        // 支持如 "192.168.1." 前缀匹配
+
         if (pattern.endsWith(".")) {
             return ip.startsWith(pattern);
         }

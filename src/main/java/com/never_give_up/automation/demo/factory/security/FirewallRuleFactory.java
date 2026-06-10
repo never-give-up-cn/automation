@@ -94,33 +94,69 @@ public class FirewallRuleFactory implements INetworkFactory<FirewallRule> {
             rule.setDestinationIp(destinationIp);
             rule.setDestinationPortRange(destinationPortRange);
             rule.setDescription(description);
+            rule.setEnabled(true);
             return rule;
         }
     }
 
-    // ===================== CIDR 匹配工具 =====================
     public static boolean ipMatchesCidr(String ip, String cidr) {
-        if (ip == null || cidr == null || cidr.equals("*")) return true;
-        if (!cidr.contains("/")) return ip.equals(cidr);
+        // 添加 null 检查
+        if (ip == null || cidr == null) {
+            return false;
+        }
+        if (cidr.equals("*")) {
+            return true;
+        }
+        // 纯IP相等匹配
+        if (!cidr.contains("/")) {
+            return ip.equals(cidr);
+        }
         try {
             String[] parts = cidr.split("/");
             String network = parts[0];
-            int prefix = Integer.parseInt(parts[1]);
-            long ipLong = ipToLong(ip);
-            long networkLong = ipToLong(network);
-            long mask = (0xFFFFFFFF00000000L >> prefix) & 0xFFFFFFFFL;
-            return (ipLong & mask) == (networkLong & mask);
+            int prefixLen = Integer.parseInt(parts[1]);
+
+            long ipNum = ipToLong(ip);
+            long netNum = ipToLong(network);
+
+            long mask;
+            if (prefixLen <= 0) {
+                mask = 0L;
+            } else if (prefixLen >= 32) {
+                mask = 0xFFFFFFFFL;
+            } else {
+                mask = (0xFFFFFFFFL << (32 - prefixLen)) & 0xFFFFFFFFL;
+            }
+
+            return (ipNum & mask) == (netNum & mask);
         } catch (Exception e) {
             return ip.equals(cidr);
         }
     }
 
     public static long ipToLong(String ip) {
-        String[] o = ip.split("\\.");
-        return (Long.parseLong(o[0]) << 24)
-                | (Long.parseLong(o[1]) << 16)
-                | (Long.parseLong(o[2]) << 8)
-                | Long.parseLong(o[3]);
+        String[] octets = ip.split("\\.");
+        return (Long.parseLong(octets[0]) << 24)
+                | (Long.parseLong(octets[1]) << 16)
+                | (Long.parseLong(octets[2]) << 8)
+                | Long.parseLong(octets[3]);
+    }
+
+    // ===================== 端口匹配 =====================
+    public static boolean portMatches(int port, String portRange) {
+        if (portRange == null || portRange.equals("*")) return true;
+        try {
+            if (portRange.contains("-")) {
+                String[] parts = portRange.split("-");
+                int start = Integer.parseInt(parts[0].trim());
+                int end = Integer.parseInt(parts[1].trim());
+                return port >= start && port <= end;
+            } else {
+                return port == Integer.parseInt(portRange.trim());
+            }
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     // ===================== 协议匹配 =====================
@@ -131,6 +167,7 @@ public class FirewallRuleFactory implements INetworkFactory<FirewallRule> {
             case UDP -> protoNumber == 17;
             case ICMP -> protoNumber == 1;
             case DNS -> protoNumber == 17 || protoNumber == 6;
+            case HTTP, HTTPS -> protoNumber == 6;
             default -> false;
         };
     }
@@ -145,26 +182,51 @@ public class FirewallRuleFactory implements INetworkFactory<FirewallRule> {
     }
 
     // ===================== 初始化默认规则 =====================
+    // 在 FirewallRuleFactory 的 initDefaultRules() 方法中修改
+    // ===================== 初始化默认规则 =====================
     public void initDefaultRules() {
         reset();
 
-        // 🔥 允许内网 192.168.1.0/24 全部出站（任何协议）
+        // 规则1: 允许所有 UDP DNS 查询（最高优先级）
         createRule(new RuleBuilder()
-                .name("Allow LAN 192.168.1.0/24 Outbound")
+                .name("Allow DNS Queries")
+                .priority(5)  // 高优先级
+                .action(Action.ALLOW)
+                .direction(Direction.OUTBOUND)
+                .protocol(Protocol.UDP)
+                .destinationPort("53")
+                .description("放行所有DNS查询"));
+
+        // 规则2: 允许内网 192.168.1.0/24 全部出站
+        createRule(new RuleBuilder()
+                .name("Allow LAN Outbound")
                 .priority(10)
                 .action(Action.ALLOW)
                 .direction(Direction.OUTBOUND)
                 .protocol(Protocol.ANY)
                 .sourceIp("192.168.1.0/24")
-                .description("内网全部放行"));
+                .destinationIp("*")
+                .sourcePort("*")
+                .destinationPort("*")
+                .description("内网全部放行出站"));
 
-        // 默认拒绝
+        // 规则3: 允许 ICMP (Ping)
+        createRule(new RuleBuilder()
+                .name("Allow ICMP")
+                .priority(8)
+                .action(Action.ALLOW)
+                .direction(Direction.BOTH)
+                .protocol(Protocol.ICMP)
+                .description("放行ICMP"));
+
+        // 规则4: 默认拒绝所有（最低优先级）
         createRule(new RuleBuilder()
                 .name("Default Deny All")
                 .priority(9999)
                 .action(Action.DENY)
                 .direction(Direction.BOTH)
-                .protocol(Protocol.ANY));
+                .protocol(Protocol.ANY)
+                .description("默认拒绝所有流量"));
     }
 
     // ===================== 核心判断 =====================
@@ -177,23 +239,48 @@ public class FirewallRuleFactory implements INetworkFactory<FirewallRule> {
         return false;
     }
 
-    // 🔥 正确匹配方法（已修复 getSourceIp）
+    // 完整规则匹配
     private boolean ruleMatches(FirewallRule rule, FiveTuple tuple, Direction dir) {
+        System.out.println("===== 开始匹配规则: " + rule.getName() + " =====");
+
+        // 方向
         if (rule.getDirection() != Direction.BOTH && rule.getDirection() != dir) {
+            System.out.println("方向不匹配，跳过");
             return false;
         }
+        // 协议
         if (!protocolMatches(tuple.getProtocol(), rule.getProtocol())) {
+            System.out.println("协议不匹配，跳过");
             return false;
         }
-        // ✅ 这里已修复：getSourceIp()
+        // 源IP
         if (!ipMatchesCidr(tuple.getSourceIp(), rule.getSourceIp())) {
+            System.out.println("源IP不匹配，跳过");
             return false;
         }
+        // 目标IP
+        if (!ipMatchesCidr(tuple.getDestinationIp(), rule.getDestinationIp())) {
+            System.out.println("目标IP不匹配，跳过");
+            return false;
+        }
+        // 源端口
+        if (!portMatches(tuple.getSourcePort(), rule.getSourcePortRange())) {
+            System.out.println("源端口不匹配，跳过");
+            return false;
+        }
+        // 目标端口
+        if (!portMatches(tuple.getDestinationPort(), rule.getDestinationPortRange())) {
+            System.out.println("目标端口不匹配，跳过");
+            return false;
+        }
+
+        System.out.println("✅ 规则完全命中");
         return true;
     }
 
-    // ===================== 快捷调用方法 =====================
+    // ===================== 快捷出站判断 =====================
     public boolean allowOutbound(String srcIp, String dstIp, int srcPort, int dstPort, String protocolName) {
+        System.out.println("开始判断出站规则"+srcIp+" → "+dstIp+" "+srcPort+" → "+dstPort+" "+protocolName);
         int proto = switch (protocolName.toUpperCase()) {
             case "TCP" -> 6;
             case "UDP" -> 17;
@@ -207,10 +294,14 @@ public class FirewallRuleFactory implements INetworkFactory<FirewallRule> {
         return shouldAllow(new FiveTuple(srcIp, dstIp, srcPort, dstPort, protocol), Direction.OUTBOUND);
     }
 
-    // ===================== 固定模板 =====================
+    public boolean allowInbound(String srcIp, String dstIp, int srcPort, int dstPort, int protocol) {
+        return shouldAllow(new FiveTuple(srcIp, dstIp, srcPort, dstPort, protocol), Direction.INBOUND);
+    }
+
+    // ===================== 工厂接口实现 =====================
     @Override
     public FirewallRule produce() {
-        return new RuleBuilder().build("");
+        return new RuleBuilder().build("TEMPLATE-" + UUID.randomUUID());
     }
 
     @Override
@@ -220,6 +311,7 @@ public class FirewallRuleFactory implements INetworkFactory<FirewallRule> {
         ruleCounter = 0;
     }
 
+    // 获取启用的规则（按优先级排序）
     public List<FirewallRule> getEnabledRules() {
         return createdRules.stream()
                 .filter(FirewallRule::isEnabled)
@@ -227,88 +319,37 @@ public class FirewallRuleFactory implements INetworkFactory<FirewallRule> {
                 .toList();
     }
 
-    // 以下无用方法保留编译不报错
-    public FirewallRule createAllowAllRule() {
-        return new RuleBuilder().build("");
-    }
-
-    public FirewallRule createDenyAllRule() {
-        return new RuleBuilder().build("");
-    }
-
-    public FirewallRule createAllowTcpRule(String destIp, int destPort) {
-        return new RuleBuilder().build("");
-    }
-
-    public FirewallRule createDenyIpRule(String sourceIp) {
-        return new RuleBuilder().build("");
-    }
-
-    public FirewallRule createAllowPortRangeRule(String destIp, int startPort, int endPort) {
-        return new RuleBuilder().build("");
-    }
-
-    public FirewallRule createAllowHttpRule(String destIp) {
-        return new RuleBuilder().build("");
-    }
-
-    public FirewallRule createAllowHttpsRule(String destIp) {
-        return new RuleBuilder().build("");
-    }
-
-    public FirewallRule createAllowDnsRule(String destIp) {
-        return new RuleBuilder().build("");
-    }
-
+    // ===================== 规则管理（已实现） =====================
     public void enableRule(String ruleId) {
+        Optional.ofNullable(ruleMap.get(ruleId)).ifPresent(rule -> rule.setEnabled(true));
     }
 
     public void disableRule(String ruleId) {
+        Optional.ofNullable(ruleMap.get(ruleId)).ifPresent(rule -> rule.setEnabled(false));
     }
 
     public void removeRule(String ruleId) {
+        Optional.ofNullable(ruleMap.remove(ruleId)).ifPresent(createdRules::remove);
     }
 
     public FirewallRule getRule(String ruleId) {
-        return null;
+        return ruleMap.get(ruleId);
     }
 
     public List<FirewallRule> getAllRules() {
-        return List.of();
+        return new ArrayList<>(createdRules);
     }
 
     public List<FirewallRule> getRulesByAction(Action action) {
-        return List.of();
+        return createdRules.stream()
+                .filter(rule -> rule.getAction() == action)
+                .toList();
     }
 
     public Optional<FirewallRule> findMatchingRule(FiveTuple fiveTuple, Direction direction) {
-        return Optional.empty();
-    }
-
-    public boolean allowOutbound(String srcIp, String dstIp, int srcPort) {
-        return false;
-    }
-
-    public boolean allowInbound(String dstIp, String srcIp, int dstPort) {
-        return false;
-    }
-
-    public boolean allowInbound(String srcIp, String dstIp, int srcPort, int dstPort, int protocol) {
-        return false;
-    }
-
-    public boolean allowInbound(String srcIp, String dstIp, int srcPort, int dstPort, String protocolName) {
-        return false;
-    }
-
-    public void addAllowRule(String srcIp, String dstIp, int port, Direction direction) {
-    }
-
-    public void addDenyRule(String srcIp, String dstIp, int port, Direction direction) {
-    }
-
-    private int protocolNameToInt(String protocolName) {
-        return 0;
+        return getEnabledRules().stream()
+                .filter(rule -> ruleMatches(rule, fiveTuple, direction))
+                .findFirst();
     }
 
     public int getRuleCount() {

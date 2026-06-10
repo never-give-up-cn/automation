@@ -103,7 +103,7 @@ public class FactoryManager {
         linkFactory.reset();
         subnetFactory.reset();
         queueFactory.reset();
-        firewallFactory.reset();
+//        firewallFactory.reset();
     }
 
     // Getters for new factories
