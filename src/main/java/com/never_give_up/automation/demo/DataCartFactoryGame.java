@@ -2177,10 +2177,6 @@ public class DataCartFactoryGame extends JFrame {
     }
 
     private void resetTcpSession() {
-        // 重置 DNS 相关状态
-        isDnsResolving = false;
-        isDnsResolved = false;
-        resolvedServerIp = null;
         dnsRetryCount = 0;
         lastDnsQueryTime = 0;
         currentTcpState = TcpState.CLOSED;
