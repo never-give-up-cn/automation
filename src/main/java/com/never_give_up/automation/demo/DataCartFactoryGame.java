@@ -1951,6 +1951,13 @@ public class DataCartFactoryGame extends JFrame {
                 this.stage = 1;  // 从 DNS 客户端开始
             }
         }
+        private String getSrcIp() {
+            return srcIp != null ? srcIp : (pcIpAddress != null ? pcIpAddress : "192.168.1.100");
+        }
+
+        private String getDstIp() {
+            return dstIp != null ? dstIp : (resolvedServerIp != null ? resolvedServerIp : "10.0.0.1");
+        }
 
         public boolean isControlFrame(String type) {
             return type.equals("SYN") || type.equals("SYN_ACK") || type.equals("ACK_PC") || type.equals("FIN_PC") || type.equals("FIN_ACK_SRV") || type.equals("FIN_SRV") || type.equals("DATA_ACK") || type.equals("LAST_ACK_PC") || type.equals("ZWP") || type.equals("DNS_QUERY") || type.equals("DNS_RESPONSE") || type.equals("DHCP_DISCOVER") || type.equals("DHCP_OFFER") || type.equals("DHCP_REQUEST") || type.equals("DHCP_ACK");
@@ -2248,13 +2255,15 @@ public class DataCartFactoryGame extends JFrame {
 
             switch (stage) {
                 // ========== 应用层 ==========
-                case 5: // 应用层
+                case 5:
                     if (!hasApp && cartType.equals("HTTP_GET")) {
                         hasApp = true;
+                        // 使用 factoryManager 的 httpFactory
                         httpBody = factoryManager.getHttpFactory().createGetRequest("/index.html").getBody();
                         appendToConsole("【📦 应用层】: HTTP GET 请求封装");
                     } else if (!hasApp && cartType.equals("TLS_CLIENT_HELLO")) {
                         hasApp = true;
+                        // 使用 factoryManager 的 tlsFactory
                         httpBody = factoryManager.getTlsFactory().createClientHello(new byte[32]).getTlsMessageType();
                         appendToConsole("【🔒 应用层】: TLS Client Hello 封装");
                     } else if (!hasApp && cartType.equals("UDP_DATA")) {
@@ -2309,8 +2318,8 @@ public class DataCartFactoryGame extends JFrame {
                 case 12: // CHK
                     if (!c_CHK) {
                         c_CHK = true;
-                        // 创建 TCP 段数据用于校验和计算
-                        byte[] tcpData = new byte[20]; // 模拟 TCP 头
+                        byte[] tcpData = new byte[20];
+                        // 使用 factoryManager 的 checksumFactory
                         int checksum = factoryManager.getChecksumFactory().calculateTcpChecksum(
                                 tcpData, getSrcIp(), getDstIp());
                         appendToConsole("【🔥 校验和】: 0x" + Integer.toHexString(checksum));
@@ -2412,18 +2421,21 @@ public class DataCartFactoryGame extends JFrame {
                     break;
 
                 // ========== 五元组和会话（新增加） ==========
-                case 22: // 五元组提取
+                case 22: // 五元组
                     if (!hasFiveTuple) {
                         hasFiveTuple = true;
                         protocol = useUdp ? "UDP" : "TCP";
+                        // 使用 factoryManager 的 fiveTupleFactory
                         factoryManager.getFiveTupleFactory().extract(srcIp, dstIp, srcPort, dstPort, protocol);
                         appendToConsole(String.format("【🔢 五元组】: %s %s:%d → %s:%d",
                                 protocol, srcIp, srcPort, dstIp, dstPort));
                     }
                     break;
+
                 case 23: // 会话管理
                     if (!hasSession) {
                         hasSession = true;
+                        // 使用 factoryManager 的 sessionFactory
                         factoryManager.getSessionFactory().createSession(srcIp, dstIp, srcPort, dstPort);
                         appendToConsole("【💬 会话】: 创建会话 " + srcIp + ":" + srcPort);
                     }
@@ -2466,6 +2478,7 @@ public class DataCartFactoryGame extends JFrame {
                     break;
                 // 修改 case 27 中的带宽控制调用
                 case 27: // 带宽控制
+                    // 使用 factoryManager 的 bandwidthFactory
                     if (factoryManager.getBandwidthFactory() != null &&
                             factoryManager.getBandwidthFactory().shouldDropPacket()) {
                         appendToConsole("【💥 带宽限制】: 公网丢包，数据包被丢弃");
@@ -2481,10 +2494,9 @@ public class DataCartFactoryGame extends JFrame {
                 // ========== 防火墙 ==========
                 case 29: // 出站防火墙
                     if (srcIp != null && dstIp != null) {
-                        // ✅ 修复：使用当前数据包的真实协议（TCP/UDP）
+                        // 使用 factoryManager 的 firewallFactory
                         boolean allowed = factoryManager.getFirewallFactory()
                                 .allowOutbound(srcIp, dstIp, srcPort, dstPort, protocol);
-
                         if (!allowed) {
                             appendToConsole("【🔥 防火墙】: 出站包被阻断 " + srcIp + " → " + dstIp);
                             this.isDropped = true;
@@ -2540,6 +2552,7 @@ public class DataCartFactoryGame extends JFrame {
                         appendToConsole("【📋 入队】: 数据包进入队列");
                     }
                     break;
+
                 case 35: // 队列出队
                     if (hasQueue && factoryManager.getQueueFactory() != null) {
                         factoryManager.getQueueFactory().dequeue();
@@ -2547,8 +2560,10 @@ public class DataCartFactoryGame extends JFrame {
                         hasQueue = false;
                     }
                     break;
+
                 case 36: // 拥塞控制
                     if (cartType.equals("DATA") && !useUdp) {
+                        // 使用 factoryManager 的 congestionControl
                         factoryManager.getCongestionControl().congestionAvoidance(cwnd);
                         appendToConsole("【🐌 拥塞控制】: 调整窗口");
                     }
