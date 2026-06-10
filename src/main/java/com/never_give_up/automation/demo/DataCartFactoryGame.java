@@ -3,8 +3,22 @@ package com.never_give_up.automation.demo;
 import com.never_give_up.automation.demo.adapter.FactoryManager;
 import com.never_give_up.automation.demo.adapter.PacketAdapter;
 import com.never_give_up.automation.demo.core.ProtocolConst;
+import com.never_give_up.automation.demo.factory.application.Http23PacketFactory;
+import com.never_give_up.automation.demo.factory.application.NtpPacketFactory;
+import com.never_give_up.automation.demo.factory.application.SnmpPacketFactory;
+import com.never_give_up.automation.demo.factory.attack.TransportAttackFactory;
 import com.never_give_up.automation.demo.factory.function.NatMappingFactory;
 import com.never_give_up.automation.demo.factory.link.LlcHeader;
+import com.never_give_up.automation.demo.factory.link.MacSecFactory;
+import com.never_give_up.automation.demo.factory.link.PppoeFactory;
+import com.never_give_up.automation.demo.factory.physical.BitStreamFactory;
+import com.never_give_up.automation.demo.factory.physical.PhysicalChannelFactory;
+import com.never_give_up.automation.demo.factory.qos.QosTrafficFactory;
+import com.never_give_up.automation.demo.factory.route.BgpPacketFactory;
+import com.never_give_up.automation.demo.factory.route.OspfPacketFactory;
+import com.never_give_up.automation.demo.factory.security.ipsec.IpsecFactory;
+import com.never_give_up.automation.demo.factory.transition.Nat64Factory;
+import com.never_give_up.automation.demo.factory.transport.TcpReassemblyFactory;
 import com.never_give_up.automation.demo.model.HttpPacket;
 import com.never_give_up.automation.demo.model.IpPacket;
 import com.never_give_up.automation.demo.model.TcpPacket;
@@ -100,6 +114,21 @@ public class DataCartFactoryGame extends JFrame {
 
     private FactoryManager factoryManager;
     private PacketAdapter packetAdapter;
+    // ===================== 新增 14 个工厂实例 =====================
+    private BitStreamFactory bitStreamFactory;
+    private PhysicalChannelFactory physicalChannelFactory;
+    private PppoeFactory pppoeFactory;
+    private MacSecFactory macSecFactory;
+    private OspfPacketFactory ospfPacketFactory;
+    private BgpPacketFactory bgpPacketFactory;
+    private QosTrafficFactory qosTrafficFactory;
+    private Nat64Factory nat64Factory;
+    private TcpReassemblyFactory tcpReassemblyFactory;
+    private TransportAttackFactory transportAttackFactory;
+    private NtpPacketFactory ntpPacketFactory;
+    private SnmpPacketFactory snmpPacketFactory;
+    private Http23PacketFactory http23PacketFactory;
+    private IpsecFactory ipsecFactory;
 
     // ========== 新增：各层工厂实例 ==========
     private com.never_give_up.automation.demo.factory.transport.TcpPacketFactory tcpFactory;
@@ -255,6 +284,21 @@ public class DataCartFactoryGame extends JFrame {
         ipFactory = new com.never_give_up.automation.demo.factory.network.IpPacketFactory();
         ethernetFactory = new com.never_give_up.automation.demo.factory.link.EthernetFactory();
         portFactory = new com.never_give_up.automation.demo.factory.address.PortFactory();
+        // ===================== 初始化 14 个新工厂 =====================
+        this.bitStreamFactory = factoryManager.getBitStreamFactory();
+        this.physicalChannelFactory = factoryManager.getPhysicalChannelFactory();
+        this.pppoeFactory = factoryManager.getPppoeFactory();
+        this.macSecFactory = factoryManager.getMacSecFactory();
+        this.ospfPacketFactory = factoryManager.getOspfPacketFactory();
+        this.bgpPacketFactory = factoryManager.getBgpPacketFactory();
+        this.qosTrafficFactory = factoryManager.getQosTrafficFactory();
+        this.nat64Factory = factoryManager.getNat64Factory();
+        this.tcpReassemblyFactory = factoryManager.getTcpReassemblyFactory();
+        this.transportAttackFactory = factoryManager.getTransportAttackFactory();
+        this.ntpPacketFactory = factoryManager.getNtpPacketFactory();
+        this.snmpPacketFactory = factoryManager.getSnmpPacketFactory();
+        this.http23PacketFactory = factoryManager.getHttp23PacketFactory();
+        this.ipsecFactory = factoryManager.getIpsecFactory();
 
         stateTimerWatchdog = System.currentTimeMillis();
         try {
@@ -562,7 +606,7 @@ public class DataCartFactoryGame extends JFrame {
                 {"【12. 队列与缓冲】", "Q_IN", "📋 入队", "Q_OUT", "📋 出队", "Q_DROP", "📋 丢包器"},
                 {"【13. 拥塞控制】", "CC_SLOW", "🐢 慢启动", "CC_AVOID", "🐌 拥塞避免", "CC_FAST", "⚡ 快速重传"},
                 {"【14. 网络设备】", "SWITCH", "🔌 交换机", "HUB", "🔌 集线器", "BRIDGE", "🌉 网桥"},
-                {"【15. 子网与链路】", "SUBNET_A", "🌐 子网A", "SUBNET_B", "🌐 子网B", "LINK_UP", "🔗 上行链路", "LINK_DOWN", "🔗 下行链路"},{"【16. 高级协议选项 Stage 46-61】",
+                {"【15. 子网与链路】", "SUBNET_A", "🌐 子网A", "SUBNET_B", "🌐 子网B", "LINK_UP", "🔗 上行链路", "LINK_DOWN", "🔗 下行链路"}, {"【16. 高级协议选项 Stage 46-61】",
                 "TCP_OPTION", "🔧 TCP 选项(46)",
                 "IP_OPTION", "🔧 IP 选项(47)",
                 "ETH_PADDING", "📦 以太网填充(48)",
@@ -578,7 +622,26 @@ public class DataCartFactoryGame extends JFrame {
                 "DNS_RECURSIVE", "🌐 DNS递归(58)",
                 "DHCP_FULL", "📡 DHCP完整(59)",
                 "TLS_HANDSHAKE", "🔒 TLS握手(60)",
-                "SERIALIZE", "💾 序列化(61)"},};
+                "SERIALIZE", "💾 序列化(61)"}, {"【20. 物理层】",
+                "BIT_STREAM", "📡 比特流生成(62)",
+                "PHY_CHANNEL", "📡 物理信道(63)"},
+                {"【21. 链路层增强】",
+                        "PPPOE", "🔌 PPPoE封装(64)",
+                        "MACSEC", "🔐 MACsec加密(65)"},
+                {"【22. 高级路由协议】",
+                        "OSPF", "🌐 OSPF路由(66)",
+                        "BGP", "🌐 BGP路由(67)"},
+                {"【23. 服务质量与转换】",
+                        "QOS", "🎯 QoS标记(68)",
+                        "NAT64", "🌍 NAT64转换(69)"},
+                {"【24. 传输层增强与安全】",
+                        "TCP_REASSEMBLY", "🔧 TCP重组(70)",
+                        "ATTACK", "⚠️ 攻击检测(71)",
+                        "IPSEC", "🔒 IPsec安全(75)"},
+                {"【25. 应用层协议】",
+                        "NTP", "🕐 NTP时间同步(72)",
+                        "SNMP", "📊 SNMP管理(73)",
+                        "HTTP23", "📡 HTTP/2.3协议(74)"},};
 
         for (String[] cat : categories) {
             JLabel title = new JLabel(cat[0]);
@@ -743,6 +806,23 @@ public class DataCartFactoryGame extends JFrame {
         buildingLayout[newRow][18] = "DHCP_FULL";      // DHCP 完整
         buildingLayout[newRow][19] = "TLS_HANDSHAKE";  // TLS 握手
         buildingLayout[newRow][20] = "SERIALIZE";      // 序列化
+
+        // ===================== 新增 14 个工厂建筑 (stage 62-75) =====================
+        int newRow2 = MAP_ROWS / 2 - 10;
+        buildingLayout[newRow2][2] = "BIT_STREAM";       // 比特流生成器
+        buildingLayout[newRow2][3] = "PHY_CHANNEL";      // 物理信道
+        buildingLayout[newRow2][4] = "PPPOE";            // PPPoE 封装
+        buildingLayout[newRow2][5] = "MACSEC";           // MACsec 加密
+        buildingLayout[newRow2][6] = "OSPF";             // OSPF 路由
+        buildingLayout[newRow2][7] = "BGP";              // BGP 路由
+        buildingLayout[newRow2][8] = "QOS";              // QoS 流量标记
+        buildingLayout[newRow2][9] = "NAT64";            // NAT64 转换
+        buildingLayout[newRow2][10] = "TCP_REASSEMBLY";  // TCP 重组
+        buildingLayout[newRow2][11] = "ATTACK";          // 攻击检测
+        buildingLayout[newRow2][12] = "NTP";             // NTP 时间同步
+        buildingLayout[newRow2][13] = "SNMP";            // SNMP 管理
+        buildingLayout[newRow2][14] = "HTTP23";          // HTTP/2.3
+        buildingLayout[newRow2][15] = "IPSEC";           // IPsec 安全
     }
 
     private void sendPing() {
@@ -1917,6 +1997,37 @@ public class DataCartFactoryGame extends JFrame {
 
     @Data
     private class DataCart {
+        // ===================== 新增 14 个工厂相关字段 =====================
+        private boolean hasBitStream = false;      // 比特流已生成
+        private boolean hasPhysicalEncoding = false; // 物理层编码已完成
+        private boolean hasPppoe = false;          // PPPoE 已封装
+        private boolean hasMacSec = false;         // MACsec 已加密
+        private boolean hasOspf = false;           // OSPF 已处理
+        private boolean hasBgp = false;            // BGP 已处理
+        private boolean hasQos = false;            // QoS 已标记
+        private boolean hasNat64 = false;          // NAT64 已转换
+        private boolean isReassembled = false;     // TCP 重组已完成
+        private boolean isAttackPacket = false;    // 是否为攻击包
+        private boolean hasNtp = false;            // NTP 已处理
+        private boolean hasSnmp = false;           // SNMP 已处理
+        private boolean hasHttp23 = false;         // HTTP/2.3 已处理
+        private boolean hasIpsec = false;          // IPsec 已加密
+
+        // 新工厂实例引用
+        private transient BitStreamFactory bitStreamFactory;
+        private transient PhysicalChannelFactory physicalChannelFactory;
+        private transient PppoeFactory pppoeFactory;
+        private transient MacSecFactory macSecFactory;
+        private transient OspfPacketFactory ospfPacketFactory;
+        private transient BgpPacketFactory bgpPacketFactory;
+        private transient QosTrafficFactory qosTrafficFactory;
+        private transient Nat64Factory nat64Factory;
+        private transient TcpReassemblyFactory tcpReassemblyFactory;
+        private transient TransportAttackFactory transportAttackFactory;
+        private transient NtpPacketFactory ntpPacketFactory;
+        private transient SnmpPacketFactory snmpPacketFactory;
+        private transient Http23PacketFactory http23PacketFactory;
+        private transient IpsecFactory ipsecFactory;
         // === 新增工厂相关字段 ===
         private boolean hasIpOption = false;      // IP 选项是否已添加
         private boolean hasTcpOption = false;     // TCP 选项是否已添加
@@ -2030,6 +2141,23 @@ public class DataCartFactoryGame extends JFrame {
                 this.stage = 5;  // 从应用层开始
             } else {
                 this.stage = 1;  // 从 DNS 客户端开始
+            }
+// ===================== 初始化 14 个新工厂引用 =====================
+            if (factoryManager != null) {
+                this.bitStreamFactory = factoryManager.getBitStreamFactory();
+                this.physicalChannelFactory = factoryManager.getPhysicalChannelFactory();
+                this.pppoeFactory = factoryManager.getPppoeFactory();
+                this.macSecFactory = factoryManager.getMacSecFactory();
+                this.ospfPacketFactory = factoryManager.getOspfPacketFactory();
+                this.bgpPacketFactory = factoryManager.getBgpPacketFactory();
+                this.qosTrafficFactory = factoryManager.getQosTrafficFactory();
+                this.nat64Factory = factoryManager.getNat64Factory();
+                this.tcpReassemblyFactory = factoryManager.getTcpReassemblyFactory();
+                this.transportAttackFactory = factoryManager.getTransportAttackFactory();
+                this.ntpPacketFactory = factoryManager.getNtpPacketFactory();
+                this.snmpPacketFactory = factoryManager.getSnmpPacketFactory();
+                this.http23PacketFactory = factoryManager.getHttp23PacketFactory();
+                this.ipsecFactory = factoryManager.getIpsecFactory();
             }
         }
 
@@ -2146,8 +2274,8 @@ public class DataCartFactoryGame extends JFrame {
                         }
                     }
                     if (!isDHCP()) {
-                        // 增加 stage 上限到 65
-                        if (stage < 65) {
+                        // 增加 stage 上限到 75
+                        if (stage < 75) {
                             timer = 1;
                             stage++;
                         } else {
@@ -2473,6 +2601,49 @@ public class DataCartFactoryGame extends JFrame {
                 case 61:
                     tag = "SERIALIZE";
                     break;      // 序列化
+                // 在 switch 语句中添加新的 case
+                case 62:
+                    tag = "BIT_STREAM";
+                    break;      // 比特流
+                case 63:
+                    tag = "PHY_CHANNEL";
+                    break;     // 物理信道
+                case 64:
+                    tag = "PPPOE";
+                    break;           // PPPoE
+                case 65:
+                    tag = "MACSEC";
+                    break;          // MACsec
+                case 66:
+                    tag = "OSPF";
+                    break;            // OSPF
+                case 67:
+                    tag = "BGP";
+                    break;             // BGP
+                case 68:
+                    tag = "QOS";
+                    break;             // QoS
+                case 69:
+                    tag = "NAT64";
+                    break;           // NAT64
+                case 70:
+                    tag = "TCP_REASSEMBLY";
+                    break;  // TCP重组
+                case 71:
+                    tag = "ATTACK";
+                    break;          // 攻击检测
+                case 72:
+                    tag = "NTP";
+                    break;             // NTP
+                case 73:
+                    tag = "SNMP";
+                    break;            // SNMP
+                case 74:
+                    tag = "HTTP23";
+                    break;          // HTTP/2.3
+                case 75:
+                    tag = "IPSEC";
+                    break;           // IPsec
 
                 default:
                     return null;
@@ -3013,6 +3184,142 @@ public class DataCartFactoryGame extends JFrame {
                         appendToConsole(String.format("【💾 序列化】: 数据包已序列化 (%d字节)", serialized.length));
                     }
                     break;
+                // ===================== 新增 14 个工厂处理 stage 62-75 =====================
+
+                case 62: // 物理层 - 比特流生成
+                    if (!hasBitStream && bitStreamFactory != null) {
+                        hasBitStream = true;
+                        byte[] bitStream = bitStreamFactory.toBitStream(ethernetFrameData != null ? ethernetFrameData : new byte[64]);
+                        appendToConsole(String.format("【📡 比特流】: 生成 %d 字节物理层比特流", bitStream.length));
+                    }
+                    break;
+
+                case 63: // 物理层 - 信道噪声模拟
+                    if (!hasPhysicalEncoding && physicalChannelFactory != null) {
+                        hasPhysicalEncoding = true;
+                        double ber = physicalChannelFactory.getBER();
+                        int jitter = physicalChannelFactory.getJitterBufferSize();
+                        long delay = physicalChannelFactory.getPropagationDelayNano(1000);
+                        appendToConsole(String.format("【📡 物理信道】: BER=%.1e, Jitter=%d, 传播时延=%dns", ber, jitter, delay));
+                    }
+                    break;
+
+                case 64: // PPPoE 封装
+                    if (!hasPppoe && pppoeFactory != null && !isReturnTrip) {
+                        hasPppoe = true;
+                        byte[] padi = pppoeFactory.buildPADI(100);
+                        byte[] lcp = pppoeFactory.buildLCPRequest();
+                        appendToConsole(String.format("【🔌 PPPoE】: PADI + LCP 请求 (%d+%d字节)", padi.length, lcp.length));
+                    }
+                    break;
+
+                case 65: // MACsec 安全加密
+                    if (!hasMacSec && macSecFactory != null && isReturnTrip) {
+                        hasMacSec = true;
+                        long sci = 0x001A2B3C4D5EL;
+                        int pn = 1;
+                        byte[] secTag = macSecFactory.buildSecTAG(sci, pn);
+                        byte[] icv = macSecFactory.buildICV();
+                        appendToConsole(String.format("【🔐 MACsec】: SecTAG + ICV (%d+%d字节)", secTag.length, icv.length));
+                    }
+                    break;
+
+                case 66: // OSPF 路由协议
+                    if (!hasOspf && ospfPacketFactory != null && cartType.equals("OSPF_HELLO")) {
+                        hasOspf = true;
+                        int routerId = ipToInt(getSrcIp());
+                        int areaId = 0;
+                        byte[] ospfHello = ospfPacketFactory.buildHello(routerId, areaId);
+                        appendToConsole(String.format("【🌐 OSPF】: Hello 报文 (RouterID=%d)", routerId));
+                    }
+                    break;
+
+                case 67: // BGP 路由协议
+                    if (!hasBgp && bgpPacketFactory != null && cartType.equals("BGP_OPEN")) {
+                        hasBgp = true;
+                        int myAs = 64512;
+                        byte[] bgpOpen = bgpPacketFactory.buildOpen(myAs);
+                        byte[] bgpUpdate = bgpPacketFactory.buildUpdate();
+                        appendToConsole(String.format("【🌐 BGP】: OPEN + UPDATE (AS=%d)", myAs));
+                    }
+                    break;
+
+                case 68: // QoS 流量标记
+                    if (!hasQos && qosTrafficFactory != null) {
+                        hasQos = true;
+                        int dscp = 46;  // EF 优先级
+                        byte[] dummyIpPkt = new byte[20];
+                        int markedDscp = qosTrafficFactory.setDSCP(dummyIpPkt, dscp);
+                        boolean allowed = qosTrafficFactory.tokenBucketAllow(1000000, 10000);
+                        appendToConsole(String.format("【🎯 QoS】: DSCP=%d, 令牌桶允许=%s", markedDscp, allowed));
+                    }
+                    break;
+
+                case 69: // NAT64 转换 (IPv6 <-> IPv4)
+                    if (!hasNat64 && nat64Factory != null && cartType.equals("NAT64")) {
+                        hasNat64 = true;
+                        byte[] ipv4 = {8, 8, 8, 8};
+                        byte[] ipv6 = nat64Factory.convertIpv4ToIpv6(ipv4);
+                        appendToConsole(String.format("【🌍 NAT64】: 8.8.8.8 → 64:FF9B::808:808"));
+                    }
+                    break;
+
+                case 70: // TCP 重组 (分片重组)
+                    if (!isReassembled && tcpReassemblyFactory != null && !isReturnTrip) {
+                        isReassembled = true;
+                        long seqNum = sequenceNumber;
+                        byte[] fakeData = new byte[100];
+                        tcpReassemblyFactory.addSegment(seqNum, fakeData);
+                        byte[] reassembled = tcpReassemblyFactory.reassemble(seqNum);
+                        appendToConsole(String.format("【🔧 TCP 重组】: SEQ=%d, 重组完成", seqNum));
+                    }
+                    break;
+
+                case 71: // 传输层攻击模拟 (SYN Flood / Land Attack)
+                    if (!isAttackPacket && transportAttackFactory != null && cartType.equals("ATTACK")) {
+                        isAttackPacket = true;
+                        int fakeSrcIp = ipToInt("1.2.3.4");
+                        byte[] synFlood = transportAttackFactory.buildSynFlood(fakeSrcIp);
+                        byte[] landAttack = transportAttackFactory.buildLandAttack(ipToInt(getDstIp()));
+                        appendToConsole(String.format("【⚠️ 攻击检测】: SYN Flood + Land Attack 已模拟"));
+                    }
+                    break;
+
+                case 72: // NTP 时间同步
+                    if (!hasNtp && ntpPacketFactory != null && cartType.equals("NTP_REQUEST")) {
+                        hasNtp = true;
+                        int stratum = 2;
+                        byte[] ntpReq = ntpPacketFactory.buildNtpRequest(stratum);
+                        appendToConsole(String.format("【🕐 NTP】: 时间同步请求 (Stratum=%d)", stratum));
+                    }
+                    break;
+
+                case 73: // SNMP 网络管理
+                    if (!hasSnmp && snmpPacketFactory != null && cartType.equals("SNMP_GET")) {
+                        hasSnmp = true;
+                        String community = "public";
+                        byte[] snmpGet = snmpPacketFactory.buildGetRequest(community);
+                        appendToConsole(String.format("【📊 SNMP】: GET 请求 (Community=%s)", community));
+                    }
+                    break;
+
+                case 74: // HTTP/2.3 高级协议
+                    if (!hasHttp23 && http23PacketFactory != null && cartType.equals("HTTP2_GET")) {
+                        hasHttp23 = true;
+                        int streamId = 1;
+                        byte[] http2Frame = http23PacketFactory.buildHttp2Frame(streamId);
+                        appendToConsole(String.format("【📡 HTTP/2.3】: HEADERS 帧 (StreamID=%d)", streamId));
+                    }
+                    break;
+
+                case 75: // IPsec 安全封装
+                    if (!hasIpsec && ipsecFactory != null && !isReturnTrip) {
+                        hasIpsec = true;
+                        int spi = 0x12345678;
+                        byte[] espHeader = ipsecFactory.buildESP(spi);
+                        appendToConsole(String.format("【🔒 IPsec】: ESP 头部 (SPI=0x%08X)", spi));
+                    }
+                    break;
             }
         }
     }
@@ -3237,61 +3544,123 @@ public class DataCartFactoryGame extends JFrame {
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
                         g2.drawString("🔧 TCP选项", x + 2, y + 24);
-                    }
-                    else if (tag.equals("IP_OPTION")) {
+                    } else if (tag.equals("IP_OPTION")) {
                         g2.setColor(new Color(200, 100, 200));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
                         g2.drawString("🔧 IP选项", x + 4, y + 24);
-                    }
-                    else if (tag.equals("ETH_PADDING")) {
+                    } else if (tag.equals("ETH_PADDING")) {
                         g2.setColor(new Color(100, 200, 100));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.BLACK);
                         g2.drawString("📦 填充", x + 6, y + 24);
-                    }
-                    else if (tag.equals("UDP_CHECKSUM")) {
+                    } else if (tag.equals("UDP_CHECKSUM")) {
                         g2.setColor(new Color(0, 150, 200));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
                         g2.drawString("🔢 UDP校验", x + 2, y + 24);
-                    }
-                    else if (tag.equals("IP_FORWARD")) {
+                    } else if (tag.equals("IP_FORWARD")) {
                         g2.setColor(new Color(200, 150, 0));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.BLACK);
                         g2.drawString("🔄 IP转发", x + 4, y + 24);
-                    }
-                    else if (tag.equals("TCP_WINDOW")) {
+                    } else if (tag.equals("TCP_WINDOW")) {
                         g2.setColor(new Color(0, 100, 150));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
                         g2.drawString("📊 TCP窗口", x + 2, y + 24);
-                    }
-                    else if (tag.equals("TCP_TIMER")) {
+                    } else if (tag.equals("TCP_TIMER")) {
                         g2.setColor(new Color(150, 100, 0));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
                         g2.drawString("⏱️ TCP定时", x + 2, y + 24);
-                    }
-                    else if (tag.equals("DHCP_FULL")) {
+                    } else if (tag.equals("DHCP_FULL")) {
                         g2.setColor(new Color(0, 200, 100));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.BLACK);
                         g2.drawString("📡 DHCP完整", x + 2, y + 24);
-                    }
-                    else if (tag.equals("TLS_HANDSHAKE")) {
+                    } else if (tag.equals("TLS_HANDSHAKE")) {
                         g2.setColor(new Color(200, 100, 0));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
                         g2.drawString("🔒 TLS握手", x + 4, y + 24);
-                    }
-                    else if (tag.equals("SERIALIZE")) {
+                    } else if (tag.equals("SERIALIZE")) {
                         g2.setColor(new Color(150, 150, 150));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.BLACK);
                         g2.drawString("💾 序列化", x + 6, y + 24);
+                    } else if (tag.equals("BIT_STREAM")) { // 新增：物理层设备渲染
+                        g2.setColor(new Color(150, 150, 0));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("📡 比特流", x + 4, y + 24);
+                    } else if (tag.equals("PHY_CHANNEL")) {
+                        g2.setColor(new Color(100, 100, 0));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("📡 物理信道", x + 4, y + 24);
+                    } else if (tag.equals("PPPOE")) {
+                        g2.setColor(new Color(0, 150, 200));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.BLACK);
+                        g2.drawString("🔌 PPPoE", x + 6, y + 24);
+                    } else if (tag.equals("MACSEC")) {
+                        g2.setColor(new Color(0, 200, 150));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.BLACK);
+                        g2.drawString("🔐 MACsec", x + 4, y + 24);
+                    } else if (tag.equals("OSPF")) {
+                        g2.setColor(new Color(0, 150, 100));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("🌐 OSPF", x + 6, y + 24);
+                    } else if (tag.equals("BGP")) {
+                        g2.setColor(new Color(0, 100, 150));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("🌐 BGP", x + 6, y + 24);
+                    } else if (tag.equals("QOS")) {
+                        g2.setColor(new Color(200, 100, 100));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("🎯 QoS", x + 8, y + 24);
+                    } else if (tag.equals("NAT64")) {
+                        g2.setColor(new Color(100, 100, 200));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("🌍 NAT64", x + 4, y + 24);
+                    } else if (tag.equals("TCP_REASSEMBLY")) {
+                        g2.setColor(new Color(150, 80, 150));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("🔧 TCP重组", x + 4, y + 24);
+                    } else if (tag.equals("ATTACK")) {
+                        g2.setColor(new Color(200, 50, 50));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("⚠️ 攻击检测", x + 4, y + 24);
+                    } else if (tag.equals("NTP")) {
+                        g2.setColor(new Color(0, 200, 200));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.BLACK);
+                        g2.drawString("🕐 NTP", x + 8, y + 24);
+                    } else if (tag.equals("SNMP")) {
+                        g2.setColor(new Color(0, 150, 150));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("📊 SNMP", x + 6, y + 24);
+                    } else if (tag.equals("HTTP23")) {
+                        g2.setColor(new Color(50, 150, 200));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("📡 HTTP/2.3", x + 2, y + 24);
+                    } else if (tag.equals("IPSEC")) {
+                        g2.setColor(new Color(50, 100, 150));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("🔒 IPsec", x + 6, y + 24);
                     }
+
                 }
             }
 
