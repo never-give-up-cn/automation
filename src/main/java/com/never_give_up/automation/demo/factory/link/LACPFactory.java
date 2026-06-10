@@ -1,7 +1,7 @@
 package com.never_give_up.automation.demo.factory.link;
 
 public class LACPFactory {
-    private int actorKey = 1;
+    public int actorKey = 1;
     private int partnerKey = 1;
 
     public byte[] buildLacpPdu() {

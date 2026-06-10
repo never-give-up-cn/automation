@@ -1,7 +1,7 @@
 package com.never_give_up.automation.demo.factory.vpn;
 
 public class L2tpFactory {
-    private int tunnelId = 100;
+    public int tunnelId = 100;
     private int sessionId = 200;
 
     public byte[] buildL2tpPacket(byte[] payload) {

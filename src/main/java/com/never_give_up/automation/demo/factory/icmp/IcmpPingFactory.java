@@ -2,7 +2,7 @@ package com.never_give_up.automation.demo.factory.icmp;
 
 /** ICMP Echo Ping 实现 */
 public class IcmpPingFactory {
-    private int seq = 0;
+    public int seq = 0;
     private final int id = 0x1234;
 
     public byte[] buildEchoRequest() {

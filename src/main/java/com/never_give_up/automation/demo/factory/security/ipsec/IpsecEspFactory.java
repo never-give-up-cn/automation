@@ -2,7 +2,7 @@ package com.never_give_up.automation.demo.factory.security.ipsec;
 
 /** ESP 封装安全载荷 */
 public class IpsecEspFactory {
-    private int spi = 0xABCDEF12;
+    public int spi = 0xABCDEF12;
     private long seq = 0;
 
     public byte[] wrapEsp(byte[] payload) {

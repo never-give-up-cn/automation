@@ -2,7 +2,7 @@ package com.never_give_up.automation.demo.factory.nat;
 
 /** PCP 端口控制协议 */
 public class PcpFactory {
-    private int lifetime = 3600;
+    public int lifetime = 3600;
 
     public byte[] buildMapRequest(int intPort, String intIp) {
         byte[] pcp = new byte[24];

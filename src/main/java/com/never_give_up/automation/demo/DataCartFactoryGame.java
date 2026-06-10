@@ -949,6 +949,62 @@ public class DataCartFactoryGame extends JFrame {
                 "STATS", "📈 统计收集(118)",
                 "LOG", "📝 日志记录(119)",
                 "PCAP", "📦 PCAP抓包(120)"}
+                ,{"【31. 链路层增强 Stage 121-124】",
+                        "LLDP", "🔍 LLDP链路发现(121)",
+                        "STP", "🌲 STP生成树(122)",
+                        "LACP", "🔗 LACP链路聚合(123)",
+                        "MPLS", "🏷️ MPLS标签交换(124)"},
+
+                {"【32. 多播路由 Stage 125-127】",
+                        "PIM_SM", "📡 PIM-SM组播(125)",
+                        "MLD", "📢 MLD组播发现(126)",
+                        "DVMRP", "🗺️ DVMRP组播路由(127)"},
+
+                {"【33. 网络监控 Stage 128-132】",
+                        "NETFLOW", "📊 NetFlow流量(128)",
+                        "SFLOW", "📈 sFlow采样(129)",
+                        "IPFIX", "📋 IPFIX流导出(130)",
+                        "ICMP_PING", "📡 ICMP Ping(131)",
+                        "ICMP_TRACE", "🔎 ICMP Traceroute(132)"},
+
+                {"【34. 加密证书 Stage 133-137】",
+                        "X509", "📜 X.509证书(133)",
+                        "CRL", "🚫 CRL吊销列表(134)",
+                        "OCSP", "🔍 OCSP在线状态(135)",
+                        "PKI", "🔐 PKI基础设施(136)",
+                        "DTLS", "🔄 DTLS数据报TLS(137)"},
+
+                {"【35. 访问控制 Stage 138-140】",
+                        "MAC_AUTH", "🔑 MAC地址认证(138)",
+                        "DOT1X", "🔌 802.1X端口认证(139)"},
+
+                {"【36. 诊断工具 Stage 141-148】",
+                        "NETSTAT", "📊 netstat连接(141)",
+                        "IPCONFIG", "⚙️ ipconfig配置(142)",
+                        "ROUTEPRINT", "🗺️ route路由表(143)",
+                        "NSLOOKUP", "🔍 nslookup解析(144)",
+                        "ARPCMD", "📋 arp缓存(145)",
+                        "CURL", "🌐 curl请求(146)",
+                        "WGET", "⬇️ wget下载(147)",
+                        "TELNET_CLIENT", "💻 telnet客户端(148)"},
+
+                {"【37. NAT增强 Stage 149-152】",
+                        "NAT_HAIRPIN", "↩️ NAT发夹(149)",
+                        "NAT_HOLE", "🕳️ NAT穿透(150)",
+                        "UPNP", "🔌 UPnP映射(151)",
+                        "PCP", "📡 PCP端口控制(152)"},
+
+                {"【38. VPN隧道 Stage 153-159】",
+                        "IPSEC_IKE", "🔑 IKE密钥交换(153)",
+                        "IPSEC_ESP", "🔒 ESP封装(154)",
+                        "IPSEC_AH", "🔐 AH认证(155)",
+                        "OPENVPN", "🔓 OpenVPN隧道(156)",
+                        "WIREGUARD", "🔒 WireGuard隧道(157)",
+                        "L2TP", "🔌 L2TP隧道(158)",
+                        "SSTP", "🌐 SSTP隧道(159)"},
+
+                {"【39. 安全增强 Stage 160】",
+                        "IPS", "🛡️ IPS入侵防御(160)"}
                 ,};
 
         for (String[] cat : categories) {
@@ -1228,6 +1284,66 @@ public class DataCartFactoryGame extends JFrame {
         buildingLayout[coreRow][47] = "STATS";
         buildingLayout[coreRow][48] = "LOG";
         buildingLayout[coreRow][49] = "PCAP";
+        // ===================== 新增 Stage 121-160 建筑位置 =====================
+// 使用行 20? 但 MAP_ROWS=20，需要复用已有行或使用列扩展
+// 由于行数有限(0-19)，使用已有行的空闲列
+
+// 放在行 0 的空闲列 (列 16-30 空闲)
+        int stageRow = 0;
+        buildingLayout[stageRow][16] = "LLDP";
+        buildingLayout[stageRow][17] = "STP";
+        buildingLayout[stageRow][18] = "LACP";
+        buildingLayout[stageRow][19] = "MPLS";
+        buildingLayout[stageRow][20] = "PIM_SM";
+        buildingLayout[stageRow][21] = "MLD";
+        buildingLayout[stageRow][22] = "DVMRP";
+        buildingLayout[stageRow][23] = "NETFLOW";
+        buildingLayout[stageRow][24] = "SFLOW";
+        buildingLayout[stageRow][25] = "IPFIX";
+        buildingLayout[stageRow][26] = "ICMP_PING";
+        buildingLayout[stageRow][27] = "ICMP_TRACE";
+
+// 放在行 1 的空闲列
+        int stageRow2 = 1;
+        buildingLayout[stageRow2][21] = "X509";
+        buildingLayout[stageRow2][22] = "CRL";
+        buildingLayout[stageRow2][23] = "OCSP";
+        buildingLayout[stageRow2][24] = "PKI";
+        buildingLayout[stageRow2][25] = "DTLS";
+        buildingLayout[stageRow2][26] = "MAC_AUTH";
+        buildingLayout[stageRow2][27] = "DOT1X";
+
+// 放在行 2 的空闲列 (列 32-49 空闲)
+        int stageRow3 = 2;
+        buildingLayout[stageRow3][32] = "NETSTAT";
+        buildingLayout[stageRow3][33] = "IPCONFIG";
+        buildingLayout[stageRow3][34] = "ROUTEPRINT";
+        buildingLayout[stageRow3][35] = "NSLOOKUP";
+        buildingLayout[stageRow3][36] = "ARPCMD";
+        buildingLayout[stageRow3][37] = "CURL";
+        buildingLayout[stageRow3][38] = "WGET";
+        buildingLayout[stageRow3][39] = "TELNET_CLIENT";
+
+// 放在行 3 的空闲列
+        int stageRow4 = 3;
+        buildingLayout[stageRow4][35] = "NAT_HAIRPIN";
+        buildingLayout[stageRow4][36] = "NAT_HOLE";
+        buildingLayout[stageRow4][37] = "UPNP";
+        buildingLayout[stageRow4][38] = "PCP";
+
+// 放在行 4 的空闲列
+        int stageRow5 = 4;
+        buildingLayout[stageRow5][38] = "IPSEC_IKE";
+        buildingLayout[stageRow5][39] = "IPSEC_ESP";
+        buildingLayout[stageRow5][40] = "IPSEC_AH";
+        buildingLayout[stageRow5][41] = "OPENVPN";
+        buildingLayout[stageRow5][42] = "WIREGUARD";
+        buildingLayout[stageRow5][43] = "L2TP";
+        buildingLayout[stageRow5][44] = "SSTP";
+
+// 放在行 5 的空闲列
+        int stageRow6 = 5;
+        buildingLayout[stageRow6][44] = "IPS";
     }
 
     private void sendPing() {
@@ -3001,8 +3117,8 @@ public class DataCartFactoryGame extends JFrame {
                         }
                     }
                     if (!isDHCP()) {
-                        // 增加 stage 上限到 120
-                        if (stage < 120) {
+                        // 增加 stage 上限到 160
+                        if (stage < 160) {
                             timer = 1;
                             stage++;
                         } else {
@@ -3457,6 +3573,45 @@ public class DataCartFactoryGame extends JFrame {
                 case 118: tag = "STATS"; break;
                 case 119: tag = "LOG"; break;
                 case 120: tag = "PCAP"; break;
+                case 121: tag = "LLDP"; break;
+                case 122: tag = "STP"; break;
+                case 123: tag = "LACP"; break;
+                case 124: tag = "MPLS"; break;
+                case 125: tag = "PIM_SM"; break;
+                case 126: tag = "MLD"; break;
+                case 127: tag = "DVMRP"; break;
+                case 128: tag = "NETFLOW"; break;
+                case 129: tag = "SFLOW"; break;
+                case 130: tag = "IPFIX"; break;
+                case 131: tag = "ICMP_PING"; break;
+                case 132: tag = "ICMP_TRACE"; break;
+                case 133: tag = "X509"; break;
+                case 134: tag = "CRL"; break;
+                case 135: tag = "OCSP"; break;
+                case 136: tag = "PKI"; break;
+                case 137: tag = "DTLS"; break;
+                case 138: tag = "MAC_AUTH"; break;
+                case 139: tag = "DOT1X"; break;
+                case 141: tag = "NETSTAT"; break;
+                case 142: tag = "IPCONFIG"; break;
+                case 143: tag = "ROUTEPRINT"; break;
+                case 144: tag = "NSLOOKUP"; break;
+                case 145: tag = "ARPCMD"; break;
+                case 146: tag = "CURL"; break;
+                case 147: tag = "WGET"; break;
+                case 148: tag = "TELNET_CLIENT"; break;
+                case 149: tag = "NAT_HAIRPIN"; break;
+                case 150: tag = "NAT_HOLE"; break;
+                case 151: tag = "UPNP"; break;
+                case 152: tag = "PCP"; break;
+                case 153: tag = "IPSEC_IKE"; break;
+                case 154: tag = "IPSEC_ESP"; break;
+                case 155: tag = "IPSEC_AH"; break;
+                case 156: tag = "OPENVPN"; break;
+                case 157: tag = "WIREGUARD"; break;
+                case 158: tag = "L2TP"; break;
+                case 159: tag = "SSTP"; break;
+                case 160: tag = "IPS"; break;
                 default:
                     return null;
             }
@@ -4528,6 +4683,308 @@ public class DataCartFactoryGame extends JFrame {
                         }
                     }
                     break;
+                // ===================== 补充缺失的工厂处理 stage 121-160 =====================
+
+// ===================== 链路层增强 (121-124) =====================
+                case 121: // LLDP 链路层发现协议
+                    if (lldpFactory != null && !isReturnTrip) {
+                        byte[] lldpFrame = lldpFactory.buildLldpFrame();
+                        appendToConsole(String.format("【🔍 LLDP】: 发送链路发现报文 (%d字节)", lldpFrame.length));
+                    }
+                    break;
+
+                case 122: // STP 生成树协议
+                    if (stpFactory != null && !isReturnTrip) {
+                        byte[] bpdu = stpFactory.buildBpdu();
+                        appendToConsole(String.format("【🌲 STP】: 发送 BPDU 报文，根桥 %s", stpFactory.rootBridge));
+                    }
+                    break;
+
+                case 123: // LACP 链路聚合
+                    if (lacpFactory != null && !isReturnTrip) {
+                        byte[] lacpPdu = lacpFactory.buildLacpPdu();
+                        appendToConsole(String.format("【🔗 LACP】: 发送链路聚合报文，Actor Key=%d", lacpFactory.actorKey));
+                    }
+                    break;
+
+                case 124: // MPLS 多协议标签交换
+                    if (mplsFactory != null && !isReturnTrip) {
+                        byte[] mplsPacket = mplsFactory.addMplsHeader(new byte[64]);
+                        appendToConsole(String.format("【🏷️ MPLS】: 添加标签 %d, TTL=%d", mplsFactory.label, mplsFactory.ttl));
+                    }
+                    break;
+
+// ===================== 多播路由 (125-127) =====================
+                case 125: // PIM-SM 稀疏模式组播
+                    if (pimSmFactory != null && cartType.equals("IGMP_JOIN")) {
+                        pimSmFactory.joinGroup("224.0.0.1");
+                        appendToConsole("【📡 PIM-SM】: 加入组播组 224.0.0.1");
+                    }
+                    break;
+
+                case 126: // MLD 组播监听发现 (IPv6)
+                    if (mldFactory != null && resolvedServerIp != null && resolvedServerIp.contains(":")) {
+                        byte[] mldReport = mldFactory.buildMldReport("ff02::1");
+                        appendToConsole("【📢 MLD】: 发送 MLD 报告报文");
+                    }
+                    break;
+
+                case 127: // DVMRP 距离矢量组播路由
+                    if (dvmrpFactory != null && !isReturnTrip) {
+                        dvmrpFactory.addRoute("224.0.0.0/4", "10.0.0.1");
+                        String upstream = dvmrpFactory.getUpstream("224.0.0.0/4");
+                        appendToConsole(String.format("【🗺️ DVMRP】: 组播路由上游 %s", upstream));
+                    }
+                    break;
+
+// ===================== 监控管理 (128-132) =====================
+                case 128: // NetFlow 流量采集
+                    if (netFlowFactory != null && !isReturnTrip) {
+                        netFlowFactory.addRecord(getSrcIp(), getDstIp(), srcPort, dstPort, 1);
+                        appendToConsole(String.format("【📊 NetFlow】: 流记录 %s:%d→%s:%d",
+                                getSrcIp(), srcPort, getDstIp(), dstPort));
+                    }
+                    break;
+
+                case 129: // sFlow 采样流
+                    if (sflowFactory != null && !isReturnTrip) {
+                        boolean sampled = sflowFactory.doSample(cartId);
+                        byte[] sflowPacket = sflowFactory.buildSflowPacket(new byte[64]);
+                        appendToConsole(String.format("【📈 sFlow】: 采样 %s, 报文大小=%d", sampled ? "是" : "否", sflowPacket.length));
+                    }
+                    break;
+
+                case 130: // IPFIX 流导出
+                    if (ipfixFactory != null && !isReturnTrip) {
+                        byte[] ipfixPacket = ipfixFactory.buildIpfixPacket(new byte[32]);
+                        appendToConsole(String.format("【📋 IPFIX】: 导出流数据 (%d字节)", ipfixPacket.length));
+                    }
+                    break;
+
+                case 131: // ICMP Ping
+                    if (icmpPingFactory != null && cartType.equals("ICMP_ECHO_REQ")) {
+                        byte[] pingReq = icmpPingFactory.buildEchoRequest();
+                        appendToConsole(String.format("【📡 PING】: Echo Request, seq=%d", icmpPingFactory.seq));
+                    }
+                    break;
+
+                case 132: // ICMP Traceroute
+                    if (icmpTracerouteFactory != null && tracerouteActive) {
+                        byte[] tracePacket = icmpTracerouteFactory.buildTracePacket();
+                        appendToConsole(String.format("【🔎 Traceroute】: TTL=%d 探测包", icmpTracerouteFactory.ttl));
+                    }
+                    break;
+
+// ===================== 加密证书 (133-137) =====================
+                case 133: // X.509 证书
+                    if (x509Factory != null && tlsEnabled) {
+                        byte[] cert = x509Factory.buildCert();
+                        appendToConsole(String.format("【📜 X.509】: 证书主体 %s", x509Factory.getSubject()));
+                    }
+                    break;
+
+                case 134: // CRL 证书吊销列表
+                    if (crlFactory != null && tlsEnabled) {
+                        crlFactory.revokeCert("SN-12345");
+                        boolean revoked = crlFactory.isRevoked("SN-12345");
+                        appendToConsole(String.format("【🚫 CRL】: 证书吊销状态 %s", revoked ? "已吊销" : "有效"));
+                    }
+                    break;
+
+                case 135: // OCSP 在线证书状态
+                    if (ocspFactory != null && tlsEnabled) {
+                        byte[] ocspReq = ocspFactory.buildRequest("SN-12345");
+                        byte[] ocspResp = ocspFactory.buildResponse(true);
+                        appendToConsole("【🔍 OCSP】: 证书状态查询完成");
+                    }
+                    break;
+
+                case 136: // PKI 公钥基础设施
+                    if (pkiFactory != null && tlsEnabled) {
+                        boolean valid = pkiFactory.verifyChain(new String[]{"cert1", "cert2"});
+                        appendToConsole(String.format("【🔐 PKI】: 证书链验证 %s", valid ? "通过" : "失败"));
+                    }
+                    break;
+
+                case 137: // DTLS 数据报 TLS
+                    if (dtlsFactory != null && useUdp && tlsEnabled) {
+                        byte[] dtlsRecord = dtlsFactory.buildDtlsRecord("Hello".getBytes());
+                        appendToConsole(String.format("【🔄 DTLS】: DTLS 记录 (%d字节)", dtlsRecord.length));
+                    }
+                    break;
+
+// ===================== 访问控制 (138-140) =====================
+                case 138: // MAC 地址认证
+                    if (macAuthFactory != null && srcMac != null) {
+                        macAuthFactory.allowMac(srcMac);
+                        boolean allowed = macAuthFactory.check(srcMac);
+                        appendToConsole(String.format("【🔑 MAC认证】: MAC %s 认证 %s", srcMac, allowed ? "通过" : "拒绝"));
+                    }
+                    break;
+
+                case 139: // 802.1X 端口认证
+                    if (dot1xFactory != null && !isReturnTrip) {
+                        byte[] eapStart = dot1xFactory.buildEapStart();
+                        dot1xFactory.setAuthResult(true);
+                        appendToConsole(String.format("【🔌 802.1X】: 认证状态 %s", dot1xFactory.isAuthenticated() ? "已认证" : "未认证"));
+                    }
+                    break;
+
+// ===================== 诊断工具 (141-148) =====================
+                case 141: // netstat
+                    if (netstatFactory != null && !isReturnTrip) {
+                        netstatFactory.addConn(useUdp ? "UDP" : "TCP",
+                                getSrcIp() + ":" + srcPort,
+                                getDstIp() + ":" + dstPort,
+                                useUdp ? "ESTABLISHED" : currentTcpState.toString());
+                        appendToConsole(String.format("【📊 netstat】: 连接数 %d", netstatFactory.getConnList().size()));
+                    }
+                    break;
+
+                case 142: // ipconfig
+                    if (ipconfigFactory != null && pcIpAssigned) {
+                        String config = ipconfigFactory.getConfigInfo();
+                        appendToConsole(String.format("【⚙️ ipconfig】: %s", config));
+                    }
+                    break;
+
+                case 143: // route print
+                    if (routePrintFactory != null) {
+                        routePrintFactory.addRoute("0.0.0.0", "0.0.0.0", "192.168.1.1", "eth0");
+                        appendToConsole(String.format("【🗺️ route】: 路由表条目数 %d", routePrintFactory.getRoutes().size()));
+                    }
+                    break;
+
+                case 144: // nslookup
+                    if (nslookupFactory != null && domain != null) {
+                        nslookupFactory.addDnsRecord(domain, resolvedServerIp != null ? resolvedServerIp : "10.0.0.1");
+                        String result = nslookupFactory.query(domain);
+                        appendToConsole(String.format("【🔍 nslookup】: %s → %s", domain, result));
+                    }
+                    break;
+
+                case 145: // arp 命令
+                    if (arpCommandFactory != null && resolvedServerIp != null) {
+                        arpCommandFactory.addEntry(resolvedServerIp, dstMac);
+                        String mac = arpCommandFactory.getMac(resolvedServerIp);
+                        appendToConsole(String.format("【📋 arp】: %s → %s", resolvedServerIp, mac));
+                    }
+                    break;
+
+                case 146: // curl
+                    if (curlFactory != null && cartType.equals("HTTP_GET")) {
+                        byte[] getRequest = curlFactory.buildGetRequest("/index.html");
+                        appendToConsole(String.format("【🌐 curl】: HTTP GET 请求 (%d字节)", getRequest.length));
+                    }
+                    break;
+
+                case 147: // wget
+                    if (wgetFactory != null && cartType.equals("HTTP_GET")) {
+                        byte[] download = wgetFactory.buildDownloadRequest("/file.zip");
+                        appendToConsole(String.format("【⬇️ wget】: 下载请求，保存路径 %s", wgetFactory.savePath));
+                    }
+                    break;
+
+                case 148: // telnet client
+                    if (telnetClientFactory != null && cartType.equals("TELNET")) {
+                        telnetClientFactory.connect(getDstIp(), 23);
+                        byte[] telnetData = telnetClientFactory.sendData("ls\r\n");
+                        appendToConsole(String.format("【💻 telnet】: 连接到 %s:%d", getDstIp(), 23));
+                    }
+                    break;
+
+// ===================== NAT 增强 (149-152) =====================
+                case 149: // NAT 发夹
+                    if (natHairpinningFactory != null && isNatted) {
+                        natHairpinningFactory.addMapping(natPublicIp, getSrcIp());
+                        String translated = natHairpinningFactory.hairpinTranslate(natPublicIp, getSrcIp());
+                        appendToConsole(String.format("【↩️ NAT发夹】: %s → %s", natPublicIp, translated));
+                    }
+                    break;
+
+                case 150: // NAT 穿透 (打洞)
+                    if (natHolePunchFactory != null && !isReturnTrip) {
+                        boolean punched = natHolePunchFactory.doHolePunch(getDstIp() + ":" + dstPort);
+                        appendToConsole(String.format("【🕳️ NAT穿透】: %s:%d 打洞 %s", getDstIp(), dstPort, punched ? "成功" : "失败"));
+                    }
+                    break;
+
+                case 151: // UPnP 端口映射
+                    if (upnpFactory != null && !isReturnTrip) {
+                        upnpFactory.addPortMap(8080, 80, getSrcIp(), "TCP");
+                        appendToConsole(String.format("【🔌 UPnP】: 端口映射 8080→%s:80", getSrcIp()));
+                    }
+                    break;
+
+                case 152: // PCP 端口控制协议
+                    if (pcpFactory != null && !isReturnTrip) {
+                        byte[] pcpMap = pcpFactory.buildMapRequest(80, getSrcIp());
+                        appendToConsole(String.format("【📡 PCP】: 端口控制请求，生存时间=%ds", pcpFactory.lifetime));
+                    }
+                    break;
+
+// ===================== VPN 隧道 (153-159) =====================
+                case 153: // IKE 密钥交换
+                    if (ipsecIkeFactory != null && !isReturnTrip) {
+                        byte[] ikeSa = ipsecIkeFactory.buildIkeSaInit();
+                        appendToConsole("【🔑 IKE】: IKE SA 初始化");
+                    }
+                    break;
+
+                case 154: // ESP 封装安全载荷
+                    if (ipsecEspFactory != null && !isReturnTrip) {
+                        byte[] espPacket = ipsecEspFactory.wrapEsp(new byte[100]);
+                        appendToConsole(String.format("【🔒 ESP】: ESP 封装, SPI=0x%08X", ipsecEspFactory.spi));
+                    }
+                    break;
+
+                case 155: // AH 认证头
+                    if (ipsecAhFactory != null && !isReturnTrip) {
+                        byte[] ahPacket = ipsecAhFactory.wrapAh(new byte[100]);
+                        appendToConsole(String.format("【🔐 AH】: AH 认证, SPI=0x%08X", ipsecAhFactory.spi));
+                    }
+                    break;
+
+                case 156: // OpenVPN
+                    if (openVpnFactory != null && !isReturnTrip) {
+                        byte[] ovpnPacket = openVpnFactory.buildOpenVpnPacket(new byte[64]);
+                        appendToConsole(String.format("【🔓 OpenVPN】: OpenVPN 数据包 (%d字节)", ovpnPacket.length));
+                    }
+                    break;
+
+                case 157: // WireGuard
+                    if (wireguardFactory != null && !isReturnTrip) {
+                        byte[] wgPacket = wireguardFactory.buildWgPacket(new byte[64]);
+                        appendToConsole("【🔒 WireGuard】: WireGuard 加密隧道");
+                    }
+                    break;
+
+                case 158: // L2TP
+                    if (l2tpFactory != null && !isReturnTrip) {
+                        byte[] l2tpPacket = l2tpFactory.buildL2tpPacket(new byte[64]);
+                        appendToConsole(String.format("【🔌 L2TP】: L2TP 隧道, TunnelID=%d", l2tpFactory.tunnelId));
+                    }
+                    break;
+
+                case 159: // SSTP
+                    if (sstpFactory != null && !isReturnTrip) {
+                        byte[] sstpControl = sstpFactory.buildSstpControl();
+                        appendToConsole("【🌐 SSTP】: SSTP 控制报文");
+                    }
+                    break;
+
+// ===================== 安全增强 (160) =====================
+                case 160: // IPS 入侵防御
+                    if (ipsFactory != null && !isReturnTrip) {
+                        boolean isAttack = ipsFactory.isAttack(getSrcIp(), new byte[64]);
+                        if (isAttack) {
+                            appendToConsole(String.format("【🛡️ IPS】: 检测到攻击来自 %s，已阻断", getSrcIp()));
+                            this.isDropped = true;
+                            return;
+                        }
+                        appendToConsole("【🛡️ IPS】: 流量正常");
+                    }
+                    break;
             }
         }
     }
@@ -4751,6 +5208,11 @@ public class DataCartFactoryGame extends JFrame {
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.BLACK);
                         g2.drawString("[FWD] IP转发", x + 4, y + 24);
+                    } else if (tag.equals("ICMP_ERROR")) {
+                        g2.setColor(new Color(200, 150, 0));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.BLACK);
+                        g2.drawString("ICMP_ERROR", x + 4, y + 24);
                     } else if (tag.equals("TCP_WINDOW")) {
                         g2.setColor(new Color(0, 100, 150));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
@@ -5322,6 +5784,11 @@ public class DataCartFactoryGame extends JFrame {
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
                         g2.drawString("[PCAP] 抓包", x + 6, y + 24);
+                    } else if (tag.equals("IPSEC_AH")) {
+                        g2.setColor(new Color(110, 90, 150));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("[AH] AH", x + 8, y + 24);
                     }
                 }
             }

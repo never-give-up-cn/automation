@@ -1,8 +1,8 @@
 package com.never_give_up.automation.demo.factory.link;
 
 public class MplsFactory {
-    private int label = 16;
-    private int ttl = 255;
+    public int label = 16;
+    public int ttl = 255;
 
     public byte[] addMplsHeader(byte[] packet) {
         byte[] mpls = new byte[4];

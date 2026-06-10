@@ -2,7 +2,7 @@ package com.never_give_up.automation.demo.factory.icmp;
 
 /** Traceroute 路由追踪（基于ICMP TTL超限） */
 public class IcmpTracerouteFactory {
-    private int ttl = 1;
+    public int ttl = 1;
     private final int id = 0x5678;
 
     public byte[] buildTracePacket() {

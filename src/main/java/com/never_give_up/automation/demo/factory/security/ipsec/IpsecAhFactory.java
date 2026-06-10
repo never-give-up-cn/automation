@@ -2,8 +2,8 @@ package com.never_give_up.automation.demo.factory.security.ipsec;
 
 /** AH 认证头 */
 public class IpsecAhFactory {
-    private int spi = 0x12345678;
-    private long seq = 0;
+    public int spi = 0x12345678;
+    public long seq = 0;
 
     public byte[] wrapAh(byte[] ipPacket) {
         byte[] ah = new byte[12 + ipPacket.length];
