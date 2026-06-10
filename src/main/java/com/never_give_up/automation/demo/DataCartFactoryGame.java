@@ -498,6 +498,7 @@ public class DataCartFactoryGame extends JFrame {
 
     private void updateArpDisplay() {
         StringBuilder arpSb = new StringBuilder();
+        // 使用 factoryManager 的 arpCache
         factoryManager.getArpCache().getCache().forEach((ip, entry) -> {
             if (!entry.isExpired(300000)) {
                 arpSb.append(String.format("%s → %s\n", entry.getIpAddress(), entry.getMacAddress()));
@@ -509,6 +510,7 @@ public class DataCartFactoryGame extends JFrame {
 
     private void updateDnsDisplay() {
         StringBuilder dnsSb = new StringBuilder();
+        // 使用 factoryManager 的 dnsCache
         factoryManager.getDnsCache().getCache().forEach((domain, record) -> {
             long remainingSec = Math.max(0, record.getTtl() / 1000);
             dnsSb.append(String.format("%s → %s (TTL:%ds)\n", domain, record.getIp(), remainingSec));
@@ -803,10 +805,12 @@ public class DataCartFactoryGame extends JFrame {
     }
 
     private void performArpResolution(String targetIp) {
+        // 使用 factoryManager 的 arpCache
         String mac = factoryManager.getArpCache().getMac(targetIp);
         if (mac == null) {
             appendToConsole("【🔍 ARP 请求】: 谁拥有 " + targetIp + "？");
-            String newMac = String.format("00:1A:2B:%02X:%02X:%02X", new Random().nextInt(256), new Random().nextInt(256), new Random().nextInt(256));
+            String newMac = String.format("00:1A:2B:%02X:%02X:%02X",
+                    new Random().nextInt(256), new Random().nextInt(256), new Random().nextInt(256));
             factoryManager.getArpCache().addEntry(targetIp, newMac);
             appendToConsole("【📥 ARP 响应】: " + targetIp + " → " + newMac);
             updateArpDisplay();
@@ -2093,13 +2097,14 @@ public class DataCartFactoryGame extends JFrame {
             String insideIp = pcIpAddress != null ? pcIpAddress : "192.168.1.100";
             int insidePort = 1234;
 
-            // 调用 NAT 工厂创建映射
+            // 使用 factoryManager 的 natFactory
             NatMappingFactory.NatEntry factoryEntry = factoryManager.getNatFactory().createMapping(insideIp, insidePort);
 
             // 同步到本地 NAT 表
             String key = insideIp + ":" + insidePort;
             if (!natTable.containsKey(key)) {
-                NatEntry localEntry = new NatEntry(factoryEntry.getInsideIp(), factoryEntry.getInsidePort(), factoryEntry.getPublicIp(), factoryEntry.getPublicPort());
+                NatEntry localEntry = new NatEntry(factoryEntry.getInsideIp(), factoryEntry.getInsidePort(),
+                        factoryEntry.getPublicIp(), factoryEntry.getPublicPort());
                 natTable.put(key, localEntry);
             }
 
