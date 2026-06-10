@@ -8,6 +8,8 @@ import com.never_give_up.automation.demo.factory.application.NtpPacketFactory;
 import com.never_give_up.automation.demo.factory.application.SnmpPacketFactory;
 import com.never_give_up.automation.demo.factory.application.auth.DiameterPacketFactory;
 import com.never_give_up.automation.demo.factory.application.auth.RadiusPacketFactory;
+import com.never_give_up.automation.demo.factory.application.dhcp.DhcpLeaseFactory;
+import com.never_give_up.automation.demo.factory.application.dns.DnsZoneFactory;
 import com.never_give_up.automation.demo.factory.application.ftp.FtpPacketFactory;
 import com.never_give_up.automation.demo.factory.application.ldap.LdapPacketFactory;
 import com.never_give_up.automation.demo.factory.application.mail.ImapPacketFactory;
@@ -19,50 +21,50 @@ import com.never_give_up.automation.demo.factory.application.sip.SipPacketFactor
 import com.never_give_up.automation.demo.factory.application.ssh.SshPacketFactory;
 import com.never_give_up.automation.demo.factory.application.telnet.TelnetPacketFactory;
 import com.never_give_up.automation.demo.factory.attack.TransportAttackFactory;
-import com.never_give_up.automation.demo.factory.balance.LbHealthCheckFactory;
-import com.never_give_up.automation.demo.factory.balance.LbIpHashFactory;
-import com.never_give_up.automation.demo.factory.balance.LbLeastConnFactory;
-import com.never_give_up.automation.demo.factory.balance.LbRoundRobinFactory;
+import com.never_give_up.automation.demo.factory.balance.*;
+import com.never_give_up.automation.demo.factory.capture.PacketCaptureFactory;
+import com.never_give_up.automation.demo.factory.event.EventFactory;
+import com.never_give_up.automation.demo.factory.flow.FlowFactory;
 import com.never_give_up.automation.demo.factory.function.NatMappingFactory;
 import com.never_give_up.automation.demo.factory.icmp.IcmpPingFactory;
 import com.never_give_up.automation.demo.factory.icmp.IcmpTracerouteFactory;
 import com.never_give_up.automation.demo.factory.link.*;
+import com.never_give_up.automation.demo.factory.log.LogFactory;
 import com.never_give_up.automation.demo.factory.monitor.IpfixFactory;
 import com.never_give_up.automation.demo.factory.monitor.NetFlowFactory;
 import com.never_give_up.automation.demo.factory.monitor.SflowFactory;
 import com.never_give_up.automation.demo.factory.multicast.DvmrpFactory;
 import com.never_give_up.automation.demo.factory.multicast.MldFactory;
+import com.never_give_up.automation.demo.factory.multicast.MulticastRoutingFactory;
 import com.never_give_up.automation.demo.factory.multicast.PimSmFactory;
 import com.never_give_up.automation.demo.factory.nat.NatHairpinningFactory;
 import com.never_give_up.automation.demo.factory.nat.NatHolePunchFactory;
 import com.never_give_up.automation.demo.factory.nat.PcpFactory;
 import com.never_give_up.automation.demo.factory.nat.UpnpFactory;
-import com.never_give_up.automation.demo.factory.network.ipv6.Ipv6FragmentFactory;
-import com.never_give_up.automation.demo.factory.network.ipv6.Ipv6NeighborDiscovery;
-import com.never_give_up.automation.demo.factory.network.ipv6.Ipv6OptionFactory;
-import com.never_give_up.automation.demo.factory.network.ipv6.Ipv6PacketFactory;
+import com.never_give_up.automation.demo.factory.network.arp.ArpTableFactory;
+import com.never_give_up.automation.demo.factory.network.ipv6.*;
 import com.never_give_up.automation.demo.factory.physical.BitStreamFactory;
 import com.never_give_up.automation.demo.factory.physical.PhysicalChannelFactory;
 import com.never_give_up.automation.demo.factory.qos.QosTrafficFactory;
+import com.never_give_up.automation.demo.factory.qos.SchedulerFactory;
 import com.never_give_up.automation.demo.factory.route.BgpPacketFactory;
+import com.never_give_up.automation.demo.factory.route.ForwardingEngineFactory;
 import com.never_give_up.automation.demo.factory.route.OspfPacketFactory;
 import com.never_give_up.automation.demo.factory.security.*;
-import com.never_give_up.automation.demo.factory.security.crypto.CrlFactory;
-import com.never_give_up.automation.demo.factory.security.crypto.OcspFactory;
-import com.never_give_up.automation.demo.factory.security.crypto.PkiFactory;
-import com.never_give_up.automation.demo.factory.security.crypto.X509Factory;
+import com.never_give_up.automation.demo.factory.security.crypto.*;
 import com.never_give_up.automation.demo.factory.security.ipsec.IpsecAhFactory;
 import com.never_give_up.automation.demo.factory.security.ipsec.IpsecEspFactory;
 import com.never_give_up.automation.demo.factory.security.ipsec.IpsecFactory;
 import com.never_give_up.automation.demo.factory.security.ipsec.IpsecIkeFactory;
 import com.never_give_up.automation.demo.factory.security.tls.DtlsFactory;
+import com.never_give_up.automation.demo.factory.session.SessionTableFactory;
+import com.never_give_up.automation.demo.factory.socket.Socket;
+import com.never_give_up.automation.demo.factory.socket.SocketFactory;
+import com.never_give_up.automation.demo.factory.stat.StatisticsFactory;
 import com.never_give_up.automation.demo.factory.tool.*;
 import com.never_give_up.automation.demo.factory.transition.Nat64Factory;
 import com.never_give_up.automation.demo.factory.transport.TcpReassemblyFactory;
-import com.never_give_up.automation.demo.factory.transport.tcp.TcpEcnFactory;
-import com.never_give_up.automation.demo.factory.transport.tcp.TcpFastOpenFactory;
-import com.never_give_up.automation.demo.factory.transport.tcp.TcpKeepAliveFactory;
-import com.never_give_up.automation.demo.factory.transport.tcp.TcpSackFactory;
+import com.never_give_up.automation.demo.factory.transport.tcp.*;
 import com.never_give_up.automation.demo.factory.vpn.L2tpFactory;
 import com.never_give_up.automation.demo.factory.vpn.OpenVpnFactory;
 import com.never_give_up.automation.demo.factory.vpn.SstpFactory;
@@ -277,6 +279,29 @@ public class DataCartFactoryGame extends JFrame {
     private TelnetClientFactory telnetClientFactory;
     private CurlFactory curlFactory;
     private WgetFactory wgetFactory;
+
+
+    // ===================== 新增 20 个核心工厂实例 =====================
+    private SocketFactory socketFactory;
+    private TcpStateMachineFactory tcpStateMachineFactory;
+    private MacTableFactory macTableFactory;
+    private CamTableFactory camTableFactory;
+    private ForwardingEngineFactory forwardingEngineFactory;
+    private SessionTableFactory sessionTableFactory;
+    private FlowFactory flowFactory;
+    private LoadBalancerFactory loadBalancerFactory;
+    private SchedulerFactory schedulerFactory;
+    private DnsZoneFactory dnsZoneFactory;
+    private DhcpLeaseFactory dhcpLeaseFactory;
+    private ArpTableFactory arpTableFactory;
+    private NeighborTableFactory neighborTableFactory;
+    private MulticastRoutingFactory multicastRoutingFactory;
+    private MplsLabelFactory mplsLabelFactory;
+    private CertificateStoreFactory certificateStoreFactory;
+    private EventFactory eventFactory;
+    private StatisticsFactory statisticsFactory;
+    private LogFactory logFactory;
+    private PacketCaptureFactory packetCaptureFactory;
 
     // ========== 新增字段（类成员） ==========
     private Map<IpFragmentKey, List<IpFragment>> fragmentBuffer = new HashMap<>();
@@ -527,6 +552,36 @@ public class DataCartFactoryGame extends JFrame {
         this.telnetClientFactory = factoryManager.getTelnetClientFactory();
         this.curlFactory = factoryManager.getCurlFactory();
         this.wgetFactory = factoryManager.getWgetFactory();
+
+        // ===================== 初始化 20 个核心工厂 =====================
+        this.socketFactory = factoryManager.getSocketFactory();
+        this.tcpStateMachineFactory = factoryManager.getTcpStateMachineFactory();
+        this.macTableFactory = factoryManager.getMacTableFactory();
+        this.camTableFactory = factoryManager.getCamTableFactory();
+        this.forwardingEngineFactory = factoryManager.getForwardingEngineFactory();
+        this.sessionTableFactory = factoryManager.getSessionTableFactory();
+        this.flowFactory = factoryManager.getFlowFactory();
+        this.loadBalancerFactory = factoryManager.getLoadBalancerFactory();
+        this.schedulerFactory = factoryManager.getSchedulerFactory();
+        this.dnsZoneFactory = factoryManager.getDnsZoneFactory();
+        this.dhcpLeaseFactory = factoryManager.getDhcpLeaseFactory();
+        this.arpTableFactory = factoryManager.getArpTableFactory();
+        this.neighborTableFactory = factoryManager.getNeighborTableFactory();
+        this.multicastRoutingFactory = factoryManager.getMulticastRoutingFactory();
+        this.mplsLabelFactory = factoryManager.getMplsLabelFactory();
+        this.certificateStoreFactory = factoryManager.getCertificateStoreFactory();
+        this.eventFactory = factoryManager.getEventFactory();
+        this.statisticsFactory = factoryManager.getStatisticsFactory();
+        this.logFactory = factoryManager.getLogFactory();
+        this.packetCaptureFactory = factoryManager.getPacketCaptureFactory();
+
+// 初始化日志工厂，记录启动事件
+        if (logFactory != null) {
+            logFactory.log("模拟器启动，网络设备工厂初始化完成");
+        }
+        if (statisticsFactory != null) {
+            statisticsFactory.reset();
+        }
 
         stateTimerWatchdog = System.currentTimeMillis();
         try {
@@ -873,6 +928,27 @@ public class DataCartFactoryGame extends JFrame {
                 {"【27. TCP 高级特性】", "TCP_KEEPALIVE", "🔁 Keep-Alive(80)", "TCP_SACK", "📊 SACK(81)", "TCP_ECN", "⚠️ ECN(82)", "TCP_FASTOPEN", "🚀 FastOpen(83)"},
                 {"【28. 应用层协议】", "FTP", "📁 FTP(84)", "SMTP", "📧 SMTP(85)", "POP3", "📬 POP3(86)", "IMAP", "📨 IMAP(87)", "SSH", "🔐 SSH(88)", "TELNET", "💻 Telnet(89)", "RTP", "🎵 RTP(90)", "SIP", "📞 SIP(91)", "RADIUS", "🔑 RADIUS(92)"},
                 {"【29. 安全防护】", "DPI", "🔍 DPI深度检测(96)", "WAF", "🛡️ WAF防火墙(97)", "DDOS", "💥 DDoS防护(98)", "RATELIMIT", "⏱️ 速率限制(99)", "ACL", "🚫 访问控制(100)"}
+                ,{"【30. 核心网络服务 Stage 101-120】",
+                "SOCKET", "🔌 Socket(101)",
+                "TCP_STATE", "📊 TCP状态机(102)",
+                "MAC_TABLE", "🔌 MAC表(103)",
+                "CAM_TABLE", "📋 CAM表(104)",
+                "FIB", "🔀 FIB转发表(105)",
+                "SESSION_TABLE", "💬 会话表(106)",
+                "FLOW", "📊 NetFlow(107)",
+                "LOAD_BALANCER", "⚖️ 负载均衡(108)",
+                "SCHEDULER", "🎯 QoS调度(109)",
+                "DNS_ZONE", "🌐 DNS区域(110)",
+                "DHCP_LEASE", "📝 DHCP租约(111)",
+                "ARP_TABLE", "📋 ARP表(112)",
+                "NEIGHBOR_TABLE", "📡 邻居表(113)",
+                "MCAST_ROUTE", "📡 组播路由(114)",
+                "MPLS_LABEL", "🏷️ MPLS标签(115)",
+                "CERT_STORE", "🔐 证书库(116)",
+                "EVENT", "🎬 事件引擎(117)",
+                "STATS", "📈 统计收集(118)",
+                "LOG", "📝 日志记录(119)",
+                "PCAP", "📦 PCAP抓包(120)"}
                 ,};
 
         for (String[] cat : categories) {
@@ -1055,6 +1131,7 @@ public class DataCartFactoryGame extends JFrame {
         buildingLayout[newRow2][13] = "SNMP";            // SNMP 管理
         buildingLayout[newRow2][14] = "HTTP23";          // HTTP/2.3
         buildingLayout[newRow2][15] = "IPSEC";           // IPsec 安全
+
         // ===================== IPv6 建筑（放在行 2-3）=====================
         int ipv6Row = 2;
         buildingLayout[ipv6Row][30] = "IPV6";
@@ -1062,14 +1139,14 @@ public class DataCartFactoryGame extends JFrame {
         buildingLayout[ipv6Row + 1][30] = "IPV6_OPTION";
         buildingLayout[ipv6Row + 1][31] = "IPV6_ND";
 
-// ===================== TCP 增强建筑（放在行 3-4）=====================
+        // ===================== TCP 增强建筑（放在行 3-4）=====================
         int tcpRow = 3;
         buildingLayout[tcpRow][33] = "TCP_KEEPALIVE";
         buildingLayout[tcpRow][34] = "TCP_SACK";
         buildingLayout[tcpRow + 1][33] = "TCP_ECN";
         buildingLayout[tcpRow + 1][34] = "TCP_FASTOPEN";
 
-// ===================== 应用层协议建筑（放在行 12-15）=====================
+        // ===================== 应用层协议建筑（放在行 12-14）=====================
         int appRow = 12;
         buildingLayout[appRow][25] = "FTP";
         buildingLayout[appRow][26] = "SMTP";
@@ -1083,7 +1160,7 @@ public class DataCartFactoryGame extends JFrame {
         buildingLayout[appRow + 2][26] = "DIAMETER";
         buildingLayout[appRow + 2][27] = "LDAP";
 
-// ===================== 安全防护建筑（放在行 15-17）=====================
+        // ===================== 安全防护建筑（放在行 15-17）=====================
         int secRow = 15;
         buildingLayout[secRow][30] = "DPI";
         buildingLayout[secRow][31] = "WAF";
@@ -1091,39 +1168,66 @@ public class DataCartFactoryGame extends JFrame {
         buildingLayout[secRow + 1][31] = "RATELIMIT";
         buildingLayout[secRow + 2][30] = "ACL";
 
-// ===================== NAT 增强建筑（放在行 17-18）=====================
+        // ===================== NAT 增强建筑（放在行 17-18）=====================
         int natRow = 17;
         buildingLayout[natRow][35] = "NAT_HAIRPIN";
         buildingLayout[natRow][36] = "NAT_HOLE";
         buildingLayout[natRow + 1][35] = "UPNP";
         buildingLayout[natRow + 1][36] = "PCP";
 
-// ===================== 负载均衡建筑（放在行 4-5）=====================
+        // ===================== 负载均衡建筑（放在行 4-5）=====================
         int lbRow = 4;
         buildingLayout[lbRow][36] = "LB_RR";
         buildingLayout[lbRow][37] = "LB_LC";
         buildingLayout[lbRow + 1][36] = "LB_IPHASH";
         buildingLayout[lbRow + 1][37] = "LB_HC";
 
-// ===================== VPN 隧道建筑（放在行 18-19）=====================
+        // ===================== VPN 隧道建筑（放在行 18-19）=====================
+        // 使用列 41-43 避免与诊断工具冲突
         int vpnRow = 18;
-        buildingLayout[vpnRow][38] = "IPSEC_IKE";
-        buildingLayout[vpnRow][39] = "IPSEC_ESP";
-        buildingLayout[vpnRow][40] = "OPENVPN";
-        buildingLayout[vpnRow + 1][38] = "WIREGUARD";
-        buildingLayout[vpnRow + 1][39] = "L2TP";
-        buildingLayout[vpnRow + 1][40] = "SSTP";
+        buildingLayout[vpnRow][41] = "IPSEC_IKE";
+        buildingLayout[vpnRow][42] = "IPSEC_ESP";
+        buildingLayout[vpnRow][43] = "OPENVPN";
+        buildingLayout[vpnRow + 1][41] = "WIREGUARD";
+        buildingLayout[vpnRow + 1][42] = "L2TP";
+        buildingLayout[vpnRow + 1][43] = "SSTP";
 
-// ===================== 诊断工具建筑（放在行 5-6）=====================
+        // ===================== 诊断工具建筑（放在行 5-7）=====================
+        // 使用列 41-43 避开 VPN（已移到行18-19的41-43，但行不同，可以共用列）
+        // 注意：不同行相同列是允许的，每个格子独立
         int toolRow = 5;
-        buildingLayout[toolRow][38] = "NETSTAT";
-        buildingLayout[toolRow][39] = "IPCONFIG";
-        buildingLayout[toolRow][40] = "ROUTEPRINT";
-        buildingLayout[toolRow + 1][38] = "NSLOOKUP";
-        buildingLayout[toolRow + 1][39] = "ARPCMD";
-        buildingLayout[toolRow + 1][40] = "CURL";
-        buildingLayout[toolRow + 2][38] = "WGET";
-        buildingLayout[toolRow + 2][39] = "TELNET_CLIENT";
+        buildingLayout[toolRow][41] = "NETSTAT";
+        buildingLayout[toolRow][42] = "IPCONFIG";
+        buildingLayout[toolRow][43] = "ROUTEPRINT";
+        buildingLayout[toolRow + 1][41] = "NSLOOKUP";
+        buildingLayout[toolRow + 1][42] = "ARPCMD";
+        buildingLayout[toolRow + 1][43] = "CURL";
+        buildingLayout[toolRow + 2][41] = "WGET";
+        buildingLayout[toolRow + 2][42] = "TELNET_CLIENT";
+
+        // ===================== 新增 20 个核心工厂建筑 (stage 101-120) =====================
+        // 放在行 19（最后一行），列 30-49（右侧区域）
+        int coreRow = 19;
+        buildingLayout[coreRow][30] = "SOCKET";
+        buildingLayout[coreRow][31] = "TCP_STATE";
+        buildingLayout[coreRow][32] = "MAC_TABLE";
+        buildingLayout[coreRow][33] = "CAM_TABLE";
+        buildingLayout[coreRow][34] = "FIB";
+        buildingLayout[coreRow][35] = "SESSION_TABLE";
+        buildingLayout[coreRow][36] = "FLOW";
+        buildingLayout[coreRow][37] = "LOAD_BALANCER";
+        buildingLayout[coreRow][38] = "SCHEDULER";
+        buildingLayout[coreRow][39] = "DNS_ZONE";
+        buildingLayout[coreRow][40] = "DHCP_LEASE";
+        buildingLayout[coreRow][41] = "ARP_TABLE";
+        buildingLayout[coreRow][42] = "NEIGHBOR_TABLE";
+        buildingLayout[coreRow][43] = "MCAST_ROUTE";
+        buildingLayout[coreRow][44] = "MPLS_LABEL";
+        buildingLayout[coreRow][45] = "CERT_STORE";
+        buildingLayout[coreRow][46] = "EVENT";
+        buildingLayout[coreRow][47] = "STATS";
+        buildingLayout[coreRow][48] = "LOG";
+        buildingLayout[coreRow][49] = "PCAP";
     }
 
     private void sendPing() {
@@ -2347,6 +2451,38 @@ public class DataCartFactoryGame extends JFrame {
 
     @Data
     private class DataCart {
+        // ===================== 新增 20 个核心工厂引用 =====================
+        private transient SocketFactory socketFactory;
+        private transient TcpStateMachineFactory tcpStateMachineFactory;
+        private transient MacTableFactory macTableFactory;
+        private transient CamTableFactory camTableFactory;
+        private transient ForwardingEngineFactory forwardingEngineFactory;
+        private transient SessionTableFactory sessionTableFactory;
+        private transient FlowFactory flowFactory;
+        private transient LoadBalancerFactory loadBalancerFactory;
+        private transient SchedulerFactory schedulerFactory;
+        private transient DnsZoneFactory dnsZoneFactory;
+        private transient DhcpLeaseFactory dhcpLeaseFactory;
+        private transient ArpTableFactory arpTableFactory;
+        private transient NeighborTableFactory neighborTableFactory;
+        private transient MulticastRoutingFactory multicastRoutingFactory;
+        private transient MplsLabelFactory mplsLabelFactory;
+        private transient CertificateStoreFactory certificateStoreFactory;
+        private transient EventFactory eventFactory;
+        private transient StatisticsFactory statisticsFactory;
+        private transient LogFactory logFactory;
+        private transient PacketCaptureFactory packetCaptureFactory;
+
+        // 新增状态标志
+        private boolean hasSocket = false;
+        private boolean hasMacLearning = false;
+        private boolean hasFibLookup = false;
+        private boolean hasFlowRecord = false;
+        private boolean hasMplsLabel = false;
+        private boolean hasDnsZone = false;
+        private boolean hasDhcpLease = false;
+        private boolean hasArpTable = false;
+
         // ===================== 新增 14 个工厂相关字段 =====================
         private boolean hasBitStream = false;      // 比特流已生成
         private boolean hasPhysicalEncoding = false; // 物理层编码已完成
@@ -2727,6 +2863,29 @@ public class DataCartFactoryGame extends JFrame {
                 this.curlFactory = factoryManager.getCurlFactory();
                 this.wgetFactory = factoryManager.getWgetFactory();
             }
+// ===================== 初始化 20 个核心工厂引用 =====================
+            if (factoryManager != null) {
+                this.socketFactory = factoryManager.getSocketFactory();
+                this.tcpStateMachineFactory = factoryManager.getTcpStateMachineFactory();
+                this.macTableFactory = factoryManager.getMacTableFactory();
+                this.camTableFactory = factoryManager.getCamTableFactory();
+                this.forwardingEngineFactory = factoryManager.getForwardingEngineFactory();
+                this.sessionTableFactory = factoryManager.getSessionTableFactory();
+                this.flowFactory = factoryManager.getFlowFactory();
+                this.loadBalancerFactory = factoryManager.getLoadBalancerFactory();
+                this.schedulerFactory = factoryManager.getSchedulerFactory();
+                this.dnsZoneFactory = factoryManager.getDnsZoneFactory();
+                this.dhcpLeaseFactory = factoryManager.getDhcpLeaseFactory();
+                this.arpTableFactory = factoryManager.getArpTableFactory();
+                this.neighborTableFactory = factoryManager.getNeighborTableFactory();
+                this.multicastRoutingFactory = factoryManager.getMulticastRoutingFactory();
+                this.mplsLabelFactory = factoryManager.getMplsLabelFactory();
+                this.certificateStoreFactory = factoryManager.getCertificateStoreFactory();
+                this.eventFactory = factoryManager.getEventFactory();
+                this.statisticsFactory = factoryManager.getStatisticsFactory();
+                this.logFactory = factoryManager.getLogFactory();
+                this.packetCaptureFactory = factoryManager.getPacketCaptureFactory();
+            }
         }
 
         private String getSrcIp() {
@@ -2842,8 +3001,8 @@ public class DataCartFactoryGame extends JFrame {
                         }
                     }
                     if (!isDHCP()) {
-                        // 增加 stage 上限到 100
-                        if (stage < 100) {
+                        // 增加 stage 上限到 120
+                        if (stage < 120) {
                             timer = 1;
                             stage++;
                         } else {
@@ -3278,6 +3437,26 @@ public class DataCartFactoryGame extends JFrame {
                 case 100:
                     tag = "ACL";
                     break;
+                case 101: tag = "SOCKET"; break;
+                case 102: tag = "TCP_STATE"; break;
+                case 103: tag = "MAC_TABLE"; break;
+                case 104: tag = "CAM_TABLE"; break;
+                case 105: tag = "FIB"; break;
+                case 106: tag = "SESSION_TABLE"; break;
+                case 107: tag = "FLOW"; break;
+                case 108: tag = "LOAD_BALANCER"; break;
+                case 109: tag = "SCHEDULER"; break;
+                case 110: tag = "DNS_ZONE"; break;
+                case 111: tag = "DHCP_LEASE"; break;
+                case 112: tag = "ARP_TABLE"; break;
+                case 113: tag = "NEIGHBOR_TABLE"; break;
+                case 114: tag = "MCAST_ROUTE"; break;
+                case 115: tag = "MPLS_LABEL"; break;
+                case 116: tag = "CERT_STORE"; break;
+                case 117: tag = "EVENT"; break;
+                case 118: tag = "STATS"; break;
+                case 119: tag = "LOG"; break;
+                case 120: tag = "PCAP"; break;
                 default:
                     return null;
             }
@@ -4153,6 +4332,202 @@ public class DataCartFactoryGame extends JFrame {
                         }
                     }
                     break;
+// ===================== 新增 20 个核心工厂处理 stage 101-120 =====================
+
+                case 101: // Socket 创建（应用层到传输层桥梁）
+                    if (!hasSocket && socketFactory != null && !isReturnTrip) {
+                        hasSocket = true;
+                        Socket sock = socketFactory.createSocket(getSrcIp(), srcPort, getDstIp(), dstPort);
+                        sock.connect();
+                        appendToConsole(String.format("【🔌 Socket】: 创建 Socket %s:%d → %s:%d",
+                                getSrcIp(), srcPort, getDstIp(), dstPort));
+                        if (statisticsFactory != null) {
+                            statisticsFactory.tx(64);
+                        }
+                    }
+                    break;
+
+                case 102: // TCP 状态机
+                    if (tcpStateMachineFactory != null && !useUdp) {
+                        TcpStateMachineFactory.TcpState state = tcpStateMachineFactory.getState();
+                        appendToConsole(String.format("【📊 TCP状态机】: 当前状态 %s", state));
+                        if (cartType.equals("SYN")) {
+                            tcpStateMachineFactory.sendSyn();
+                        } else if (cartType.equals("FIN_PC")) {
+                            tcpStateMachineFactory.timeWait();
+                        }
+                    }
+                    break;
+
+                case 103: // MAC 地址表学习（交换机）
+                    if (!hasMacLearning && macTableFactory != null && !isReturnTrip) {
+                        hasMacLearning = true;
+                        String inPort = "port_" + (stage % 10);
+                        macTableFactory.learn(srcMac, inPort);
+                        String outPort = macTableFactory.getPort(dstMac);
+                        appendToConsole(String.format("【🔌 MAC表】: 学习 %s → %s, 出口 %s", srcMac, inPort, outPort));
+                    }
+                    break;
+
+                case 104: // CAM 表（Cisco 交换机）
+                    if (camTableFactory != null && !isReturnTrip) {
+                        int vlanId = 1;
+                        camTableFactory.add(vlanId, dstMac, "Gi0/" + (stage % 24 + 1));
+                        CamTableFactory.CamEntry entry = camTableFactory.get(dstMac);
+                        if (entry != null) {
+                            appendToConsole(String.format("【📋 CAM表】: MAC %s → VLAN%d, 端口 %s", dstMac, entry.vlan, entry.port));
+                        }
+                    }
+                    break;
+
+                case 105: // FIB 转发表（CEF 快速转发）
+                    if (!hasFibLookup && forwardingEngineFactory != null) {
+                        hasFibLookup = true;
+                        forwardingEngineFactory.addFibEntry("0.0.0.0/0", "10.0.0.1");
+                        String nextHop = forwardingEngineFactory.forward(getDstIp());
+                        appendToConsole(String.format("【🔀 FIB转发】: %s → 下一跳 %s", getDstIp(), nextHop));
+                    }
+                    break;
+
+                case 106: // 五元组会话表
+                    if (sessionTableFactory != null && !isReturnTrip) {
+                        String proto = useUdp ? "UDP" : "TCP";
+                        sessionTableFactory.createSession(getSrcIp(), srcPort, getDstIp(), dstPort, proto);
+                        boolean exists = sessionTableFactory.exists(getSrcIp(), srcPort, getDstIp(), dstPort, proto);
+                        appendToConsole(String.format("【💬 会话表】: %s:%d → %s:%d (%s) 存在:%s",
+                                getSrcIp(), srcPort, getDstIp(), dstPort, proto, exists));
+                    }
+                    break;
+
+                case 107: // NetFlow 流记录
+                    if (flowFactory != null && !isReturnTrip) {
+                        String flowId = getSrcIp() + ":" + srcPort + "→" + getDstIp() + ":" + dstPort;
+                        int bytes = 1500;
+                        flowFactory.updateFlow(flowId, bytes);
+                        FlowFactory.Flow flow = flowFactory.getFlow(flowId);
+                        appendToConsole(String.format("【📊 NetFlow】: 流 %s, 包数=%d, 字节=%d",
+                                flowId.substring(0, Math.min(20, flowId.length())), flow.packets, flow.bytes));
+                    }
+                    break;
+
+                case 108: // 负载均衡器
+                    if (loadBalancerFactory != null && !isReturnTrip) {
+                        List<String> servers = Arrays.asList("10.0.0.1", "10.0.0.2", "10.0.0.3");
+                        loadBalancerFactory.setAlgorithm(LoadBalancerFactory.Algorithm.RR);
+                        String selected = loadBalancerFactory.select(servers, getSrcIp());
+                        appendToConsole(String.format("【⚖️ 负载均衡】: 选择服务器 %s", selected));
+                    }
+                    break;
+
+                case 109: // QoS 调度器
+                    if (schedulerFactory != null) {
+                        schedulerFactory.setType(SchedulerFactory.Type.WRR);
+                        appendToConsole("【🎯 QoS调度】: 启用加权轮询调度");
+                    }
+                    break;
+
+                case 110: // DNS 区域记录
+                    if (!hasDnsZone && dnsZoneFactory != null && cartType.equals("DNS_QUERY")) {
+                        hasDnsZone = true;
+                        dnsZoneFactory.addRecord(domain, "A", "10.0.0.1");
+                        dnsZoneFactory.addRecord(domain, "AAAA", "2001:db8::1");
+                        DnsZoneFactory.DnsRecord record = dnsZoneFactory.query(domain, "A");
+                        if (record != null) {
+                            appendToConsole(String.format("【🌐 DNS区域】: %s A记录 → %s", domain, record.value));
+                        }
+                    }
+                    break;
+
+                case 111: // DHCP 租约管理
+                    if (dhcpLeaseFactory != null && cartType.startsWith("DHCP")) {
+                        dhcpLeaseFactory.offer(srcMac, "192.168.1.100");
+                        String leasedIp = dhcpLeaseFactory.getIp(srcMac);
+                        appendToConsole(String.format("【📝 DHCP租约】: MAC %s → IP %s", srcMac, leasedIp));
+                    }
+                    break;
+
+                case 112: // ARP 表（带老化）
+                    if (!hasArpTable && arpTableFactory != null && resolvedServerIp != null) {
+                        hasArpTable = true;
+                        arpTableFactory.addDynamic(resolvedServerIp, dstMac);
+                        String resolvedMac = arpTableFactory.resolve(resolvedServerIp);
+                        appendToConsole(String.format("【📋 ARP表】: %s → %s", resolvedServerIp, resolvedMac));
+                    }
+                    break;
+
+                case 113: // IPv6 邻居表
+                    if (neighborTableFactory != null && resolvedServerIp != null && resolvedServerIp.contains(":")) {
+                        neighborTableFactory.add(resolvedServerIp, "00:11:22:33:44:55");
+                        String ndMac = neighborTableFactory.getMac(resolvedServerIp);
+                        appendToConsole(String.format("【📡 NDP邻居】: %s → %s", resolvedServerIp, ndMac));
+                    }
+                    break;
+
+                case 114: // 组播路由表 (S,G) / (*,G)
+                    if (multicastRoutingFactory != null && cartType.equals("IGMP_JOIN")) {
+                        multicastRoutingFactory.addStarG("224.0.0.1");
+                        boolean hasRoute = multicastRoutingFactory.hasRoute(getSrcIp(), "224.0.0.1");
+                        appendToConsole(String.format("【📡 组播路由】: (*,224.0.0.1) 存在=%s", hasRoute));
+                    }
+                    break;
+
+                case 115: // MPLS 标签栈操作
+                    if (!hasMplsLabel && mplsLabelFactory != null && !isReturnTrip) {
+                        hasMplsLabel = true;
+                        mplsLabelFactory.push(100);
+                        mplsLabelFactory.swap(200);
+                        Integer top = mplsLabelFactory.top();
+                        appendToConsole(String.format("【🏷️ MPLS】: 标签栈顶=%d", top));
+                        mplsLabelFactory.pop();
+                    }
+                    break;
+
+                case 116: // 证书存储
+                    if (certificateStoreFactory != null && tlsEnabled) {
+                        certificateStoreFactory.addKey("server-key", "RSA-2048-PRIVATE");
+                        certificateStoreFactory.addTrustCert("ca-cert", "CA-CERT-DATA");
+                        boolean trusted = certificateStoreFactory.isTrusted("CA-CERT-DATA");
+                        appendToConsole(String.format("【🔐 证书库】: 证书可信=%s", trusted));
+                    }
+                    break;
+
+                case 117: // 事件记录（动画核心）
+                    if (eventFactory != null) {
+                        eventFactory.emit(EventFactory.Type.SEND, "发送 " + cartType + " SEQ=" + sequenceNumber);
+                        appendToConsole("【🎬 事件】: 已记录发送事件");
+                    }
+                    break;
+
+                case 118: // 统计收集
+                    if (statisticsFactory != null) {
+                        if (!isReturnTrip) {
+                            statisticsFactory.tx(ttl > 0 ? 1500 : 64);
+                        } else {
+                            statisticsFactory.rx(1500);
+                        }
+                        appendToConsole(String.format("【📈 统计】: TX=%d, RX=%d, 丢包=%d",
+                                statisticsFactory.packetsTx, statisticsFactory.packetsRx, statisticsFactory.loss));
+                    }
+                    break;
+
+                case 119: // 日志记录
+                    if (logFactory != null) {
+                        logFactory.log(String.format("%s TTL=%d %s:%d→%s:%d",
+                                cartType, ttl, getSrcIp(), srcPort, getDstIp(), dstPort));
+                        appendToConsole("【📝 日志】: 已记录到日志系统");
+                    }
+                    break;
+
+                case 120: // PCAP 抓包
+                    if (packetCaptureFactory != null && ethernetFrameData != null) {
+                        packetCaptureFactory.capture(ethernetFrameData);
+                        appendToConsole(String.format("【📦 PCAP】: 抓取 %d 字节数据包", ethernetFrameData.length));
+                        if (stage == 120 && !isReturnTrip && serverReceivedCount >= totalDataToTransmit) {
+                            List<PacketCaptureFactory.PcapPacket> replay = packetCaptureFactory.replay();
+                            appendToConsole(String.format("【🔄 回放】: 共 %d 个包可回放", replay.size()));
+                        }
+                    }
+                    break;
             }
         }
     }
@@ -4826,6 +5201,127 @@ public class DataCartFactoryGame extends JFrame {
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
                         g2.drawString("[RDNS] 递归DNS", x + 2, y + 24);
+                    }
+                    // ===================== 新增 20 个核心工厂渲染 =====================
+                    else if (tag.equals("SOCKET")) {
+                        g2.setColor(new Color(0, 180, 100));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("[SKT] Socket", x + 2, y + 24);
+                    }
+                    else if (tag.equals("TCP_STATE")) {
+                        g2.setColor(new Color(100, 100, 200));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("[FSM] TCP状态", x + 2, y + 24);
+                    }
+                    else if (tag.equals("MAC_TABLE")) {
+                        g2.setColor(new Color(100, 180, 100));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.BLACK);
+                        g2.drawString("[MAC] MAC表", x + 4, y + 24);
+                    }
+                    else if (tag.equals("CAM_TABLE")) {
+                        g2.setColor(new Color(80, 200, 80));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.BLACK);
+                        g2.drawString("[CAM] CAM表", x + 4, y + 24);
+                    }
+                    else if (tag.equals("FIB")) {
+                        g2.setColor(new Color(200, 180, 80));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.BLACK);
+                        g2.drawString("[FIB] 转发表", x + 4, y + 24);
+                    }
+                    else if (tag.equals("SESSION_TABLE")) {
+                        g2.setColor(new Color(150, 100, 180));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("[SES] 会话表", x + 4, y + 24);
+                    }
+                    else if (tag.equals("FLOW")) {
+                        g2.setColor(new Color(80, 200, 200));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.BLACK);
+                        g2.drawString("[FLOW] NetFlow", x + 2, y + 24);
+                    }
+                    else if (tag.equals("LOAD_BALANCER")) {
+                        g2.setColor(new Color(200, 100, 80));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("[LB] 负载均衡", x + 2, y + 24);
+                    }
+                    else if (tag.equals("SCHEDULER")) {
+                        g2.setColor(new Color(100, 150, 150));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("[QoS] 调度器", x + 4, y + 24);
+                    }
+                    else if (tag.equals("DNS_ZONE")) {
+                        g2.setColor(new Color(0, 180, 180));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.BLACK);
+                        g2.drawString("[ZONE] DNS区域", x + 2, y + 24);
+                    }
+                    else if (tag.equals("DHCP_LEASE")) {
+                        g2.setColor(new Color(100, 180, 200));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.BLACK);
+                        g2.drawString("[LEASE] DHCP租约", x + 2, y + 24);
+                    }
+                    else if (tag.equals("ARP_TABLE")) {
+                        g2.setColor(new Color(80, 160, 200));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("[ARP] ARP表", x + 6, y + 24);
+                    }
+                    else if (tag.equals("NEIGHBOR_TABLE")) {
+                        g2.setColor(new Color(60, 140, 180));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("[ND] 邻居表", x + 6, y + 24);
+                    }
+                    else if (tag.equals("MCAST_ROUTE")) {
+                        g2.setColor(new Color(180, 80, 180));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("[MCAST] 组播路由", x + 2, y + 24);
+                    }
+                    else if (tag.equals("MPLS_LABEL")) {
+                        g2.setColor(new Color(200, 200, 80));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.BLACK);
+                        g2.drawString("[MPLS] 标签栈", x + 4, y + 24);
+                    }
+                    else if (tag.equals("CERT_STORE")) {
+                        g2.setColor(new Color(180, 180, 100));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.BLACK);
+                        g2.drawString("[CERT] 证书库", x + 4, y + 24);
+                    }
+                    else if (tag.equals("EVENT")) {
+                        g2.setColor(new Color(200, 100, 150));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("[EVT] 事件引擎", x + 2, y + 24);
+                    }
+                    else if (tag.equals("STATS")) {
+                        g2.setColor(new Color(80, 180, 140));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.BLACK);
+                        g2.drawString("[STAT] 统计", x + 8, y + 24);
+                    }
+                    else if (tag.equals("LOG")) {
+                        g2.setColor(new Color(150, 150, 150));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.BLACK);
+                        g2.drawString("[LOG] 日志", x + 8, y + 24);
+                    }
+                    else if (tag.equals("PCAP")) {
+                        g2.setColor(new Color(80, 100, 180));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("[PCAP] 抓包", x + 6, y + 24);
                     }
                 }
             }

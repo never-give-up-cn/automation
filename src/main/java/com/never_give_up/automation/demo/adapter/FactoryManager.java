@@ -5,7 +5,11 @@ import com.never_give_up.automation.demo.factory.address.IpAddressFactory;
 import com.never_give_up.automation.demo.factory.address.MacAddressFactory;
 import com.never_give_up.automation.demo.factory.address.PortFactory;
 import com.never_give_up.automation.demo.factory.application.*;
+import com.never_give_up.automation.demo.factory.application.dhcp.DhcpLeaseFactory;
+import com.never_give_up.automation.demo.factory.application.dns.DnsZoneFactory;
 import com.never_give_up.automation.demo.factory.attack.TransportAttackFactory;
+import com.never_give_up.automation.demo.factory.balance.*;
+import com.never_give_up.automation.demo.factory.capture.PacketCaptureFactory;
 import com.never_give_up.automation.demo.factory.checksum.UdpChecksumFactory;
 import com.never_give_up.automation.demo.factory.control.BandwidthFactory;
 import com.never_give_up.automation.demo.factory.control.CongestionControlFactory;
@@ -13,27 +17,38 @@ import com.never_give_up.automation.demo.factory.control.SessionFactory;
 import com.never_give_up.automation.demo.factory.device.NetworkDeviceFactory;
 import com.never_give_up.automation.demo.factory.dhcp.DhcpFullPacketFactory;
 import com.never_give_up.automation.demo.factory.dns.DnsRecursiveFactory;
+import com.never_give_up.automation.demo.factory.event.EventFactory;
+import com.never_give_up.automation.demo.factory.flow.FlowFactory;
 import com.never_give_up.automation.demo.factory.function.*;
 import com.never_give_up.automation.demo.factory.icmp.IcmpErrorFactory;
 import com.never_give_up.automation.demo.factory.interfacee.NetworkInterfaceFactory;
 import com.never_give_up.automation.demo.factory.link.*;
-import com.never_give_up.automation.demo.factory.multicast.IgmpFactory;
+import com.never_give_up.automation.demo.factory.log.LogFactory;
+import com.never_give_up.automation.demo.factory.multicast.*;
 import com.never_give_up.automation.demo.factory.nd.NdpFactory;
 import com.never_give_up.automation.demo.factory.network.IcmpPacketFactory;
 import com.never_give_up.automation.demo.factory.network.IpFragmentFactory;
 import com.never_give_up.automation.demo.factory.network.IpPacketFactory;
+import com.never_give_up.automation.demo.factory.network.arp.ArpTableFactory;
+import com.never_give_up.automation.demo.factory.network.ipv6.*;
 import com.never_give_up.automation.demo.factory.option.IpOptionFactory;
 import com.never_give_up.automation.demo.factory.option.TcpOptionFactory;
 import com.never_give_up.automation.demo.factory.physical.BitStreamFactory;
 import com.never_give_up.automation.demo.factory.physical.PhysicalChannelFactory;
 import com.never_give_up.automation.demo.factory.qos.QosTrafficFactory;
+import com.never_give_up.automation.demo.factory.qos.SchedulerFactory;
 import com.never_give_up.automation.demo.factory.queue.PacketQueueFactory;
 import com.never_give_up.automation.demo.factory.route.BgpPacketFactory;
+import com.never_give_up.automation.demo.factory.route.ForwardingEngineFactory;
 import com.never_give_up.automation.demo.factory.route.IpForwardFactory;
 import com.never_give_up.automation.demo.factory.route.OspfPacketFactory;
 import com.never_give_up.automation.demo.factory.security.FirewallRuleFactory;
+import com.never_give_up.automation.demo.factory.security.crypto.*;
 import com.never_give_up.automation.demo.factory.security.ipsec.IpsecFactory;
 import com.never_give_up.automation.demo.factory.serialize.PacketSerializerFactory;
+import com.never_give_up.automation.demo.factory.session.SessionTableFactory;
+import com.never_give_up.automation.demo.factory.socket.SocketFactory;
+import com.never_give_up.automation.demo.factory.stat.StatisticsFactory;
 import com.never_give_up.automation.demo.factory.timer.TcpTimerFactory;
 import com.never_give_up.automation.demo.factory.topology.LinkFactory;
 import com.never_give_up.automation.demo.factory.topology.SubnetFactory;
@@ -41,6 +56,7 @@ import com.never_give_up.automation.demo.factory.transition.Nat64Factory;
 import com.never_give_up.automation.demo.factory.transport.TcpPacketFactory;
 import com.never_give_up.automation.demo.factory.transport.TcpReassemblyFactory;
 import com.never_give_up.automation.demo.factory.transport.UdpPacketFactory;
+import com.never_give_up.automation.demo.factory.transport.tcp.*;
 import com.never_give_up.automation.demo.factory.tunnel.TunnelFactory;
 import com.never_give_up.automation.demo.factory.vlan.VlanFactory;
 import com.never_give_up.automation.demo.factory.window.TcpWindowFactory;
@@ -306,6 +322,28 @@ public class FactoryManager {
     private final CurlFactory curlFactory;
     private final WgetFactory wgetFactory;
 
+    // ===================== 你新增的 20 个核心工厂 =====================
+    private final SocketFactory socketFactory;
+    private final TcpStateMachineFactory tcpStateMachineFactory;
+    private final MacTableFactory macTableFactory;
+    private final CamTableFactory camTableFactory;
+    private final ForwardingEngineFactory forwardingEngineFactory;
+    private final SessionTableFactory sessionTableFactory;
+    private final FlowFactory flowFactory;
+    private final LoadBalancerFactory loadBalancerFactory;
+    private final SchedulerFactory schedulerFactory;
+    private final DnsZoneFactory dnsZoneFactory;
+    private final DhcpLeaseFactory dhcpLeaseFactory;
+    private final ArpTableFactory arpTableFactory;
+    private final NeighborTableFactory neighborTableFactory;
+    private final MulticastRoutingFactory multicastRoutingFactory;
+    private final MplsLabelFactory mplsLabelFactory;
+    private final CertificateStoreFactory certificateStoreFactory;
+    private final EventFactory eventFactory;
+    private final StatisticsFactory statisticsFactory;
+    private final LogFactory logFactory;
+    private final PacketCaptureFactory packetCaptureFactory;
+
     public FactoryManager() {
         // ===================== 原有基础工厂初始化 =====================
         this.ipAddressFactory = new IpAddressFactory();
@@ -467,6 +505,27 @@ public class FactoryManager {
         this.telnetClientFactory = new TelnetClientFactory();
         this.curlFactory = new CurlFactory();
         this.wgetFactory = new WgetFactory();
+
+        this.socketFactory = new SocketFactory();
+        this.tcpStateMachineFactory = new TcpStateMachineFactory();
+        this.macTableFactory = new MacTableFactory();
+        this.camTableFactory = new CamTableFactory();
+        this.forwardingEngineFactory = new ForwardingEngineFactory();
+        this.sessionTableFactory = new SessionTableFactory();
+        this.flowFactory = new FlowFactory();
+        this.loadBalancerFactory = new LoadBalancerFactory();
+        this.schedulerFactory = new SchedulerFactory();
+        this.dnsZoneFactory = new DnsZoneFactory();
+        this.dhcpLeaseFactory = new DhcpLeaseFactory();
+        this.arpTableFactory = new ArpTableFactory();
+        this.neighborTableFactory = new NeighborTableFactory();
+        this.multicastRoutingFactory = new MulticastRoutingFactory();
+        this.mplsLabelFactory = new MplsLabelFactory();
+        this.certificateStoreFactory = new CertificateStoreFactory();
+        this.eventFactory = new EventFactory();
+        this.statisticsFactory = new StatisticsFactory();
+        this.logFactory = new LogFactory();
+        this.packetCaptureFactory = new PacketCaptureFactory();
     }
 
     /**
