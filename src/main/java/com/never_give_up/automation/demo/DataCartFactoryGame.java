@@ -642,8 +642,21 @@ public class DataCartFactoryGame extends JFrame {
         leftPanel.add(mainLeft, BorderLayout.CENTER);
         add(leftPanel, BorderLayout.WEST);
 
+//        canvas = new GameCanvas();
+//        add(canvas, BorderLayout.CENTER);
+        // 找到创建 canvas 的位置
         canvas = new GameCanvas();
-        add(canvas, BorderLayout.CENTER);
+        canvas.setPreferredSize(new Dimension(MAP_COLS * TILE_SIZE, MAP_ROWS * TILE_SIZE));
+
+// 创建带滚动条的面板
+        JScrollPane mapScrollPane = new JScrollPane(canvas);
+        mapScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        mapScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+        mapScrollPane.getHorizontalScrollBar().setUnitIncrement(40);
+        mapScrollPane.getVerticalScrollBar().setUnitIncrement(40);
+
+// 添加到中心位置
+        add(mapScrollPane, BorderLayout.CENTER);
 
         JPanel rightPanel = new JPanel(new BorderLayout());
         rightPanel.setPreferredSize(new Dimension(280, 0));
