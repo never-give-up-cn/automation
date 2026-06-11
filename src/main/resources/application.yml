@@ -1,0 +1,11 @@
+server:
+  port: 8080
+
+risk:
+  assessment:
+    base-url: http://116.62.236.8:8010
+    api-key: your_service_api_key_here  # 替换为实际配置的 SERVICE_API_KEYS
+
+logging:
+  level:
+    com.never_give_up: DEBUG

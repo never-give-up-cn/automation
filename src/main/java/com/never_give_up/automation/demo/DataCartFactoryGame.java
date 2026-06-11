@@ -83,6 +83,7 @@ import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.geom.AffineTransform;
 import java.security.KeyFactory;
 import java.security.KeyPairGenerator;
 import java.security.PublicKey;
@@ -94,6 +95,47 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class DataCartFactoryGame extends JFrame {
+    // 在 DataCartFactoryGame 类中添加区域定义枚举和配置
+    private enum BuildingZone {
+        ZONE_APPLICATION("📡 应用层", new Color(0, 200, 200, 50), new Color(0, 200, 200)),
+        ZONE_TRANSPORT("🔌 传输层 (TCP/UDP)", new Color(255, 165, 0, 40), new Color(255, 165, 0)),
+        ZONE_NETWORK("🌐 网络层 (IP/ICMP)", new Color(255, 255, 0, 40), new Color(255, 255, 0)),
+        ZONE_LINK("🔗 链路层 (Ethernet/ARP)", new Color(0, 160, 255, 40), new Color(0, 160, 255)),
+        ZONE_PHYSICAL("⚡ 物理层", new Color(200, 200, 200, 40), new Color(200, 200, 200)),
+        ZONE_SECURITY("🛡️ 安全防护", new Color(255, 80, 80, 50), new Color(255, 80, 80)),
+        ZONE_NETWORK_DEVICE("🔌 网络设备", new Color(100, 100, 200, 40), new Color(100, 100, 200)),
+        ZONE_QOS("🎯 QoS/拥塞控制", new Color(100, 200, 100, 40), new Color(100, 200, 100)),
+        ZONE_GATEWAY("🚪 网关/NAT", new Color(255, 140, 0, 40), new Color(255, 140, 0)),
+        ZONE_ROUTER("📡 路由协议", new Color(200, 100, 0, 40), new Color(200, 100, 0)),
+        ZONE_DHCP("📡 DHCP", new Color(100, 100, 255, 40), new Color(100, 100, 255)),
+        ZONE_DNS("🌐 DNS", new Color(0, 200, 200, 40), new Color(0, 200, 200)),
+        ZONE_IPV6("🌍 IPv6", new Color(80, 80, 180, 40), new Color(80, 80, 180)),
+        ZONE_VPN("🔒 VPN隧道", new Color(100, 80, 160, 40), new Color(100, 80, 160)),
+        ZONE_ENCRYPTION("🔐 加密证书", new Color(180, 180, 100, 40), new Color(180, 180, 100)),
+        ZONE_MONITOR("📊 监控管理", new Color(80, 180, 200, 40), new Color(80, 180, 200)),
+        ZONE_MULTICAST("📡 组播路由", new Color(180, 80, 180, 40), new Color(180, 80, 180)),
+        ZONE_DIAGNOSTIC("🔧 诊断工具", new Color(150, 150, 150, 40), new Color(150, 150, 150)),
+        ZONE_CORE("🏛️ 核心服务", new Color(120, 120, 120, 40), new Color(120, 120, 120)),
+        ZONE_MINING("⛏️ 采矿/数据源", new Color(40, 100, 220, 40), new Color(40, 100, 220)),
+        ZONE_APPLICATION_PROTOCOL("📨 应用协议", new Color(100, 150, 200, 40), new Color(100, 150, 200)),
+        ZONE_LINK_ENHANCE("🔗 链路增强", new Color(0, 140, 140, 40), new Color(0, 140, 140)),
+        ZONE_NAT_ENHANCE("🌍 NAT增强", new Color(200, 120, 60, 40), new Color(200, 120, 60)),
+        ZONE_LOAD_BALANCE("⚖️ 负载均衡", new Color(200, 100, 80, 40), new Color(200, 100, 80)),
+        ZONE_ACCESS_CONTROL("🚫 访问控制", new Color(180, 100, 120, 40), new Color(180, 100, 120));
+
+        final String name;
+        final Color bgColor;
+        final Color borderColor;
+
+        BuildingZone(String name, Color bgColor, Color borderColor) {
+            this.name = name;
+            this.bgColor = bgColor;
+            this.borderColor = borderColor;
+        }
+    }
+
+    // 添加建筑到区域的映射
+    private Map<String, BuildingZone> buildingZoneMap = new HashMap<>();
     enum TcpState {
         CLOSED, SYN_SENT, ESTABLISHED, FIN_WAIT_1, FIN_WAIT_2, CLOSE_WAIT, LAST_ACK, TIME_WAIT
     }
@@ -161,7 +203,18 @@ public class DataCartFactoryGame extends JFrame {
             this.sendTime = sendTime;
         }
     }
-
+    // 在类的字段声明区域添加
+    private double canvasScale = 1.0;      // 当前缩放比例
+    private final double MIN_SCALE = 0.5;   // 最小缩放比例
+    private final double MAX_SCALE = 3.0;   // 最大缩放比例
+    private final double SCALE_STEP = 0.1;  // 每次滚轮缩放步长
+    // ===== 新增：拖拽平移相关字段 =====
+    private int viewOffsetX = 0;     // 视图水平偏移（逻辑坐标）
+    private int viewOffsetY = 0;     // 视图垂直偏移（逻辑坐标）
+    private int lastDragX = 0;       // 上次拖拽的X坐标
+    private int lastDragY = 0;       // 上次拖拽的Y坐标
+    private boolean isDragging = false;  // 是否正在拖拽
+    private boolean demoCompleted = false;
     private FactoryManager factoryManager;
     private PacketAdapter packetAdapter;
     // ===================== 新增 14 个工厂实例 =====================
@@ -183,7 +236,7 @@ public class DataCartFactoryGame extends JFrame {
     // ========== 新增：各层工厂实例 ==========
     private com.never_give_up.automation.demo.factory.transport.TcpPacketFactory tcpFactory;
     private com.never_give_up.automation.demo.factory.network.IpPacketFactory ipFactory;
-    private com.never_give_up.automation.demo.factory.link.EthernetFactory ethernetFactory;
+    private EthernetFactory ethernetFactory;
     private com.never_give_up.automation.demo.factory.address.PortFactory portFactory;
 
     // ===================== 新增：IPv6 协议栈工厂 =====================
@@ -362,7 +415,7 @@ public class DataCartFactoryGame extends JFrame {
     private final int SERVER_BUFFER_MAX = 5;
     private long lastServerConsumeTime = 0;
     private int serverDecodeDelay = 600;
-    private final int WAN_BOTTLE_NECK_MAX = 10;
+    private final int WAN_BOTTLE_NECK_MAX = 20; // 增加公网容量
     private long stateTimerWatchdog = 0;
     private final long RTO_TIMEOUT = 500000;
     private int nextSeqNum = 100;
@@ -429,9 +482,9 @@ public class DataCartFactoryGame extends JFrame {
     private boolean httpDemoEnabled = false;
     private boolean tlsEnabled = false;
     private java.security.KeyPair serverRsaKeyPair;
-    private javax.crypto.Cipher rsaCipher;
+    private Cipher rsaCipher;
     private javax.crypto.SecretKey sessionKey;
-    private javax.crypto.Cipher aesCipher;
+    private Cipher aesCipher;
     private boolean tlsCipherReady = false;
     private TlsState tlsState = TlsState.IDLE;
     private boolean udpActive = false;
@@ -440,7 +493,14 @@ public class DataCartFactoryGame extends JFrame {
 
     private boolean httpSent = false;
     private String httpResponseContent = "";
+    // 添加一个方法来获取当前缩放后的坐标/尺寸（用于坐标转换）
+    public int scaleX(int x) {
+        return (int) (x * canvasScale);
+    }
 
+    public int scaleSize(int size) {
+        return (int) (size * canvasScale);
+    }
     public DataCartFactoryGame() {
         setTitle("🌐 全协议栈网络可视化模拟器 (DHCP + TCP连接表 + ICMP Ping/Traceroute)");
         setSize(2000, 1050);
@@ -453,7 +513,7 @@ public class DataCartFactoryGame extends JFrame {
         // 初始化各层工厂
         tcpFactory = new com.never_give_up.automation.demo.factory.transport.TcpPacketFactory();
         ipFactory = new com.never_give_up.automation.demo.factory.network.IpPacketFactory();
-        ethernetFactory = new com.never_give_up.automation.demo.factory.link.EthernetFactory();
+        ethernetFactory = new EthernetFactory();
         portFactory = new com.never_give_up.automation.demo.factory.address.PortFactory();
         // ===================== 初始化 14 个新工厂 =====================
         this.bitStreamFactory = factoryManager.getBitStreamFactory();
@@ -590,6 +650,7 @@ public class DataCartFactoryGame extends JFrame {
             throw new RuntimeException("加密组件初始化失败", e);
         }
         initMap();
+        initZoneMapping();
         initArpCache();
         initDnsCache();
 
@@ -647,17 +708,212 @@ public class DataCartFactoryGame extends JFrame {
         // 找到创建 canvas 的位置
         canvas = new GameCanvas();
         canvas.setPreferredSize(new Dimension(MAP_COLS * TILE_SIZE, MAP_ROWS * TILE_SIZE));
-
+        canvas.setBackground(new Color(18, 20, 26));
 // 创建带滚动条的面板
         JScrollPane mapScrollPane = new JScrollPane(canvas);
         mapScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
         mapScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
         mapScrollPane.getHorizontalScrollBar().setUnitIncrement(40);
         mapScrollPane.getVerticalScrollBar().setUnitIncrement(40);
+// 添加鼠标拖拽监听器到 canvas
+        // 添加鼠标监听器到 canvas
+        canvas.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                if (SwingUtilities.isLeftMouseButton(e)) {
+                    isDragging = true;
+                    lastDragX = e.getX();
+                    lastDragY = e.getY();
+                    canvas.setCursor(Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR));
+                }
+            }
 
-// 添加到中心位置
-        add(mapScrollPane, BorderLayout.CENTER);
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                if (SwingUtilities.isLeftMouseButton(e)) {
+                    if (!isDragging) {
+                        // 没有拖拽，是点击事件，处理建筑放置
+                        // 关键：使用 getLogicalX/Y 方法，传入鼠标屏幕坐标
+                        int logicalX = canvas.getLogicalX(e.getX());
+                        int logicalY = canvas.getLogicalY(e.getY());
 
+                        if (logicalX >= 0 && logicalY >= 0) {
+                            int col = logicalX / TILE_SIZE;
+                            int row = logicalY / TILE_SIZE;
+                            if (row >= 0 && row < MAP_ROWS && col >= 0 && col < MAP_COLS) {
+                                DataCart cart = getDataCartAtPoint(new Point(logicalX, logicalY));
+                                if (cart != null) return;
+
+                                String existing = buildingLayout[row][col];
+                                if (!existing.equals("NONE") || mapLayout[row][col] == 9) return;
+
+                                if (selectedBuilding.startsWith("MINER_")) {
+                                    int reqType = selectedBuilding.equals("MINER_H") ? 1 : 2;
+                                    if (mapLayout[row][col] == reqType && funds >= PRICE_MINER) {
+                                        funds -= PRICE_MINER;
+                                        buildingLayout[row][col] = selectedBuilding;
+                                        appendToConsole(String.format("【🏗️ 建造】: 放置 %s 矿机，花费 %d", selectedBuilding, PRICE_MINER));
+                                    }
+                                } else {
+                                    if (mapLayout[row][col] == 0 && funds >= PRICE_MACHINE) {
+                                        funds -= PRICE_MACHINE;
+                                        buildingLayout[row][col] = selectedBuilding;
+                                        appendToConsole(String.format("【🏗️ 建造】: 放置 %s，花费 %d", selectedBuilding, PRICE_MACHINE));
+                                    }
+                                }
+                                updateTopLabel();
+                                canvas.repaint();
+                            }
+                        }
+                    }
+                    isDragging = false;
+                    canvas.setCursor(Cursor.getDefaultCursor());
+                }
+
+                // 右键删除建筑
+                if (SwingUtilities.isRightMouseButton(e)) {
+                    // 关键修复：使用 getLogicalX/Y 方法
+                    int logicalX = canvas.getLogicalX(e.getX());
+                    int logicalY = canvas.getLogicalY(e.getY());
+
+                    if (logicalX >= 0 && logicalY >= 0) {
+                        int col = logicalX / TILE_SIZE;
+                        int row = logicalY / TILE_SIZE;
+                        if (row >= 0 && row < MAP_ROWS && col >= 0 && col < MAP_COLS) {
+                            String existing = buildingLayout[row][col];
+                            if (!existing.equals("NONE") && !existing.equals("PC_FACTORY") && !existing.equals("RX_ST") && !existing.equals("DHCP_SERVER") && mapLayout[row][col] != 9) {
+                                int refund = existing.startsWith("MINER") ? PRICE_MINER / 2 : PRICE_MACHINE / 2;
+                                funds += refund;
+                                buildingLayout[row][col] = "NONE";
+                                canvas.repaint();
+                                updateTopLabel();
+                                appendToConsole(String.format("【🗑️ 拆除】: 移除 %s，返还 %d 资金", existing, refund));
+                            }
+                        }
+                    }
+                }
+            }
+
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2) {
+                    int logicalX = canvas.getLogicalX(e.getX());
+                    int logicalY = canvas.getLogicalY(e.getY());
+                    DataCart cart = getDataCartAtPoint(new Point(logicalX, logicalY));
+                    if (cart != null) {
+                        showPacketDetails(cart);
+                    }
+                }
+            }
+        });
+
+        canvas.addMouseMotionListener(new MouseAdapter() {
+            @Override
+            public void mouseDragged(MouseEvent e) {
+                if (isDragging) {
+                    int deltaX = e.getX() - lastDragX;
+                    int deltaY = e.getY() - lastDragY;
+
+                    // 更新视图偏移
+                    viewOffsetX += deltaX;
+                    viewOffsetY += deltaY;
+
+                    // 可选：添加上下限限制（防止拖出边界）
+                    // viewOffsetX = Math.min(Math.max(viewOffsetX, -maxOffsetX), maxOffsetX);
+
+                    lastDragX = e.getX();
+                    lastDragY = e.getY();
+                    canvas.repaint();
+                }
+            }
+        });
+
+// 添加滚轮缩放监听器
+        canvas.addMouseWheelListener(e -> {
+            if (e.isControlDown()) {
+                double oldScale = canvasScale;
+                int rotation = e.getWheelRotation();
+                if (rotation < 0) {
+                    canvasScale = Math.min(MAX_SCALE, canvasScale + SCALE_STEP);
+                } else {
+                    canvasScale = Math.max(MIN_SCALE, canvasScale - SCALE_STEP);
+                }
+
+                if (oldScale != canvasScale) {
+                    // 缩放时，调整偏移量以保持鼠标位置为中心的缩放效果
+                    if (e.getSource() instanceof Component) {
+                        Point mousePos = e.getPoint();
+                        // 计算缩放前鼠标指向的逻辑坐标
+                        double logicalX = (mousePos.x - viewOffsetX) / oldScale;
+                        double logicalY = (mousePos.y - viewOffsetY) / oldScale;
+                        // 缩放后，使相同的逻辑坐标仍位于鼠标位置
+                        viewOffsetX = (int) (mousePos.x - logicalX * canvasScale);
+                        viewOffsetY = (int) (mousePos.y - logicalY * canvasScale);
+                    }
+
+                    // 更新画布尺寸（可选，如果不需要自动滚动条可以跳过）
+                    int newWidth = (int) (MAP_COLS * TILE_SIZE * canvasScale);
+                    int newHeight = (int) (MAP_ROWS * TILE_SIZE * canvasScale);
+                    canvas.setPreferredSize(new Dimension(newWidth, newHeight));
+                    canvas.revalidate();
+                    canvas.repaint();
+
+                    appendToConsole(String.format("【🔍 画布缩放】: %.1f倍 (Ctrl+滚轮)", canvasScale));
+                }
+            }
+        });
+
+// ===== 新增：添加鼠标滚轮缩放监听 =====
+        mapScrollPane.addMouseWheelListener(e -> {
+            if (e.isControlDown()) {  // Ctrl + 滚轮缩放（常见习惯）
+                double oldScale = canvasScale;
+                int rotation = e.getWheelRotation();
+                if (rotation < 0) {
+                    // 向上滚动，放大
+                    canvasScale = Math.min(MAX_SCALE, canvasScale + SCALE_STEP);
+                } else {
+                    // 向下滚动，缩小
+                    canvasScale = Math.max(MIN_SCALE, canvasScale - SCALE_STEP);
+                }
+
+                if (oldScale != canvasScale) {
+                    // 更新画布大小
+                    int newWidth = (int) (MAP_COLS * TILE_SIZE * canvasScale);
+                    int newHeight = (int) (MAP_ROWS * TILE_SIZE * canvasScale);
+                    canvas.setPreferredSize(new Dimension(newWidth, newHeight));
+                    canvas.revalidate();
+                    canvas.repaint();
+
+                    // 可选：在控制台显示当前缩放比例
+                    appendToConsole(String.format("【🔍 画布缩放】: %.1f倍 (Ctrl+滚轮)", canvasScale));
+                }
+            }
+        });
+
+// 添加提示标签（可选）
+        JPanel mapPanelWithHint = new JPanel(new BorderLayout());
+        mapPanelWithHint.add(mapScrollPane, BorderLayout.CENTER);
+        JLabel hintLabel = new JLabel("  💡 提示：按住 Ctrl 键 + 滚动鼠标滚轮可缩放地图", JLabel.LEFT);
+        hintLabel.setFont(new Font("微软雅黑", Font.PLAIN, 11));
+        hintLabel.setForeground(Color.GRAY);
+        mapPanelWithHint.add(hintLabel, BorderLayout.SOUTH);
+
+// 替换原来的 add(mapScrollPane, BorderLayout.CENTER)
+        add(mapPanelWithHint, BorderLayout.CENTER);
+// 使用 JScrollPane 包裹 canvas
+        mapScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        mapScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+        mapScrollPane.getHorizontalScrollBar().setUnitIncrement(40);
+        mapScrollPane.getVerticalScrollBar().setUnitIncrement(40);
+        mapScrollPane.setWheelScrollingEnabled(true);  // 允许滚动条滚动
+
+// 可选：添加提示标签
+        mapPanelWithHint.add(mapScrollPane, BorderLayout.CENTER);
+        hintLabel.setFont(new Font("微软雅黑", Font.PLAIN, 11));
+        hintLabel.setForeground(Color.GRAY);
+        mapPanelWithHint.add(hintLabel, BorderLayout.SOUTH);
+
+        add(mapPanelWithHint, BorderLayout.CENTER);
         JPanel rightPanel = new JPanel(new BorderLayout());
         rightPanel.setPreferredSize(new Dimension(280, 0));
         rightPanel.setBorder(BorderFactory.createTitledBorder("🌐 TCP 连接表 (netstat)"));
@@ -739,7 +995,9 @@ public class DataCartFactoryGame extends JFrame {
         });
         JButton clearConsoleButton = new JButton("🗑️ 清空控制台");
         clearConsoleButton.addActionListener(e -> txtHexDisplay.setText(""));
-
+        JButton copyConsoleButton = new JButton("📋 复制日志");
+        copyConsoleButton.addActionListener(e -> copyConsoleLog());
+        copyConsoleButton.setToolTipText("复制控制台所有日志到剪贴板");
         JButton pingButton = new JButton("📡 PING");
         pingButton.addActionListener(e -> sendPing());
         JButton tracerouteButton = new JButton("🔎 TRACEROUTE");
@@ -749,6 +1007,7 @@ public class DataCartFactoryGame extends JFrame {
         btnPanel.add(clearArpButton);
         btnPanel.add(clearDnsButton);
         btnPanel.add(clearConsoleButton);
+        btnPanel.add(copyConsoleButton);  // 新增复制按钮
         btnPanel.add(pingButton);
         btnPanel.add(tracerouteButton);
         btnPanel.add(rbTcp);
@@ -760,48 +1019,100 @@ public class DataCartFactoryGame extends JFrame {
 
         buildShopUI();
 
+// 在 canvas 的 MouseAdapter 中修改坐标处理
         canvas.addMouseListener(new MouseAdapter() {
             @Override
             public void mousePressed(MouseEvent e) {
-                Point p = e.getPoint();
-                if (getDataCartAtPoint(p) != null) return;
-
-                int col = e.getX() / TILE_SIZE;
-                int row = e.getY() / TILE_SIZE;
-                if (row >= MAP_ROWS || col >= MAP_COLS) return;
-
+                // 右键删除建筑（需要正确转换坐标）
                 if (SwingUtilities.isRightMouseButton(e)) {
-                    String existing = buildingLayout[row][col];
-                    if (existing.equals("NONE") || existing.equals("PC_FACTORY") || existing.equals("RX_ST")) return;
-                    funds += existing.startsWith("MINER") ? PRICE_MINER / 2 : PRICE_MACHINE / 2;
-                    buildingLayout[row][col] = "NONE";
-                    canvas.repaint();
-                    updateTopLabel();
+                    // 关键修复：使用 getLogicalX/Y 方法转换坐标
+                    // 注意：这里需要传入缩放后的实际屏幕坐标
+                    int logicalX = canvas.getLogicalX(e.getX());
+                    int logicalY = canvas.getLogicalY(e.getY());
+
+                    // 边界检查
+                    if (logicalX < 0 || logicalY < 0) return;
+
+                    int col = logicalX / TILE_SIZE;
+                    int row = logicalY / TILE_SIZE;
+
+                    if (row >= 0 && row < MAP_ROWS && col >= 0 && col < MAP_COLS) {
+                        String existing = buildingLayout[row][col];
+                        // 不能删除 PC 工厂、服务器和网关边界
+                        if (!existing.equals("NONE") && !existing.equals("PC_FACTORY") && !existing.equals("RX_ST") && !existing.equals("DHCP_SERVER")) {
+                            // 检查是否是网关边界（mapLayout[row][col] == 9）
+                            if (mapLayout[row][col] != 9) {
+                                int refund = 0;
+                                if (existing.startsWith("MINER_H") || existing.startsWith("MINER_S")) {
+                                    refund = PRICE_MINER / 2;
+                                } else {
+                                    refund = PRICE_MACHINE / 2;
+                                }
+                                funds += refund;
+                                buildingLayout[row][col] = "NONE";
+                                canvas.repaint();
+                                updateTopLabel();
+                                appendToConsole(String.format("【🗑️ 拆除】: 移除 %s，返还 %d 资金", existing, refund));
+                            }
+                        }
+                    }
                     return;
                 }
 
-                if (!buildingLayout[row][col].equals("NONE") || mapLayout[row][col] == 9) return;
+                // 左键 - 延迟判断拖拽，建筑放置在 mouseReleased 中
+                if (SwingUtilities.isLeftMouseButton(e)) {
+                    // 不做任何事，让 mouseReleased 处理
+                }
+            }
 
-                if (selectedBuilding.startsWith("MINER_")) {
-                    int reqType = selectedBuilding.equals("MINER_H") ? 1 : 2;
-                    if (mapLayout[row][col] == reqType && funds >= PRICE_MINER) {
-                        funds -= PRICE_MINER;
-                        buildingLayout[row][col] = selectedBuilding;
-                    }
-                } else {
-                    if (mapLayout[row][col] == 0 && funds >= PRICE_MACHINE) {
-                        funds -= PRICE_MACHINE;
-                        buildingLayout[row][col] = selectedBuilding;
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                if (SwingUtilities.isLeftMouseButton(e) && !isDragging) {
+                    // 没有拖拽，是点击事件，处理建筑放置
+                    int logicalX = canvas.getLogicalX(e.getX());
+                    int logicalY = canvas.getLogicalY(e.getY());
+
+                    if (logicalX < 0 || logicalY < 0) return;
+
+                    int col = logicalX / TILE_SIZE;
+                    int row = logicalY / TILE_SIZE;
+                    if (row >= 0 && row < MAP_ROWS && col >= 0 && col < MAP_COLS) {
+                        // 获取数据包（优先处理，避免在数据包上建建筑）
+                        DataCart cart = getDataCartAtPoint(new Point(logicalX, logicalY));
+                        if (cart != null) {
+                            return;
+                        }
+
+                        String existing = buildingLayout[row][col];
+                        // 不能建在已有建筑上，也不能建在网关边界
+                        if (!existing.equals("NONE") || mapLayout[row][col] == 9) return;
+
+                        if (selectedBuilding.startsWith("MINER_")) {
+                            int reqType = selectedBuilding.equals("MINER_H") ? 1 : 2;
+                            if (mapLayout[row][col] == reqType && funds >= PRICE_MINER) {
+                                funds -= PRICE_MINER;
+                                buildingLayout[row][col] = selectedBuilding;
+                                appendToConsole(String.format("【🏗️ 建造】: 放置 %s 矿机，花费 %d", selectedBuilding, PRICE_MINER));
+                            }
+                        } else {
+                            if (mapLayout[row][col] == 0 && funds >= PRICE_MACHINE) {
+                                funds -= PRICE_MACHINE;
+                                buildingLayout[row][col] = selectedBuilding;
+                                appendToConsole(String.format("【🏗️ 建造】: 放置 %s，花费 %d", selectedBuilding, PRICE_MACHINE));
+                            }
+                        }
+                        updateTopLabel();
+                        canvas.repaint();
                     }
                 }
-                updateTopLabel();
-                canvas.repaint();
             }
 
             @Override
             public void mouseClicked(MouseEvent e) {
                 if (e.getClickCount() == 2) {
-                    DataCart cart = getDataCartAtPoint(e.getPoint());
+                    int logicalX = canvas.getLogicalX(e.getX());
+                    int logicalY = canvas.getLogicalY(e.getY());
+                    DataCart cart = getDataCartAtPoint(new Point(logicalX, logicalY));
                     if (cart != null) {
                         showPacketDetails(cart);
                     }
@@ -818,7 +1129,16 @@ public class DataCartFactoryGame extends JFrame {
             updateTcpConnTable();
         }).start();
     }
-
+    // 添加一个重置视图的方法（可选）
+    private void resetView() {
+        canvasScale = 1.0;
+        viewOffsetX = 0;
+        viewOffsetY = 0;
+        canvas.setPreferredSize(new Dimension(MAP_COLS * TILE_SIZE, MAP_ROWS * TILE_SIZE));
+        canvas.revalidate();
+        canvas.repaint();
+        appendToConsole("【🔄 视图重置】: 缩放比例恢复100%，偏移归零");
+    }
     private void appendToConsole(String text) {
         SwingUtilities.invokeLater(() -> {
             txtHexDisplay.append(text + "\n");
@@ -1035,7 +1355,29 @@ public class DataCartFactoryGame extends JFrame {
             }
         }
     }
+    // 在 buildShopUI() 方法之后、initMap() 方法之前添加新方法
+    private void copyConsoleLog() {
+        String consoleText = txtHexDisplay.getText();
+        if (consoleText == null || consoleText.trim().isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    "控制台日志为空，无可复制内容",
+                    "提示",
+                    JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
 
+        // 复制到系统剪贴板
+        java.awt.datatransfer.StringSelection selection =
+                new java.awt.datatransfer.StringSelection(consoleText);
+        Toolkit.getDefaultToolkit().getSystemClipboard().setContents(selection, null);
+
+        // 显示复制成功提示
+        JOptionPane.showMessageDialog(this,
+                String.format("✅ 已复制 %d 行日志到剪贴板",
+                        consoleText.split("\n").length),
+                "复制成功",
+                JOptionPane.INFORMATION_MESSAGE);
+    }
     private void initMap() {
         // 初始化矿石资源点
         mapLayout[2][1] = 1;
@@ -1358,6 +1700,232 @@ public class DataCartFactoryGame extends JFrame {
         int stageRow6 = 5;
         buildingLayout[stageRow6][44] = "IPS";
     }
+    // 在 DataCartFactoryGame() 构造函数中，initMap() 之后添加
+    private void initZoneMapping() {
+        // 采矿/数据源区域
+        buildingZoneMap.put("MINER_H", BuildingZone.ZONE_MINING);
+        buildingZoneMap.put("MINER_S", BuildingZone.ZONE_MINING);
+        buildingZoneMap.put("PC_FACTORY", BuildingZone.ZONE_MINING);
+        buildingZoneMap.put("RX_ST", BuildingZone.ZONE_MINING);
+        buildingZoneMap.put("TX_APP", BuildingZone.ZONE_APPLICATION);
+
+        // 应用层协议
+        buildingZoneMap.put("FTP", BuildingZone.ZONE_APPLICATION_PROTOCOL);
+        buildingZoneMap.put("SMTP", BuildingZone.ZONE_APPLICATION_PROTOCOL);
+        buildingZoneMap.put("POP3", BuildingZone.ZONE_APPLICATION_PROTOCOL);
+        buildingZoneMap.put("IMAP", BuildingZone.ZONE_APPLICATION_PROTOCOL);
+        buildingZoneMap.put("SSH", BuildingZone.ZONE_APPLICATION_PROTOCOL);
+        buildingZoneMap.put("TELNET", BuildingZone.ZONE_APPLICATION_PROTOCOL);
+        buildingZoneMap.put("RTP", BuildingZone.ZONE_APPLICATION_PROTOCOL);
+        buildingZoneMap.put("SIP", BuildingZone.ZONE_APPLICATION_PROTOCOL);
+        buildingZoneMap.put("RADIUS", BuildingZone.ZONE_APPLICATION_PROTOCOL);
+        buildingZoneMap.put("DIAMETER", BuildingZone.ZONE_APPLICATION_PROTOCOL);
+        buildingZoneMap.put("LDAP", BuildingZone.ZONE_APPLICATION_PROTOCOL);
+        buildingZoneMap.put("HTTP23", BuildingZone.ZONE_APPLICATION);
+        buildingZoneMap.put("NTP", BuildingZone.ZONE_APPLICATION);
+        buildingZoneMap.put("SNMP", BuildingZone.ZONE_APPLICATION);
+
+        // 传输层
+        buildingZoneMap.put("T_SP", BuildingZone.ZONE_TRANSPORT);
+        buildingZoneMap.put("T_DP", BuildingZone.ZONE_TRANSPORT);
+        buildingZoneMap.put("T_SEQ", BuildingZone.ZONE_TRANSPORT);
+        buildingZoneMap.put("T_ACK", BuildingZone.ZONE_TRANSPORT);
+        buildingZoneMap.put("T_CTL", BuildingZone.ZONE_TRANSPORT);
+        buildingZoneMap.put("T_WIN", BuildingZone.ZONE_TRANSPORT);
+        buildingZoneMap.put("T_CHK", BuildingZone.ZONE_TRANSPORT);
+        buildingZoneMap.put("T_CORE", BuildingZone.ZONE_TRANSPORT);
+        buildingZoneMap.put("UDP_CHECKSUM", BuildingZone.ZONE_TRANSPORT);
+        buildingZoneMap.put("TCP_OPTION", BuildingZone.ZONE_TRANSPORT);
+        buildingZoneMap.put("TCP_WINDOW", BuildingZone.ZONE_TRANSPORT);
+        buildingZoneMap.put("TCP_TIMER", BuildingZone.ZONE_TRANSPORT);
+        buildingZoneMap.put("TCP_REASSEMBLY", BuildingZone.ZONE_TRANSPORT);
+        buildingZoneMap.put("TCP_KEEPALIVE", BuildingZone.ZONE_TRANSPORT);
+        buildingZoneMap.put("TCP_SACK", BuildingZone.ZONE_TRANSPORT);
+        buildingZoneMap.put("TCP_ECN", BuildingZone.ZONE_TRANSPORT);
+        buildingZoneMap.put("TCP_FASTOPEN", BuildingZone.ZONE_TRANSPORT);
+
+        // 网络层
+        buildingZoneMap.put("TX_IPH", BuildingZone.ZONE_NETWORK);
+        buildingZoneMap.put("TX_IP_FRAG", BuildingZone.ZONE_NETWORK);
+        buildingZoneMap.put("RX_IP", BuildingZone.ZONE_NETWORK);
+        buildingZoneMap.put("RX_FRAG", BuildingZone.ZONE_NETWORK);
+        buildingZoneMap.put("IP_OPTION", BuildingZone.ZONE_NETWORK);
+        buildingZoneMap.put("IP_FORWARD", BuildingZone.ZONE_NETWORK);
+        buildingZoneMap.put("ICMP_ERROR", BuildingZone.ZONE_NETWORK);
+        buildingZoneMap.put("ICMP_PING", BuildingZone.ZONE_MONITOR);
+        buildingZoneMap.put("ICMP_TRACE", BuildingZone.ZONE_MONITOR);
+
+        // 链路层
+        buildingZoneMap.put("ETH_DST", BuildingZone.ZONE_LINK);
+        buildingZoneMap.put("ETH_SRC", BuildingZone.ZONE_LINK);
+        buildingZoneMap.put("ETH_TYPE", BuildingZone.ZONE_LINK);
+        buildingZoneMap.put("TX_LLC", BuildingZone.ZONE_LINK);
+        buildingZoneMap.put("TX_FCS", BuildingZone.ZONE_LINK);
+        buildingZoneMap.put("RX_LLC", BuildingZone.ZONE_LINK);
+        buildingZoneMap.put("RX_ETH", BuildingZone.ZONE_LINK);
+        buildingZoneMap.put("RX_FCS", BuildingZone.ZONE_LINK);
+        buildingZoneMap.put("TX_ARP", BuildingZone.ZONE_LINK);
+        buildingZoneMap.put("RX_ARP", BuildingZone.ZONE_LINK);
+        buildingZoneMap.put("ETH_PADDING", BuildingZone.ZONE_LINK);
+
+        // 链路增强
+        buildingZoneMap.put("LLDP", BuildingZone.ZONE_LINK_ENHANCE);
+        buildingZoneMap.put("STP", BuildingZone.ZONE_LINK_ENHANCE);
+        buildingZoneMap.put("LACP", BuildingZone.ZONE_LINK_ENHANCE);
+        buildingZoneMap.put("MPLS", BuildingZone.ZONE_LINK_ENHANCE);
+        buildingZoneMap.put("VLAN_TAG", BuildingZone.ZONE_LINK_ENHANCE);
+        buildingZoneMap.put("TUNNEL_GRE", BuildingZone.ZONE_LINK_ENHANCE);
+
+        // 物理层
+        buildingZoneMap.put("BIT_STREAM", BuildingZone.ZONE_PHYSICAL);
+        buildingZoneMap.put("PHY_CHANNEL", BuildingZone.ZONE_PHYSICAL);
+        buildingZoneMap.put("PPPOE", BuildingZone.ZONE_PHYSICAL);
+        buildingZoneMap.put("MACSEC", BuildingZone.ZONE_SECURITY);
+
+        // 安全防护
+        buildingZoneMap.put("FW_IN", BuildingZone.ZONE_SECURITY);
+        buildingZoneMap.put("FW_OUT", BuildingZone.ZONE_SECURITY);
+        buildingZoneMap.put("IDS", BuildingZone.ZONE_SECURITY);
+        buildingZoneMap.put("IPS", BuildingZone.ZONE_SECURITY);
+        buildingZoneMap.put("DPI", BuildingZone.ZONE_SECURITY);
+        buildingZoneMap.put("WAF", BuildingZone.ZONE_SECURITY);
+        buildingZoneMap.put("DDOS", BuildingZone.ZONE_SECURITY);
+        buildingZoneMap.put("RATELIMIT", BuildingZone.ZONE_SECURITY);
+        buildingZoneMap.put("ACL", BuildingZone.ZONE_ACCESS_CONTROL);
+        buildingZoneMap.put("MAC_AUTH", BuildingZone.ZONE_ACCESS_CONTROL);
+        buildingZoneMap.put("DOT1X", BuildingZone.ZONE_ACCESS_CONTROL);
+        buildingZoneMap.put("IPSEC", BuildingZone.ZONE_SECURITY);
+        buildingZoneMap.put("ATTACK", BuildingZone.ZONE_SECURITY);
+
+        // 网络设备
+        buildingZoneMap.put("SWITCH", BuildingZone.ZONE_NETWORK_DEVICE);
+        buildingZoneMap.put("HUB", BuildingZone.ZONE_NETWORK_DEVICE);
+        buildingZoneMap.put("BRIDGE", BuildingZone.ZONE_NETWORK_DEVICE);
+        buildingZoneMap.put("SUBNET_A", BuildingZone.ZONE_NETWORK_DEVICE);
+        buildingZoneMap.put("SUBNET_B", BuildingZone.ZONE_NETWORK_DEVICE);
+        buildingZoneMap.put("LINK_UP", BuildingZone.ZONE_NETWORK_DEVICE);
+        buildingZoneMap.put("LINK_DOWN", BuildingZone.ZONE_NETWORK_DEVICE);
+
+        // QoS/拥塞控制
+        buildingZoneMap.put("QOS", BuildingZone.ZONE_QOS);
+        buildingZoneMap.put("Q_IN", BuildingZone.ZONE_QOS);
+        buildingZoneMap.put("Q_OUT", BuildingZone.ZONE_QOS);
+        buildingZoneMap.put("Q_DROP", BuildingZone.ZONE_QOS);
+        buildingZoneMap.put("CC_SLOW", BuildingZone.ZONE_QOS);
+        buildingZoneMap.put("CC_AVOID", BuildingZone.ZONE_QOS);
+        buildingZoneMap.put("CC_FAST", BuildingZone.ZONE_QOS);
+        buildingZoneMap.put("SCHEDULER", BuildingZone.ZONE_QOS);
+
+        // 网关/NAT
+        buildingZoneMap.put("R_LAN", BuildingZone.ZONE_GATEWAY);
+        buildingZoneMap.put("R_TAB", BuildingZone.ZONE_GATEWAY);
+        buildingZoneMap.put("R_NAT", BuildingZone.ZONE_GATEWAY);
+        buildingZoneMap.put("R_WAN", BuildingZone.ZONE_GATEWAY);
+        buildingZoneMap.put("BW_CTRL", BuildingZone.ZONE_GATEWAY);
+        buildingZoneMap.put("NAT64", BuildingZone.ZONE_GATEWAY);
+        buildingZoneMap.put("NAT_HAIRPIN", BuildingZone.ZONE_NAT_ENHANCE);
+        buildingZoneMap.put("NAT_HOLE", BuildingZone.ZONE_NAT_ENHANCE);
+        buildingZoneMap.put("UPNP", BuildingZone.ZONE_NAT_ENHANCE);
+        buildingZoneMap.put("PCP", BuildingZone.ZONE_NAT_ENHANCE);
+
+        // 路由协议
+        buildingZoneMap.put("ROUTER1", BuildingZone.ZONE_ROUTER);
+        buildingZoneMap.put("ROUTER2", BuildingZone.ZONE_ROUTER);
+        buildingZoneMap.put("ROUTER3", BuildingZone.ZONE_ROUTER);
+        buildingZoneMap.put("OSPF", BuildingZone.ZONE_ROUTER);
+        buildingZoneMap.put("BGP", BuildingZone.ZONE_ROUTER);
+
+        // DHCP
+        buildingZoneMap.put("DHCP_DISC", BuildingZone.ZONE_DHCP);
+        buildingZoneMap.put("DHCP_SERVER", BuildingZone.ZONE_DHCP);
+        buildingZoneMap.put("DHCP_OFFER", BuildingZone.ZONE_DHCP);
+        buildingZoneMap.put("DHCP_REQ", BuildingZone.ZONE_DHCP);
+        buildingZoneMap.put("DHCP_ACK", BuildingZone.ZONE_DHCP);
+        buildingZoneMap.put("DHCP_FULL", BuildingZone.ZONE_DHCP);
+        buildingZoneMap.put("DHCP_LEASE", BuildingZone.ZONE_DHCP);
+
+        // DNS
+        buildingZoneMap.put("DNS_CLIENT", BuildingZone.ZONE_DNS);
+        buildingZoneMap.put("DNS_LOCAL", BuildingZone.ZONE_DNS);
+        buildingZoneMap.put("DNS_ROOT", BuildingZone.ZONE_DNS);
+        buildingZoneMap.put("DNS_AUTH", BuildingZone.ZONE_DNS);
+        buildingZoneMap.put("DNS_RECURSIVE", BuildingZone.ZONE_DNS);
+        buildingZoneMap.put("DNS_ZONE", BuildingZone.ZONE_DNS);
+
+        // IPv6
+        buildingZoneMap.put("IPV6", BuildingZone.ZONE_IPV6);
+        buildingZoneMap.put("IPV6_FRAG", BuildingZone.ZONE_IPV6);
+        buildingZoneMap.put("IPV6_OPTION", BuildingZone.ZONE_IPV6);
+        buildingZoneMap.put("IPV6_ND", BuildingZone.ZONE_IPV6);
+        buildingZoneMap.put("NDP_DISC", BuildingZone.ZONE_IPV6);
+
+        // VPN
+        buildingZoneMap.put("IPSEC_IKE", BuildingZone.ZONE_VPN);
+        buildingZoneMap.put("IPSEC_ESP", BuildingZone.ZONE_VPN);
+        buildingZoneMap.put("IPSEC_AH", BuildingZone.ZONE_VPN);
+        buildingZoneMap.put("OPENVPN", BuildingZone.ZONE_VPN);
+        buildingZoneMap.put("WIREGUARD", BuildingZone.ZONE_VPN);
+        buildingZoneMap.put("L2TP", BuildingZone.ZONE_VPN);
+        buildingZoneMap.put("SSTP", BuildingZone.ZONE_VPN);
+
+        // 加密证书
+        buildingZoneMap.put("X509", BuildingZone.ZONE_ENCRYPTION);
+        buildingZoneMap.put("CRL", BuildingZone.ZONE_ENCRYPTION);
+        buildingZoneMap.put("OCSP", BuildingZone.ZONE_ENCRYPTION);
+        buildingZoneMap.put("PKI", BuildingZone.ZONE_ENCRYPTION);
+        buildingZoneMap.put("DTLS", BuildingZone.ZONE_ENCRYPTION);
+        buildingZoneMap.put("TLS_HANDSHAKE", BuildingZone.ZONE_ENCRYPTION);
+        buildingZoneMap.put("CERT_STORE", BuildingZone.ZONE_ENCRYPTION);
+
+        // 监控管理
+        buildingZoneMap.put("NETFLOW", BuildingZone.ZONE_MONITOR);
+        buildingZoneMap.put("SFLOW", BuildingZone.ZONE_MONITOR);
+        buildingZoneMap.put("IPFIX", BuildingZone.ZONE_MONITOR);
+        buildingZoneMap.put("FLOW", BuildingZone.ZONE_MONITOR);
+        buildingZoneMap.put("STATS", BuildingZone.ZONE_MONITOR);
+        buildingZoneMap.put("PCAP", BuildingZone.ZONE_MONITOR);
+
+        // 组播路由
+        buildingZoneMap.put("PIM_SM", BuildingZone.ZONE_MULTICAST);
+        buildingZoneMap.put("MLD", BuildingZone.ZONE_MULTICAST);
+        buildingZoneMap.put("DVMRP", BuildingZone.ZONE_MULTICAST);
+        buildingZoneMap.put("MCAST_ROUTE", BuildingZone.ZONE_MULTICAST);
+        buildingZoneMap.put("IGMP_MCAST", BuildingZone.ZONE_MULTICAST);
+
+        // 诊断工具
+        buildingZoneMap.put("NETSTAT", BuildingZone.ZONE_DIAGNOSTIC);
+        buildingZoneMap.put("IPCONFIG", BuildingZone.ZONE_DIAGNOSTIC);
+        buildingZoneMap.put("ROUTEPRINT", BuildingZone.ZONE_DIAGNOSTIC);
+        buildingZoneMap.put("NSLOOKUP", BuildingZone.ZONE_DIAGNOSTIC);
+        buildingZoneMap.put("ARPCMD", BuildingZone.ZONE_DIAGNOSTIC);
+        buildingZoneMap.put("CURL", BuildingZone.ZONE_DIAGNOSTIC);
+        buildingZoneMap.put("WGET", BuildingZone.ZONE_DIAGNOSTIC);
+        buildingZoneMap.put("TELNET_CLIENT", BuildingZone.ZONE_DIAGNOSTIC);
+
+        // 核心服务
+        buildingZoneMap.put("SOCKET", BuildingZone.ZONE_CORE);
+        buildingZoneMap.put("TCP_STATE", BuildingZone.ZONE_CORE);
+        buildingZoneMap.put("MAC_TABLE", BuildingZone.ZONE_CORE);
+        buildingZoneMap.put("CAM_TABLE", BuildingZone.ZONE_CORE);
+        buildingZoneMap.put("FIB", BuildingZone.ZONE_CORE);
+        buildingZoneMap.put("SESSION_TABLE", BuildingZone.ZONE_CORE);
+        buildingZoneMap.put("SESSION", BuildingZone.ZONE_CORE);
+        buildingZoneMap.put("FIVETUPLE", BuildingZone.ZONE_CORE);
+        buildingZoneMap.put("LOAD_BALANCER", BuildingZone.ZONE_LOAD_BALANCE);
+        buildingZoneMap.put("LB_RR", BuildingZone.ZONE_LOAD_BALANCE);
+        buildingZoneMap.put("LB_LC", BuildingZone.ZONE_LOAD_BALANCE);
+        buildingZoneMap.put("LB_IPHASH", BuildingZone.ZONE_LOAD_BALANCE);
+        buildingZoneMap.put("LB_HC", BuildingZone.ZONE_LOAD_BALANCE);
+        buildingZoneMap.put("EVENT", BuildingZone.ZONE_CORE);
+        buildingZoneMap.put("LOG", BuildingZone.ZONE_CORE);
+        buildingZoneMap.put("SERIALIZE", BuildingZone.ZONE_CORE);
+
+        // 其他
+        buildingZoneMap.put("RX_TCP", BuildingZone.ZONE_TRANSPORT);
+        buildingZoneMap.put("RX_APP", BuildingZone.ZONE_APPLICATION);
+        buildingZoneMap.put("RX_PORT", BuildingZone.ZONE_TRANSPORT);
+        buildingZoneMap.put("MPLS_LABEL", BuildingZone.ZONE_LINK_ENHANCE);
+    }
 
     private void sendPing() {
         if (!pcIpAssigned) {
@@ -1425,16 +1993,21 @@ public class DataCartFactoryGame extends JFrame {
             }
             return;
         }
+        // 在 startDnsResolution 方法中，修改超时处理部分
         if (isDnsResolving) {
             // 检查超时
             if (System.currentTimeMillis() - lastDnsQueryTime > DNS_TIMEOUT) {
-                appendToConsole("【⚠️ DNS 超时】: 重试 (" + (dnsRetryCount + 1) + "/3)");
                 dnsRetryCount++;
+                appendToConsole("【⚠️ DNS 超时】: 重试 (" + dnsRetryCount + "/3)");
                 if (dnsRetryCount >= 3) {
                     appendToConsole("【❌ DNS 失败】: 无法解析域名 " + targetDomain + "，使用默认 IP");
                     resolvedServerIp = "10.0.0.1";
                     isDnsResolved = true;
                     isDnsResolving = false;
+                    dnsRetryCount = 0;
+                    // 直接添加到 DNS 缓存
+                    dnsCache.put(targetDomain, new DnsEntry(targetDomain, resolvedServerIp, 3600000));
+                    updateDnsDisplay();
                     performArpResolution(resolvedServerIp);
                     if (!useUdp && currentTcpState == TcpState.CLOSED) {
                         startTcpHandshake();
@@ -1595,11 +2168,17 @@ public class DataCartFactoryGame extends JFrame {
             }
         }
 
+        // 在 gameTick 方法中，修改公网队列计数
         int currentCartsInWan = 0;
         for (DataCart c : dataCarts) {
             int col = (int) (c.x / TILE_SIZE);
             if (!c.isReturnTrip && c.stage >= 25 && c.stage <= 31 && col >= 21 && col <= 34) {
-                currentCartsInWan++;
+                // DNS 和 DHCP 包不计入公网队列计数
+                boolean isControlPacket = c.cartType != null &&
+                        (c.cartType.startsWith("DNS_") || c.cartType.startsWith("DHCP_"));
+                if (!isControlPacket) {
+                    currentCartsInWan++;
+                }
             }
         }
 
@@ -1614,8 +2193,7 @@ public class DataCartFactoryGame extends JFrame {
             }
 
             // 修复后的启动逻辑，支持所有模式
-            // 修复后的启动逻辑，支持所有模式
-            if (pcIpAssigned) {
+            if (pcIpAssigned && !demoCompleted) {
                 if (!useUdp) {
                     // TCP 模式（包含普通TCP和HTTP演示）
                     if (currentTcpState == TcpState.CLOSED) {
@@ -1731,10 +2309,22 @@ public class DataCartFactoryGame extends JFrame {
         List<DataCart> toRemoveCarts = new ArrayList<>();
         for (DataCart cart : dataCarts) {
             int col = (int) (cart.x / TILE_SIZE);
+            // 只有普通数据包才受公网队列限制，DNS/DHCP/ARP/ICMP 等控制包不受限
+            boolean isControlPacket = cart.cartType != null &&
+                    (cart.cartType.startsWith("DNS_") ||
+                            cart.cartType.startsWith("DHCP_") ||
+                            cart.cartType.startsWith("ARP_") ||
+                            cart.cartType.startsWith("ICMP_") ||
+                            cart.cartType.equals("SYN") ||
+                            cart.cartType.equals("SYN_ACK") ||
+                            cart.cartType.equals("ACK_PC") ||
+                            cart.cartType.equals("FIN_PC") ||
+                            cart.cartType.equals("DATA_ACK"));
+
             if (!cart.isReturnTrip && cart.stage >= 25 && cart.stage <= 31 && col >= 21 && col <= 34) {
-                if (currentCartsInWan > WAN_BOTTLE_NECK_MAX && !isForemostCartInWan(cart)) {
+                if (currentCartsInWan > WAN_BOTTLE_NECK_MAX && !isForemostCartInWan(cart) && !isControlPacket) {
                     cart.waitInQueueTimer++;
-                    if (cart.waitInQueueTimer > 120) {
+                    if (cart.waitInQueueTimer > 60) {  // 减少超时时间从120到60
                         cart.isDropped = true;
                         appendToConsole(String.format("【💥 公网丢包】: %s 在公网排队超时，已坠毁", cart.cartType));
                     }
@@ -1786,12 +2376,23 @@ public class DataCartFactoryGame extends JFrame {
         canvas.repaint();
     }
 
+    // 替换原有的 isForemostCartInWan 方法
     private boolean isForemostCartInWan(DataCart target) {
+        // DNS 查询包不应该被公网队列限制
+        if (target.cartType != null && target.cartType.startsWith("DNS_")) {
+            return true;  // DNS 包总是被视为"最前面"，不会被排队
+        }
+
         double maxProgressX = 0;
         DataCart foremost = null;
         for (DataCart c : dataCarts) {
             int col = (int) (c.x / TILE_SIZE);
+            // 只统计非返回且在公网区域的数据包
             if (!c.isReturnTrip && c.stage >= 25 && c.stage <= 31 && col >= 21 && col <= 34) {
+                // 同样排除 DNS 包
+                if (c.cartType != null && c.cartType.startsWith("DNS_")) {
+                    continue;
+                }
                 if (c.x > maxProgressX) {
                     maxProgressX = c.x;
                     foremost = c;
@@ -2378,6 +2979,7 @@ public class DataCartFactoryGame extends JFrame {
                     Timer timer = new Timer(1500, e -> {
                         if (currentTcpState == TcpState.TIME_WAIT) {
                             resetTcpSession();
+                            demoCompleted = true;   // 标记本次演示结束，不再自动重启
                             JOptionPane.showMessageDialog(DataCartFactoryGame.this, "🎉 数据传输完成！\n\n共传输 " + totalDataToTransmit + " 个数据包\n" + "演示了 DHCP、DNS、ARP、TCP 三次握手、滑动窗口、拥塞控制、IP 分片、NAT、Ethernet II 封装、TTL 递减、四次挥手", "传输成功", JOptionPane.INFORMATION_MESSAGE);
                         }
                     });
@@ -2438,7 +3040,7 @@ public class DataCartFactoryGame extends JFrame {
         httpResponseContent = "";
         dhcpInProgress = false;
         dhcpStep = 0;
-
+        demoCompleted = false;
         factoryManager.reset();
 
         updateTopLabel();
@@ -2882,15 +3484,25 @@ public class DataCartFactoryGame extends JFrame {
             this.y = sy;
             this.cartType = type;
             this.sequenceNumber = seq;
+            // DNS 相关包的特殊处理 - 走 DNS 专用路径
+            if (type.equals("DNS_QUERY") || type.equals("DNS_RESPONSE") ||
+                    type.equals("DNS_RECURSION_ROOT") || type.equals("DNS_ROOT_TO_LOCAL") ||
+                    type.equals("DNS_LOCAL_TO_AUTH") || type.equals("DNS_AUTH_TO_LOCAL") ||
+                    type.equals("DNS_RECURSION_AUTH") || type.equals("DNS_RECURSION_AUTH_RESP")) {
+                this.stage = 1;  // 从 DNS 客户端开始
+                this.protocol = "DNS";
+                return;
+            }
+
             if (type.equals("ICMP_TIMEEXCEEDED") || type.equals("ICMP_ECHO_REPLY") || type.equals("HTTP_200_OK")) {
                 this.isReturnTrip = true;
                 this.stage = -1;
             } else if (isControlFrame(type)) {
                 this.stage = 2;
             } else if (type.startsWith("TLS_") || type.equals("HTTP_GET") || type.equals("UDP_DATA")) {
-                this.stage = 5;  // 从应用层开始
+                this.stage = 5;
             } else {
-                this.stage = 1;  // 从 DNS 客户端开始
+                this.stage = 1;
             }
 // ===================== 初始化 14 个新工厂引用 =====================
             if (factoryManager != null) {
@@ -3025,11 +3637,60 @@ public class DataCartFactoryGame extends JFrame {
             return dstIp != null ? dstIp : (resolvedServerIp != null ? resolvedServerIp : "10.0.0.1");
         }
 
+        // 替换原有的 isControlFrame 方法
         public boolean isControlFrame(String type) {
-            return type.equals("SYN") || type.equals("SYN_ACK") || type.equals("ACK_PC") || type.equals("FIN_PC") || type.equals("FIN_ACK_SRV") || type.equals("FIN_SRV") || type.equals("DATA_ACK") || type.equals("LAST_ACK_PC") || type.equals("ZWP") || type.equals("DNS_QUERY") || type.equals("DNS_RESPONSE") || type.equals("DHCP_DISCOVER") || type.equals("DHCP_OFFER") || type.equals("DHCP_REQUEST") || type.equals("DHCP_ACK");
+            // DNS 查询和响应不是 TCP 控制帧，应该走完整协议栈
+            if (type.equals("DNS_QUERY") || type.equals("DNS_RESPONSE") ||
+                    type.equals("DNS_RECURSION_ROOT") || type.equals("DNS_ROOT_TO_LOCAL") ||
+                    type.equals("DNS_LOCAL_TO_AUTH") || type.equals("DNS_AUTH_TO_LOCAL") ||
+                    type.equals("DNS_RECURSION_AUTH") || type.equals("DNS_RECURSION_AUTH_RESP")) {
+                return false;
+            }
+            return type.equals("SYN") || type.equals("SYN_ACK") || type.equals("ACK_PC") ||
+                    type.equals("FIN_PC") || type.equals("FIN_ACK_SRV") || type.equals("FIN_SRV") ||
+                    type.equals("DATA_ACK") || type.equals("LAST_ACK_PC") || type.equals("ZWP") ||
+                    type.equals("DHCP_DISCOVER") || type.equals("DHCP_OFFER") ||
+                    type.equals("DHCP_REQUEST") || type.equals("DHCP_ACK");
         }
 
         public void update() {
+            // DNS 包走专用快速路径，完全不经过公网队列
+            if (cartType != null && cartType.startsWith("DNS_") && !isReturnTrip) {
+                Point target = findTargetMachine(stage, cartType);
+                if (target != null) {
+                    double dx = target.x - x;
+                    double dy = target.y - y;
+                    double dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist <= 8) {  // 移动速度快
+                        x = target.x;
+                        y = target.y;
+                        processStageCraft();
+                        if (cartType.equals("DNS_QUERY")) {
+                            if (stage < 4) {
+                                timer = 0;
+                                stage++;
+                            } else {
+                                isArrived = true;
+                            }
+                        } else if (cartType.equals("DNS_RESPONSE")) {
+                            isArrived = true;
+                        } else {
+                            if (stage < 2) {
+                                timer = 0;
+                                stage++;
+                            } else {
+                                isArrived = true;
+                            }
+                        }
+                    } else {
+                        x += (dx / dist) * 8;
+                        y += (dy / dist) * 8;
+                    }
+                    return;
+                }
+            }
+
+            // 原有代码保持不变...
             if (timer > 0) {
                 timer--;
                 return;
@@ -3072,7 +3733,7 @@ public class DataCartFactoryGame extends JFrame {
                 return;
             }
 
-            if (isDHCP()) {
+            if (isDnsOrDhcp()) {
                 target = findTargetMachine(stage, cartType);
                 if (target == null) target = isReturnTrip ? pcFactory : findBuildingCoords("DHCP_SERVER");
             } else {
@@ -3089,7 +3750,7 @@ public class DataCartFactoryGame extends JFrame {
             if (dist <= speed) {
                 x = target.x;
                 y = target.y;
-                if (!isReturnTrip || isDHCP()) {
+                if (!isReturnTrip || isDnsOrDhcp()) {
                     // ========== DataCart.update() 中 stage 15 的处理修改 ==========
 // 在 processStageCraft() 调用之前，对于 stage==15 的特殊处理（仅对 DATA 等大包）
                     // ========== DataCart.update() 中 stage == 15 的处理修改 ==========
@@ -3129,8 +3790,8 @@ public class DataCartFactoryGame extends JFrame {
                             return;
                         }
                     }
-                    if (!isDHCP()) {
-                        // 增加 stage 上限到 160
+                    // 在 update 方法中找到处理 stage 递增的部分，修改为：
+                    if (!isDnsOrDhcp()) {
                         if (stage < 160) {
                             timer = 1;
                             stage++;
@@ -3138,7 +3799,19 @@ public class DataCartFactoryGame extends JFrame {
                             isArrived = true;
                         }
                     } else {
-                        int maxStage = (cartType.equals("DHCP_DISCOVER") || cartType.equals("DHCP_REQUEST")) ? 2 : 2;
+                        // DNS 和 DHCP 包的最大 stage 不同
+                        int maxStage = 0;
+                        if (cartType.equals("DNS_QUERY")) {
+                            maxStage = 4;  // 经过 DNS_CLIENT -> DNS_LOCAL -> DNS_ROOT -> DNS_AUTH
+                        } else if (cartType.equals("DNS_RESPONSE")) {
+                            maxStage = 1;
+                        } else if (cartType.startsWith("DNS_RECURSION")) {
+                            maxStage = 2;
+                        } else if (cartType.startsWith("DHCP")) {
+                            maxStage = 2;
+                        } else {
+                            maxStage = 2;
+                        }
                         if (stage < maxStage) {
                             timer = 1;
                             stage++;
@@ -3176,12 +3849,14 @@ public class DataCartFactoryGame extends JFrame {
         }
 
 
-        private boolean isDHCP() {
-            return cartType.equals("DHCP_DISCOVER") || cartType.equals("DHCP_OFFER") || cartType.equals("DHCP_REQUEST") || cartType.equals("DHCP_ACK");
+        // 替换原有的 isDHCP 方法
+        private boolean isDnsOrDhcp() {
+            return cartType.startsWith("DHCP") || cartType.startsWith("DNS_");
         }
 
         // 在 DataCart 类中，修改 stage 对应的 tag 映射
         private Point findTargetMachine(int s, String type) {
+
             // 为 ACK_PC 添加快速路由
             if (type.equals("ACK_PC")) {
                 if (s == 2) {
@@ -3193,13 +3868,33 @@ public class DataCartFactoryGame extends JFrame {
             }
 
             // DNS 递归查询专用路由
-            if (type.equals("DNS_ROOT_TO_LOCAL")) {
-                return findBuildingCoords("DNS_LOCAL");
-            } else if (type.equals("DNS_LOCAL_TO_AUTH")) {
-                return findBuildingCoords("DNS_AUTH");
-            } else if (type.equals("DNS_AUTH_TO_LOCAL")) {
+            if (type.equals("DNS_QUERY")) {
+                switch (s) {
+                    case 1: return findBuildingCoords("DNS_CLIENT");
+                    case 2: return findBuildingCoords("DNS_LOCAL");
+                    case 3: return findBuildingCoords("DNS_ROOT");
+                    case 4: return findBuildingCoords("DNS_AUTH");
+                    default: return null;
+                }
+            }
+            if (type.equals("DNS_RESPONSE")) {
+                // 响应直接返回 PC
+                return findBuildingCoords("PC_FACTORY");
+            }
+            if (type.equals("DNS_RECURSION_ROOT") || type.equals("DNS_RECURSION_AUTH")) {
+                // 递归查询转发
+                return findBuildingCoords("DNS_ROOT");
+            }
+            if (type.equals("DNS_ROOT_TO_LOCAL") || type.equals("DNS_AUTH_TO_LOCAL")) {
                 return findBuildingCoords("DNS_LOCAL");
             }
+            if (type.equals("DNS_LOCAL_TO_AUTH")) {
+                return findBuildingCoords("DNS_AUTH");
+            }
+            if (type.equals("DNS_RECURSION_ROOT_RESP") || type.equals("DNS_RECURSION_AUTH_RESP")) {
+                return findBuildingCoords("DNS_LOCAL");
+            }
+
 
             // TLS 和 HTTP 演示专用路由
             if (type.equals("TLS_CLIENT_HELLO") || type.equals("HTTP_GET") ||
@@ -3632,6 +4327,11 @@ public class DataCartFactoryGame extends JFrame {
         }
 
         private void processStageCraft() {
+            if (cartType != null && cartType.startsWith("DNS_")) {
+                // DNS 包不需要任何封装处理
+                return;
+            }
+
             if (cartType.startsWith("DHCP")) return;
 
             switch (stage) {
@@ -5007,35 +5707,178 @@ public class DataCartFactoryGame extends JFrame {
             setBackground(new Color(18, 20, 26));
         }
 
+        // 获取逻辑坐标（考虑平移、缩放和滚动条）
+        public int getLogicalX(int screenX) {
+            // 获取当前滚动条位置
+            JScrollPane scrollPane = (JScrollPane) getParent().getParent();
+            JScrollBar hBar = scrollPane.getHorizontalScrollBar();
+            int scrollX = hBar.getValue();
+
+            // 计算实际画布上的坐标（考虑滚动条偏移）
+            double canvasX = screenX + scrollX;
+
+            // 再转换为逻辑坐标（考虑缩放和视图偏移）
+            return (int) ((canvasX - viewOffsetX) / canvasScale);
+        }
+
+        public int getLogicalY(int screenY) {
+            // 获取当前滚动条位置
+            JScrollPane scrollPane = (JScrollPane) getParent().getParent();
+            JScrollBar vBar = scrollPane.getVerticalScrollBar();
+            int scrollY = vBar.getValue();
+
+            // 计算实际画布上的坐标（考虑滚动条偏移）
+            double canvasY = screenY + scrollY;
+
+            // 再转换为逻辑坐标（考虑缩放和视图偏移）
+            return (int) ((canvasY - viewOffsetY) / canvasScale);
+        }
+
+        // 获取屏幕坐标（用于绘制）
+        private int toScreenX(int logicalX) {
+            return (int) (logicalX * canvasScale) + viewOffsetX;
+        }
+
+        private int toScreenY(int logicalY) {
+            return (int) (logicalY * canvasScale) + viewOffsetY;
+        }
+
+        // 获取绘制区域尺寸（缩放后的实际尺寸）
+        @Override
+        public Dimension getPreferredSize() {
+            return new Dimension(
+                    (int) (MAP_COLS * TILE_SIZE * canvasScale),
+                    (int) (MAP_ROWS * TILE_SIZE * canvasScale)
+            );
+        }
+
         @Override
         protected void paintComponent(Graphics g) {
             super.paintComponent(g);
             Graphics2D g2 = (Graphics2D) g;
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
+            // 应用平移和缩放
+            g2.translate(viewOffsetX, viewOffsetY);
+            g2.scale(canvasScale, canvasScale);
+// ===== 新增：按区域绘制背景 =====
+            // 用于记录每个区域的范围
+            Map<BuildingZone, Rectangle> zoneBounds = new HashMap<>();
+
             for (int r = 0; r < MAP_ROWS; r++) {
                 for (int c = 0; c < MAP_COLS; c++) {
-                    int x = c * TILE_SIZE, y = r * TILE_SIZE;
-                    if (mapLayout[r][c] == 9) {
-                        g2.setColor(new Color(35, 38, 48));
-                        g2.fillRect(x, y, TILE_SIZE, TILE_SIZE);
-                        g2.setColor(Color.BLACK);
-                        g2.drawRect(x, y, TILE_SIZE, TILE_SIZE);
-                        continue;
-                    }
-                    g2.setColor(new Color(30, 32, 40));
-                    g2.drawRect(x, y, TILE_SIZE, TILE_SIZE);
-                    if (mapLayout[r][c] == 1) {
-                        g2.setColor(new Color(40, 100, 220, 60));
-                        g2.fillOval(x + 6, y + 6, TILE_SIZE - 12, TILE_SIZE - 12);
-                    }
-                    if (mapLayout[r][c] == 2) {
-                        g2.setColor(new Color(40, 200, 100, 60));
-                        g2.fillOval(x + 6, y + 6, TILE_SIZE - 12, TILE_SIZE - 12);
+                    String tag = buildingLayout[r][c];
+                    if (tag.equals("NONE")) continue;
+
+                    BuildingZone zone = buildingZoneMap.get(tag);
+                    if (zone != null) {
+                        int x = c * TILE_SIZE;
+                        int y = r * TILE_SIZE;
+                        Rectangle rect = zoneBounds.get(zone);
+                        if (rect == null) {
+                            rect = new Rectangle(x, y, TILE_SIZE, TILE_SIZE);
+                            zoneBounds.put(zone, rect);
+                        } else {
+                            rect.setBounds(
+                                    Math.min(rect.x, x),
+                                    Math.min(rect.y, y),
+                                    Math.max(rect.x + rect.width, x + TILE_SIZE) - Math.min(rect.x, x),
+                                    Math.max(rect.y + rect.height, y + TILE_SIZE) - Math.min(rect.y, y)
+                            );
+                        }
                     }
                 }
             }
 
+            // 绘制区域背景
+            for (Map.Entry<BuildingZone, Rectangle> entry : zoneBounds.entrySet()) {
+                BuildingZone zone = entry.getKey();
+                Rectangle rect = entry.getValue();
+
+                // 稍微扩展区域边界
+                rect.grow(5, 5);
+
+                // 绘制半透明背景
+                g2.setColor(zone.bgColor);
+                g2.fillRoundRect(rect.x, rect.y, rect.width, rect.height, 15, 15);
+
+                // 绘制区域边框
+                g2.setColor(zone.borderColor);
+                g2.setStroke(new BasicStroke(2f));
+                g2.drawRoundRect(rect.x, rect.y, rect.width, rect.height, 15, 15);
+
+                // 绘制区域标题
+                g2.setFont(new Font("微软雅黑", Font.BOLD, 14));
+                g2.setColor(zone.borderColor);
+                g2.drawString(zone.name, rect.x + 10, rect.y + 25);
+            }
+
+            // 重置画笔
+            g2.setStroke(new BasicStroke(1f));
+            // 绘制网格和建筑（原有代码保持不变）
+            // 在 paintComponent 方法中，替换建筑绘制部分
+            for (int r = 0; r < MAP_ROWS; r++) {
+                for (int c = 0; c < MAP_COLS; c++) {
+                    int x = c * TILE_SIZE, y = r * TILE_SIZE;
+                    String tag = buildingLayout[r][c];
+                    if (tag.equals("NONE")) continue;
+
+                    // 获取建筑所属区域
+                    BuildingZone zone = buildingZoneMap.get(tag);
+                    Color baseColor = zone != null ? zone.borderColor : new Color(45, 48, 58);
+
+                    // 建筑背景使用区域颜色的半透明版本
+                    g2.setColor(new Color(baseColor.getRed(), baseColor.getGreen(), baseColor.getBlue(), 80));
+                    g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                    g2.setColor(baseColor);
+                    g2.drawRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                    g2.setFont(new Font("Consolas", Font.BOLD, 8));
+                    g2.setColor(Color.WHITE);
+
+                    // 特殊建筑保持原有颜色逻辑（PC、服务器等）
+                    if (tag.equals("PC_FACTORY")) {
+                        g2.setColor(new Color(0, 130, 200));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.WHITE);
+                        g2.drawString("[PC] 源PC", x + 4, y + 24);
+                    }
+                    else if (tag.equals("RX_ST")) {
+                        g2.setColor(new Color(190, 30, 50));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.YELLOW);
+                        g2.drawString("[SRV] 服务器", x + 2, y + 24);
+                        for (int b = 0; b < serverBufferCount; b++) {
+                            g2.setColor(Color.RED);
+                            g2.fillRect(x + 4 + (b * 6), y + 4, 5, 6);
+                        }
+                    }
+                    // 矿机特殊处理
+                    else if (tag.startsWith("MINER_H")) {
+                        g2.setColor(new Color(0, 200, 200, 100));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.CYAN);
+                        g2.drawString("[H] 矿机", x + 4, y + 24);
+                    }
+                    else if (tag.startsWith("MINER_S")) {
+                        g2.setColor(new Color(0, 255, 0, 100));
+                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        g2.setColor(Color.GREEN);
+                        g2.drawString("[S] 矿机", x + 4, y + 24);
+                    }
+                    else {
+                        // 普通建筑，文字颜色使用区域边框颜色
+                        g2.setColor(baseColor);
+                        String displayText = tag.length() > 8 ? tag.substring(0, 6) : tag;
+                        // 简化显示，去掉前缀
+                        if (tag.startsWith("TX_") || tag.startsWith("RX_") || tag.startsWith("T_") || tag.startsWith("R_")) {
+                            displayText = tag;
+                        }
+                        g2.drawString(displayText, x + 4, y + 24);
+                    }
+                }
+            }
+
+            // 公网区域标识
             g2.setColor(new Color(255, 100, 0, 15));
             g2.fillRect(21 * TILE_SIZE, 0, 14 * TILE_SIZE, MAP_ROWS * TILE_SIZE);
 
@@ -5048,12 +5891,14 @@ public class DataCartFactoryGame extends JFrame {
             g2.setFont(new Font("微软雅黑", Font.BOLD, 14));
             g2.drawString("[CAR] 公网车辆: " + wanCarCount + "/" + WAN_BOTTLE_NECK_MAX, 22 * TILE_SIZE, 30);
 
+            // 绘制建筑
             for (int r = 0; r < MAP_ROWS; r++) {
                 for (int c = 0; c < MAP_COLS; c++) {
                     int x = c * TILE_SIZE, y = r * TILE_SIZE;
                     String tag = buildingLayout[r][c];
                     if (tag.equals("NONE")) continue;
 
+                    // 建筑背景
                     g2.setColor(new Color(45, 48, 58));
                     g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                     g2.setColor(Color.GRAY);
@@ -5061,12 +5906,15 @@ public class DataCartFactoryGame extends JFrame {
                     g2.setFont(new Font("Consolas", Font.BOLD, 8));
                     g2.setColor(Color.WHITE);
 
+                    // PC 工厂
                     if (tag.equals("PC_FACTORY")) {
                         g2.setColor(new Color(0, 130, 200));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
                         g2.drawString("[PC] 源PC", x + 4, y + 24);
-                    } else if (tag.equals("RX_ST")) {
+                    }
+                    // 服务器
+                    else if (tag.equals("RX_ST")) {
                         g2.setColor(new Color(190, 30, 50));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.YELLOW);
@@ -5075,27 +5923,37 @@ public class DataCartFactoryGame extends JFrame {
                             g2.setColor(Color.RED);
                             g2.fillRect(x + 4 + (b * 6), y + 4, 5, 6);
                         }
-                    } else if (tag.startsWith("DHCP_")) {
+                    }
+                    // DHCP 相关
+                    else if (tag.startsWith("DHCP_")) {
                         g2.setColor(new Color(100, 100, 255));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
                         g2.drawString(tag, x + 3, y + 24);
-                    } else if (tag.equals("DNS_CLIENT") || tag.equals("DNS_LOCAL") || tag.equals("DNS_ROOT") || tag.equals("DNS_AUTH")) {
+                    }
+                    // DNS 相关
+                    else if (tag.equals("DNS_CLIENT") || tag.equals("DNS_LOCAL") || tag.equals("DNS_ROOT") || tag.equals("DNS_AUTH")) {
                         g2.setColor(new Color(0, 200, 200));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.BLACK);
                         g2.drawString(tag, x + 3, y + 24);
-                    } else if (tag.startsWith("ETH_")) {
+                    }
+                    // 以太网相关
+                    else if (tag.startsWith("ETH_")) {
                         g2.setColor(new Color(0, 160, 255));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.BLACK);
                         g2.drawString(tag, x + 3, y + 24);
-                    } else if (tag.startsWith("ROUTER")) {
+                    }
+                    // 路由器
+                    else if (tag.startsWith("ROUTER")) {
                         g2.setColor(new Color(200, 100, 0));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.BLACK);
                         g2.drawString(tag, x + 3, y + 24);
-                    } else if (tag.startsWith("T_") || tag.startsWith("TX_") || tag.startsWith("R_") || tag.startsWith("RX_")) {
+                    }
+                    // 传输层/网络层/链路层组件
+                    else if (tag.startsWith("T_") || tag.startsWith("TX_") || tag.startsWith("R_") || tag.startsWith("RX_")) {
                         if (tag.contains("NAT")) g2.setColor(new Color(255, 165, 0));
                         else if (tag.contains("ARP")) g2.setColor(new Color(0, 255, 255));
                         else if (tag.startsWith("R_")) g2.setColor(Color.CYAN);
@@ -5103,714 +5961,31 @@ public class DataCartFactoryGame extends JFrame {
                         else g2.setColor(Color.ORANGE);
                         g2.drawRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.drawString(tag, x + 3, y + 24);
-                    } else if (tag.startsWith("MINER_H")) {
+                    }
+                    // 矿机
+                    else if (tag.startsWith("MINER_H")) {
                         g2.setColor(Color.CYAN);
                         g2.drawString("[H] 矿机", x + 4, y + 24);
-                    } else if (tag.startsWith("MINER_S")) {
+                    }
+                    else if (tag.startsWith("MINER_S")) {
                         g2.setColor(Color.GREEN);
                         g2.drawString("[S] 矿机", x + 4, y + 24);
-                    } else if (tag.equals("FW_IN") || tag.equals("FW_OUT")) {
-                        g2.setColor(new Color(255, 80, 80));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[FW] " + tag, x + 3, y + 24);
-                    } else if (tag.equals("IDS")) {
-                        g2.setColor(new Color(255, 165, 0));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("[IDS] IDS", x + 3, y + 24);
-                    } else if (tag.equals("Q_IN") || tag.equals("Q_OUT") || tag.equals("Q_DROP")) {
-                        g2.setColor(new Color(100, 100, 200));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[Q] " + tag, x + 3, y + 24);
-                    } else if (tag.startsWith("CC_")) {
-                        g2.setColor(new Color(0, 200, 200));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        String ccName = tag.equals("CC_SLOW") ? "[SS] 慢启动" :
-                                (tag.equals("CC_AVOID") ? "[CA] 拥塞避免" : "[FR] 快速重传");
-                        g2.drawString(ccName, x + 2, y + 24);
-                    } else if (tag.equals("FIVETUPLE")) {
-                        g2.setColor(new Color(200, 100, 200));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[5T] 五元组", x + 2, y + 24);
-                    } else if (tag.equals("SESSION")) {
-                        g2.setColor(new Color(100, 200, 100));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("[SES] 会话", x + 4, y + 24);
-                    } else if (tag.equals("BW_CTRL")) {
-                        g2.setColor(new Color(200, 200, 0));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("[BW] 带宽", x + 4, y + 24);
-                    } else if (tag.equals("SWITCH")) {
-                        g2.setColor(new Color(0, 150, 200));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[SW] 交换机", x + 2, y + 24);
-                    } else if (tag.equals("HUB")) {
-                        g2.setColor(new Color(150, 100, 50));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[HB] 集线器", x + 2, y + 24);
-                    } else if (tag.equals("BRIDGE")) {
-                        g2.setColor(new Color(100, 150, 100));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[BR] 网桥", x + 4, y + 24);
-                    } else if (tag.startsWith("SUBNET_")) {
-                        g2.setColor(new Color(80, 80, 200, 100));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.CYAN);
-                        g2.drawString("[NET] " + tag, x + 2, y + 24);
-                    } else if (tag.equals("LINK_UP")) {
-                        g2.setColor(new Color(0, 255, 0, 80));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.GREEN);
-                        g2.drawString("[LINK] 链路↑", x + 4, y + 24);
-                    } else if (tag.equals("LINK_DOWN")) {
-                        g2.setColor(new Color(255, 0, 0, 80));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.RED);
-                        g2.drawString("[LINK] 链路↓", x + 4, y + 24);
-                    } else if (tag.equals("RX_ETH")) {
-                        g2.setColor(new Color(0, 100, 200));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[RX] 解ETH", x + 4, y + 24);
-                    } else if (tag.equals("RX_FCS")) {
-                        g2.setColor(new Color(0, 150, 100));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[OK] FCS", x + 6, y + 24);
-                    } else if (tag.equals("RX_FRAG")) {
-                        g2.setColor(new Color(200, 100, 0));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[FR] 分片重组", x + 2, y + 24);
-                    } else if (tag.equals("RX_PORT")) {
-                        g2.setColor(new Color(150, 0, 150));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[PT] 解端口", x + 4, y + 24);
-                    } else if (tag.equals("TCP_OPTION")) {
-                        g2.setColor(new Color(100, 100, 200));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[TCP] TCP选项", x + 2, y + 24);
-                    } else if (tag.equals("IP_OPTION")) {
-                        g2.setColor(new Color(200, 100, 200));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[IP] IP选项", x + 4, y + 24);
-                    } else if (tag.equals("ETH_PADDING")) {
-                        g2.setColor(new Color(100, 200, 100));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("[PAD] 填充", x + 6, y + 24);
-                    } else if (tag.equals("UDP_CHECKSUM")) {
-                        g2.setColor(new Color(0, 150, 200));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[UDP] UDP校验", x + 2, y + 24);
-                    } else if (tag.equals("IP_FORWARD")) {
-                        g2.setColor(new Color(200, 150, 0));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("[FWD] IP转发", x + 4, y + 24);
-                    } else if (tag.equals("ICMP_ERROR")) {
-                        g2.setColor(new Color(200, 150, 0));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("ICMP_ERROR", x + 4, y + 24);
-                    } else if (tag.equals("TCP_WINDOW")) {
-                        g2.setColor(new Color(0, 100, 150));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[WIN] TCP窗口", x + 2, y + 24);
-                    } else if (tag.equals("TCP_TIMER")) {
-                        g2.setColor(new Color(150, 100, 0));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[TMR] TCP定时", x + 2, y + 24);
-                    } else if (tag.equals("DHCP_FULL")) {
-                        g2.setColor(new Color(0, 200, 100));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("[DHCP] DHCP完整", x + 2, y + 24);
-                    } else if (tag.equals("TLS_HANDSHAKE")) {
-                        g2.setColor(new Color(200, 100, 0));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[TLS] TLS握手", x + 4, y + 24);
-                    } else if (tag.equals("SERIALIZE")) {
-                        g2.setColor(new Color(150, 150, 150));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("[SER] 序列化", x + 6, y + 24);
-                    } else if (tag.equals("BIT_STREAM")) {
-                        g2.setColor(new Color(150, 150, 0));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[BIT] 比特流", x + 4, y + 24);
-                    } else if (tag.equals("PHY_CHANNEL")) {
-                        g2.setColor(new Color(100, 100, 0));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[PHY] 物理信道", x + 4, y + 24);
-                    } else if (tag.equals("PPPOE")) {
-                        g2.setColor(new Color(0, 150, 200));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("[PPPoE] PPPoE", x + 2, y + 24);
-                    } else if (tag.equals("MACSEC")) {
-                        g2.setColor(new Color(0, 200, 150));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("[MACsec] MACsec", x + 2, y + 24);
-                    } else if (tag.equals("OSPF")) {
-                        g2.setColor(new Color(0, 150, 100));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[OSPF] OSPF", x + 4, y + 24);
-                    } else if (tag.equals("BGP")) {
-                        g2.setColor(new Color(0, 100, 150));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[BGP] BGP", x + 6, y + 24);
-                    } else if (tag.equals("QOS")) {
-                        g2.setColor(new Color(200, 100, 100));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[QoS] QoS", x + 8, y + 24);
-                    } else if (tag.equals("NAT64")) {
-                        g2.setColor(new Color(100, 100, 200));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[NAT64] NAT64", x + 4, y + 24);
-                    } else if (tag.equals("TCP_REASSEMBLY")) {
-                        g2.setColor(new Color(150, 80, 150));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[RE] TCP重组", x + 4, y + 24);
-                    } else if (tag.equals("ATTACK")) {
-                        g2.setColor(new Color(200, 50, 50));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[ATT] 攻击检测", x + 4, y + 24);
-                    } else if (tag.equals("NTP")) {
-                        g2.setColor(new Color(0, 200, 200));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("[NTP] NTP", x + 8, y + 24);
-                    } else if (tag.equals("SNMP")) {
-                        g2.setColor(new Color(0, 150, 150));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[SNMP] SNMP", x + 4, y + 24);
-                    } else if (tag.equals("HTTP23")) {
-                        g2.setColor(new Color(50, 150, 200));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[H2] HTTP/2.3", x + 2, y + 24);
-                    } else if (tag.equals("IPSEC")) {
-                        g2.setColor(new Color(50, 100, 150));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[IPSEC] IPsec", x + 4, y + 24);
-                    } else if (tag.equals("IPV6")) {
-                        g2.setColor(new Color(80, 80, 180));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[V6] IPv6", x + 6, y + 24);
-                    } else if (tag.equals("IPV6_FRAG")) {
-                        g2.setColor(new Color(80, 100, 180));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[FRAG] IPv6分片", x + 2, y + 24);
-                    } else if (tag.equals("IPV6_OPTION")) {
-                        g2.setColor(new Color(100, 80, 180));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[OPT] IPv6选项", x + 2, y + 24);
-                    } else if (tag.equals("IPV6_ND")) {
-                        g2.setColor(new Color(60, 100, 160));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[ND] IPv6 ND", x + 4, y + 24);
-                    } else if (tag.equals("TCP_KEEPALIVE")) {
-                        g2.setColor(new Color(100, 150, 100));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[KA] KeepAlive", x + 2, y + 24);
-                    } else if (tag.equals("TCP_SACK")) {
-                        g2.setColor(new Color(120, 140, 100));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[SACK] SACK", x + 4, y + 24);
-                    } else if (tag.equals("TCP_ECN")) {
-                        g2.setColor(new Color(140, 120, 100));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[ECN] ECN", x + 8, y + 24);
-                    } else if (tag.equals("TCP_FASTOPEN")) {
-                        g2.setColor(new Color(160, 100, 100));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[FO] FastOpen", x + 2, y + 24);
-                    } else if (tag.equals("FTP")) {
-                        g2.setColor(new Color(100, 100, 180));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[FTP] FTP", x + 8, y + 24);
-                    } else if (tag.equals("SMTP")) {
-                        g2.setColor(new Color(120, 100, 160));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[SMTP] SMTP", x + 4, y + 24);
-                    } else if (tag.equals("POP3")) {
-                        g2.setColor(new Color(140, 100, 140));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[POP3] POP3", x + 4, y + 24);
-                    } else if (tag.equals("IMAP")) {
-                        g2.setColor(new Color(160, 100, 120));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[IMAP] IMAP", x + 4, y + 24);
-                    } else if (tag.equals("SSH")) {
-                        g2.setColor(new Color(100, 140, 140));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[SSH] SSH", x + 8, y + 24);
-                    } else if (tag.equals("TELNET")) {
-                        g2.setColor(new Color(120, 120, 120));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[TEL] Telnet", x + 4, y + 24);
-                    } else if (tag.equals("RTP")) {
-                        g2.setColor(new Color(100, 160, 120));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[RTP] RTP", x + 8, y + 24);
-                    } else if (tag.equals("SIP")) {
-                        g2.setColor(new Color(140, 140, 100));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[SIP] SIP", x + 8, y + 24);
-                    } else if (tag.equals("RADIUS")) {
-                        g2.setColor(new Color(160, 120, 100));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[RAD] RADIUS", x + 4, y + 24);
-                    } else if (tag.equals("DIAMETER")) {
-                        g2.setColor(new Color(180, 100, 100));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[DIA] Diameter", x + 2, y + 24);
-                    } else if (tag.equals("LDAP")) {
-                        g2.setColor(new Color(100, 180, 100));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[LDA] LDAP", x + 6, y + 24);
-                    } else if (tag.equals("NAT_HAIRPIN")) {
-                        g2.setColor(new Color(180, 140, 80));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("[NH] NAT发夹", x + 2, y + 24);
-                    } else if (tag.equals("NAT_HOLE")) {
-                        g2.setColor(new Color(160, 120, 60));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("[HP] NAT穿透", x + 2, y + 24);
-                    } else if (tag.equals("UPNP")) {
-                        g2.setColor(new Color(140, 100, 40));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[UPnP] UPnP", x + 4, y + 24);
-                    } else if (tag.equals("PCP")) {
-                        g2.setColor(new Color(120, 80, 20));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[PCP] PCP", x + 8, y + 24);
-                    } else if (tag.equals("LB_RR")) {
-                        g2.setColor(new Color(80, 180, 140));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("[RR] 轮询LB", x + 4, y + 24);
-                    } else if (tag.equals("LB_LC")) {
-                        g2.setColor(new Color(60, 160, 120));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[LC] 最少连接", x + 2, y + 24);
-                    } else if (tag.equals("LB_IPHASH")) {
-                        g2.setColor(new Color(40, 140, 100));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[IPH] IP哈希", x + 4, y + 24);
-                    } else if (tag.equals("LB_HC")) {
-                        g2.setColor(new Color(20, 120, 80));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[HC] 健康检查", x + 2, y + 24);
-                    } else if (tag.equals("IPSEC_IKE")) {
-                        g2.setColor(new Color(100, 80, 140));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[IKE] IKE", x + 8, y + 24);
-                    } else if (tag.equals("IPSEC_ESP")) {
-                        g2.setColor(new Color(120, 80, 160));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[ESP] ESP", x + 8, y + 24);
-                    } else if (tag.equals("OPENVPN")) {
-                        g2.setColor(new Color(100, 100, 160));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[OVPN] OpenVPN", x + 2, y + 24);
-                    } else if (tag.equals("WIREGUARD")) {
-                        g2.setColor(new Color(80, 120, 140));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[WG] WireGuard", x + 2, y + 24);
-                    } else if (tag.equals("L2TP")) {
-                        g2.setColor(new Color(60, 140, 120));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[L2] L2TP", x + 8, y + 24);
-                    } else if (tag.equals("SSTP")) {
-                        g2.setColor(new Color(40, 160, 100));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("[SSTP] SSTP", x + 6, y + 24);
-                    } else if (tag.equals("DPI")) {
-                        g2.setColor(new Color(180, 80, 80));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[DPI] DPI", x + 8, y + 24);
-                    } else if (tag.equals("WAF")) {
-                        g2.setColor(new Color(200, 60, 60));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[WAF] WAF", x + 8, y + 24);
-                    } else if (tag.equals("DDOS")) {
-                        g2.setColor(new Color(220, 40, 40));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[DDoS] DDoS防护", x + 2, y + 24);
-                    } else if (tag.equals("RATELIMIT")) {
-                        g2.setColor(new Color(160, 100, 80));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[RL] 限速", x + 8, y + 24);
-                    } else if (tag.equals("ACL")) {
-                        g2.setColor(new Color(140, 120, 80));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[ACL] ACL", x + 8, y + 24);
-                    } else if (tag.equals("NETSTAT")) {
-                        g2.setColor(new Color(80, 140, 180));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[STAT] netstat", x + 4, y + 24);
-                    } else if (tag.equals("IPCONFIG")) {
-                        g2.setColor(new Color(60, 120, 160));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[IPCFG] ipconfig", x + 2, y + 24);
-                    } else if (tag.equals("ROUTEPRINT")) {
-                        g2.setColor(new Color(40, 100, 140));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[RT] route", x + 8, y + 24);
-                    } else if (tag.equals("NSLOOKUP")) {
-                        g2.setColor(new Color(60, 100, 180));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[NS] nslookup", x + 4, y + 24);
-                    } else if (tag.equals("ARPCMD")) {
-                        g2.setColor(new Color(40, 80, 160));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[ARP] arp", x + 8, y + 24);
-                    } else if (tag.equals("CURL")) {
-                        g2.setColor(new Color(80, 180, 160));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("[CURL] curl", x + 6, y + 24);
-                    } else if (tag.equals("WGET")) {
-                        g2.setColor(new Color(60, 160, 140));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("[WGET] wget", x + 6, y + 24);
-                    } else if (tag.equals("TELNET_CLIENT")) {
-                        g2.setColor(new Color(40, 140, 120));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("[TEL] telnet", x + 6, y + 24);
-                    } else if (tag.equals("LLDP")) {
-                        g2.setColor(new Color(0, 180, 180));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("[LLDP] LLDP", x + 4, y + 24);
-                    } else if (tag.equals("STP")) {
-                        g2.setColor(new Color(0, 160, 160));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("[STP] STP", x + 8, y + 24);
-                    } else if (tag.equals("LACP")) {
-                        g2.setColor(new Color(0, 140, 140));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[LACP] LACP", x + 4, y + 24);
-                    } else if (tag.equals("MPLS")) {
-                        g2.setColor(new Color(0, 120, 120));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[MPLS] MPLS", x + 4, y + 24);
-                    } else if (tag.equals("PIM_SM")) {
-                        g2.setColor(new Color(180, 100, 180));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[PIM] PIM-SM", x + 4, y + 24);
-                    } else if (tag.equals("MLD")) {
-                        g2.setColor(new Color(160, 80, 160));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[MLD] MLD", x + 8, y + 24);
-                    } else if (tag.equals("DVMRP")) {
-                        g2.setColor(new Color(140, 60, 140));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[DVMRP] DVMRP", x + 2, y + 24);
-                    } else if (tag.equals("NETFLOW")) {
-                        g2.setColor(new Color(80, 180, 200));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("[NF] NetFlow", x + 4, y + 24);
-                    } else if (tag.equals("SFLOW")) {
-                        g2.setColor(new Color(60, 160, 180));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("[SF] sFlow", x + 8, y + 24);
-                    } else if (tag.equals("IPFIX")) {
-                        g2.setColor(new Color(40, 140, 160));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[IPFIX] IPFIX", x + 2, y + 24);
-                    } else if (tag.equals("ICMP_PING")) {
-                        g2.setColor(new Color(80, 200, 80));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("[PING] PING", x + 6, y + 24);
-                    } else if (tag.equals("ICMP_TRACE")) {
-                        g2.setColor(new Color(60, 180, 60));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("[TR] Traceroute", x + 2, y + 24);
-                    } else if (tag.equals("X509")) {
-                        g2.setColor(new Color(180, 180, 100));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("[X509] X.509", x + 4, y + 24);
-                    } else if (tag.equals("CRL")) {
-                        g2.setColor(new Color(160, 160, 80));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("[CRL] CRL", x + 8, y + 24);
-                    } else if (tag.equals("OCSP")) {
-                        g2.setColor(new Color(140, 140, 60));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("[OCSP] OCSP", x + 4, y + 24);
-                    } else if (tag.equals("PKI")) {
-                        g2.setColor(new Color(120, 120, 40));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[PKI] PKI", x + 8, y + 24);
-                    } else if (tag.equals("DTLS")) {
-                        g2.setColor(new Color(100, 100, 20));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[DTLS] DTLS", x + 4, y + 24);
-                    } else if (tag.equals("IPS")) {
-                        g2.setColor(new Color(200, 80, 100));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[IPS] IPS", x + 8, y + 24);
-                    } else if (tag.equals("MAC_AUTH")) {
-                        g2.setColor(new Color(180, 100, 120));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[MAC] MAC认证", x + 2, y + 24);
-                    } else if (tag.equals("DOT1X")) {
-                        g2.setColor(new Color(160, 120, 140));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[1X] 802.1X", x + 4, y + 24);
-                    } else if (tag.equals("VLAN_TAG")) {
-                        g2.setColor(new Color(255, 140, 0));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("[VLAN] VLAN", x + 6, y + 24);
-                    } else if (tag.equals("TUNNEL_GRE")) {
-                        g2.setColor(new Color(100, 200, 100));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("[GRE] GRE", x + 8, y + 24);
-                    } else if (tag.equals("IGMP_MCAST")) {
-                        g2.setColor(new Color(0, 200, 200));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("[IGMP] IGMP", x + 4, y + 24);
-                    } else if (tag.equals("NDP_DISC")) {
-                        g2.setColor(new Color(0, 150, 150));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[NDP] NDP", x + 8, y + 24);
-                    } else if (tag.equals("DNS_RECURSIVE")) {
-                        g2.setColor(new Color(0, 100, 150));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[RDNS] 递归DNS", x + 2, y + 24);
                     }
-                    // ===================== 新增 20 个核心工厂渲染 =====================
-                    else if (tag.equals("SOCKET")) {
-                        g2.setColor(new Color(0, 180, 100));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[SKT] Socket", x + 2, y + 24);
-                    }
-                    else if (tag.equals("TCP_STATE")) {
-                        g2.setColor(new Color(100, 100, 200));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[FSM] TCP状态", x + 2, y + 24);
-                    }
-                    else if (tag.equals("MAC_TABLE")) {
-                        g2.setColor(new Color(100, 180, 100));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("[MAC] MAC表", x + 4, y + 24);
-                    }
-                    else if (tag.equals("CAM_TABLE")) {
-                        g2.setColor(new Color(80, 200, 80));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("[CAM] CAM表", x + 4, y + 24);
-                    }
-                    else if (tag.equals("FIB")) {
-                        g2.setColor(new Color(200, 180, 80));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("[FIB] 转发表", x + 4, y + 24);
-                    }
-                    else if (tag.equals("SESSION_TABLE")) {
-                        g2.setColor(new Color(150, 100, 180));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[SES] 会话表", x + 4, y + 24);
-                    }
-                    else if (tag.equals("FLOW")) {
-                        g2.setColor(new Color(80, 200, 200));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("[FLOW] NetFlow", x + 2, y + 24);
-                    }
-                    else if (tag.equals("LOAD_BALANCER")) {
-                        g2.setColor(new Color(200, 100, 80));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[LB] 负载均衡", x + 2, y + 24);
-                    }
-                    else if (tag.equals("SCHEDULER")) {
-                        g2.setColor(new Color(100, 150, 150));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[QoS] 调度器", x + 4, y + 24);
-                    }
-                    else if (tag.equals("DNS_ZONE")) {
-                        g2.setColor(new Color(0, 180, 180));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("[ZONE] DNS区域", x + 2, y + 24);
-                    }
-                    else if (tag.equals("DHCP_LEASE")) {
-                        g2.setColor(new Color(100, 180, 200));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("[LEASE] DHCP租约", x + 2, y + 24);
-                    }
-                    else if (tag.equals("ARP_TABLE")) {
-                        g2.setColor(new Color(80, 160, 200));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[ARP] ARP表", x + 6, y + 24);
-                    }
-                    else if (tag.equals("NEIGHBOR_TABLE")) {
-                        g2.setColor(new Color(60, 140, 180));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[ND] 邻居表", x + 6, y + 24);
-                    }
-                    else if (tag.equals("MCAST_ROUTE")) {
-                        g2.setColor(new Color(180, 80, 180));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[MCAST] 组播路由", x + 2, y + 24);
-                    }
-                    else if (tag.equals("MPLS_LABEL")) {
-                        g2.setColor(new Color(200, 200, 80));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("[MPLS] 标签栈", x + 4, y + 24);
-                    }
-                    else if (tag.equals("CERT_STORE")) {
-                        g2.setColor(new Color(180, 180, 100));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("[CERT] 证书库", x + 4, y + 24);
-                    }
-                    else if (tag.equals("EVENT")) {
-                        g2.setColor(new Color(200, 100, 150));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[EVT] 事件引擎", x + 2, y + 24);
-                    }
-                    else if (tag.equals("STATS")) {
-                        g2.setColor(new Color(80, 180, 140));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("[STAT] 统计", x + 8, y + 24);
-                    }
-                    else if (tag.equals("LOG")) {
-                        g2.setColor(new Color(150, 150, 150));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.BLACK);
-                        g2.drawString("[LOG] 日志", x + 8, y + 24);
-                    }
-                    else if (tag.equals("PCAP")) {
-                        g2.setColor(new Color(80, 100, 180));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[PCAP] 抓包", x + 6, y + 24);
-                    } else if (tag.equals("IPSEC_AH")) {
-                        g2.setColor(new Color(110, 90, 150));
-                        g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                        g2.setColor(Color.WHITE);
-                        g2.drawString("[AH] AH", x + 8, y + 24);
+                    // 默认其他建筑
+                    else {
+                        g2.setColor(new Color(100, 100, 100));
+                        g2.drawString(tag.length() > 8 ? tag.substring(0, 6) : tag, x + 4, y + 24);
                     }
                 }
             }
 
+            // 绘制采矿车
             for (OreCart c : oreCarts) {
                 g2.setColor(c.oreType.equals("HELLO") ? Color.CYAN : Color.GREEN);
                 g2.fillOval((int) c.x - 5, (int) c.y - 5, 10, 10);
             }
 
+            // 绘制数据包
             for (DataCart cart : dataCarts) {
                 int cx = (int) cart.x, cy = (int) cart.y;
 
@@ -5826,12 +6001,12 @@ public class DataCartFactoryGame extends JFrame {
                 else if (cart.cartType.startsWith("DNS")) g2.setColor(new Color(0, 200, 200));
                 else if (cart.isRetransmission) g2.setColor(Color.ORANGE);
                 else if (cart.cartType.startsWith("TLS_")) g2.setColor(new Color(255, 165, 0));
-                else if (cart.cartType.equals("HTTP_GET") || cart.cartType.equals("HTTP_200_OK"))
-                    g2.setColor(new Color(150, 0, 200));
+                else if (cart.cartType.equals("HTTP_GET") || cart.cartType.equals("HTTP_200_OK")) g2.setColor(new Color(150, 0, 200));
                 else if (cart.cartType.equals("UDP_DATA")) g2.setColor(new Color(50, 150, 255));
                 else g2.setColor(Color.LIGHT_GRAY);
                 g2.fillOval(cx - 7, cy - 7, 14, 14);
 
+                // 绘制协议层标识
                 int bx = cx - 30;
                 if (cart.hasApp) {
                     g2.setColor(new Color(100, 255, 100));
@@ -5863,6 +6038,7 @@ public class DataCartFactoryGame extends JFrame {
                     g2.fillRect(bx, cy - 5, 6, 10);
                 }
 
+                // 标签文字
                 g2.setFont(new Font("微软雅黑", Font.BOLD, 10));
                 String direction = cart.isReturnTrip ? "[R] 回传" : (cart.waitInQueueTimer > 0 ? "[W] 排队" : "[S] 发送");
                 String nameTag = cart.cartType;
