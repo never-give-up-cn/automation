@@ -544,4 +544,632 @@ public class FactoryManager {
         subnetFactory.reset();
         queueFactory.reset();
     }
+
+    // ===================== Getter 方法 =====================
+
+    public ChecksumFactory getChecksumFactory() {
+        return checksumFactory;
+    }
+
+    public IpAddressFactory getIpAddressFactory() {
+        return ipAddressFactory;
+    }
+
+    public MacAddressFactory getMacFactory() {
+        return macFactory;
+    }
+
+    public PortFactory getPortFactory() {
+        return portFactory;
+    }
+
+    public TcpPacketFactory getTcpPacketFactory() {
+        return tcpFactory;
+    }
+
+    public UdpPacketFactory getUdpPacketFactory() {
+        return udpFactory;
+    }
+
+    public IpPacketFactory getIpPacketFactory() {
+        return ipPacketFactory;
+    }
+
+    public EthernetFactory getEthernetFactory() {
+        return etherFactory;
+    }
+
+    public ArpPacketFactory getArpFactory() {
+        return arpFactory;
+    }
+
+    public DnsPacketFactory getDnsFactory() {
+        return dnsFactory;
+    }
+
+    public DhcpPacketFactory getDhcpFactory() {
+        return dhcpFactory;
+    }
+
+    public HttpPacketFactory getHttpFactory() {
+        return httpFactory;
+    }
+
+    public TlsPacketFactory getTlsFactory() {
+        return tlsFactory;
+    }
+
+    public ArpCacheFactory getArpCache() {
+        return arpCache;
+    }
+
+    public DnsCacheFactory getDnsCache() {
+        return dnsCache;
+    }
+
+    public NatMappingFactory getNatFactory() {
+        return natFactory;
+    }
+
+    public RouteTableFactory getRouteTable() {
+        return routeTable;
+    }
+
+    public CongestionControlFactory getCongestionControl() {
+        return congestionControl;
+    }
+
+    public IpFragmentFactory getIpFragmentFactory() {
+        return ipFragmentFactory;
+    }
+
+    public IcmpPacketFactory getIcmpFactory() {
+        return icmpFactory;
+    }
+
+    public FiveTupleFactory getFiveTupleFactory() {
+        return fiveTupleFactory;
+    }
+
+    public BandwidthFactory getBandwidthFactory() {
+        return bandwidthFactory;
+    }
+
+    public SessionFactory getSessionFactory() {
+        return sessionFactory;
+    }
+
+    public NetworkDeviceFactory getDeviceFactory() {
+        return deviceFactory;
+    }
+
+    public LinkFactory getLinkFactory() {
+        return linkFactory;
+    }
+
+    public SubnetFactory getSubnetFactory() {
+        return subnetFactory;
+    }
+
+    public PacketQueueFactory getQueueFactory() {
+        return queueFactory;
+    }
+
+    public FirewallRuleFactory getFirewallFactory() {
+        return firewallFactory;
+    }
+
+    public LinkLayerFactory getLinkLayerFactory() {
+        return linkLayerFactory;
+    }
+
+    public IpOptionFactory getIpOptionFactory() {
+        return ipOptionFactory;
+    }
+
+    public TcpOptionFactory getTcpOptionFactory() {
+        return tcpOptionFactory;
+    }
+
+    public UdpChecksumFactory getUdpChecksumFactory() {
+        return udpChecksumFactory;
+    }
+
+    public IcmpErrorFactory getIcmpErrorFactory() {
+        return icmpErrorFactory;
+    }
+
+    public EthernetPaddingFactory getEthernetPaddingFactory() {
+        return ethernetPaddingFactory;
+    }
+
+    public IpForwardFactory getIpForwardFactory() {
+        return ipForwardFactory;
+    }
+
+    public TcpTimerFactory getTcpTimerFactory() {
+        return tcpTimerFactory;
+    }
+
+    public TcpWindowFactory getTcpWindowFactory() {
+        return tcpWindowFactory;
+    }
+
+    public TcpConnectionFactory getTcpConnectionFactory() {
+        return tcpConnectionFactory;
+    }
+
+    public DnsRecursiveFactory getDnsRecursiveFactory() {
+        return dnsRecursiveFactory;
+    }
+
+    public DhcpFullPacketFactory getDhcpFullPacketFactory() {
+        return dhcpFullPacketFactory;
+    }
+
+    public TlsHandshakeFactory getTlsHandshakeFactory() {
+        return tlsHandshakeFactory;
+    }
+
+    public PacketSerializerFactory getPacketSerializerFactory() {
+        return packetSerializerFactory;
+    }
+
+    public NetworkInterfaceFactory getNetworkInterfaceFactory() {
+        return networkInterfaceFactory;
+    }
+
+    public VlanFactory getVlanFactory() {
+        return vlanFactory;
+    }
+
+    public TunnelFactory getTunnelFactory() {
+        return tunnelFactory;
+    }
+
+    public IgmpFactory getIgmpFactory() {
+        return igmpFactory;
+    }
+
+    public NdpFactory getNdpFactory() {
+        return ndpFactory;
+    }
+
+// ===================== 14个新工厂 Getter =====================
+
+    public BitStreamFactory getBitStreamFactory() {
+        return bitStreamFactory;
+    }
+
+    public PhysicalChannelFactory getPhysicalChannelFactory() {
+        return physicalChannelFactory;
+    }
+
+    public PppoeFactory getPppoeFactory() {
+        return pppoeFactory;
+    }
+
+    public MacSecFactory getMacSecFactory() {
+        return macSecFactory;
+    }
+
+    public OspfPacketFactory getOspfPacketFactory() {
+        return ospfPacketFactory;
+    }
+
+    public BgpPacketFactory getBgpPacketFactory() {
+        return bgpPacketFactory;
+    }
+
+    public QosTrafficFactory getQosTrafficFactory() {
+        return qosTrafficFactory;
+    }
+
+    public Nat64Factory getNat64Factory() {
+        return nat64Factory;
+    }
+
+    public TcpReassemblyFactory getTcpReassemblyFactory() {
+        return tcpReassemblyFactory;
+    }
+
+    public TransportAttackFactory getTransportAttackFactory() {
+        return transportAttackFactory;
+    }
+
+    public NtpPacketFactory getNtpPacketFactory() {
+        return ntpPacketFactory;
+    }
+
+    public SnmpPacketFactory getSnmpPacketFactory() {
+        return snmpPacketFactory;
+    }
+
+    public Http23PacketFactory getHttp23PacketFactory() {
+        return http23PacketFactory;
+    }
+
+    public IpsecFactory getIpsecFactory() {
+        return ipsecFactory;
+    }
+
+// ===================== IPv6 协议栈 Getter =====================
+
+    public Ipv6PacketFactory getIpv6PacketFactory() {
+        return ipv6PacketFactory;
+    }
+
+    public Ipv6FragmentFactory getIpv6FragmentFactory() {
+        return ipv6FragmentFactory;
+    }
+
+    public Ipv6OptionFactory getIpv6OptionFactory() {
+        return ipv6OptionFactory;
+    }
+
+    public Ipv6NeighborDiscovery getIpv6NeighborDiscovery() {
+        return ipv6NeighborDiscovery;
+    }
+
+// ===================== 多播路由 Getter =====================
+
+    public PimSmFactory getPimSmFactory() {
+        return pimSmFactory;
+    }
+
+    public MldFactory getMldFactory() {
+        return mldFactory;
+    }
+
+    public DvmrpFactory getDvmrpFactory() {
+        return dvmrpFactory;
+    }
+
+// ===================== TCP 增强 Getter =====================
+
+    public TcpKeepAliveFactory getTcpKeepAliveFactory() {
+        return tcpKeepAliveFactory;
+    }
+
+    public TcpSackFactory getTcpSackFactory() {
+        return tcpSackFactory;
+    }
+
+    public TcpEcnFactory getTcpEcnFactory() {
+        return tcpEcnFactory;
+    }
+
+    public TcpFastOpenFactory getTcpFastOpenFactory() {
+        return tcpFastOpenFactory;
+    }
+
+// ===================== 链路层增强 Getter =====================
+
+    public LldpFactory getLldpFactory() {
+        return lldpFactory;
+    }
+
+    public StpFactory getStpFactory() {
+        return stpFactory;
+    }
+
+    public LACPFactory getLacpFactory() {
+        return lacpFactory;
+    }
+
+    public MplsFactory getMplsFactory() {
+        return mplsFactory;
+    }
+
+// ===================== 应用层协议 Getter =====================
+
+    public FtpPacketFactory getFtpPacketFactory() {
+        return ftpPacketFactory;
+    }
+
+    public SmtpPacketFactory getSmtpPacketFactory() {
+        return smtpPacketFactory;
+    }
+
+    public Pop3PacketFactory getPop3PacketFactory() {
+        return pop3PacketFactory;
+    }
+
+    public ImapPacketFactory getImapPacketFactory() {
+        return imapPacketFactory;
+    }
+
+    public SshPacketFactory getSshPacketFactory() {
+        return sshPacketFactory;
+    }
+
+    public TelnetPacketFactory getTelnetPacketFactory() {
+        return telnetPacketFactory;
+    }
+
+    public RtpPacketFactory getRtpPacketFactory() {
+        return rtpPacketFactory;
+    }
+
+    public RtcpPacketFactory getRtcpPacketFactory() {
+        return rtcpPacketFactory;
+    }
+
+    public SipPacketFactory getSipPacketFactory() {
+        return sipPacketFactory;
+    }
+
+    public RadiusPacketFactory getRadiusPacketFactory() {
+        return radiusPacketFactory;
+    }
+
+    public DiameterPacketFactory getDiameterPacketFactory() {
+        return diameterPacketFactory;
+    }
+
+    public LdapPacketFactory getLdapPacketFactory() {
+        return ldapPacketFactory;
+    }
+
+// ===================== NAT 增强 Getter =====================
+
+    public NatHairpinningFactory getNatHairpinningFactory() {
+        return natHairpinningFactory;
+    }
+
+    public NatHolePunchFactory getNatHolePunchFactory() {
+        return natHolePunchFactory;
+    }
+
+    public UpnpFactory getUpnpFactory() {
+        return upnpFactory;
+    }
+
+    public PcpFactory getPcpFactory() {
+        return pcpFactory;
+    }
+
+// ===================== 负载均衡 Getter =====================
+
+    public LbRoundRobinFactory getLbRoundRobinFactory() {
+        return lbRoundRobinFactory;
+    }
+
+    public LbLeastConnFactory getLbLeastConnFactory() {
+        return lbLeastConnFactory;
+    }
+
+    public LbIpHashFactory getLbIpHashFactory() {
+        return lbIpHashFactory;
+    }
+
+    public LbHealthCheckFactory getLbHealthCheckFactory() {
+        return lbHealthCheckFactory;
+    }
+
+// ===================== 监控管理 Getter =====================
+
+    public NetFlowFactory getNetFlowFactory() {
+        return netFlowFactory;
+    }
+
+    public SflowFactory getSflowFactory() {
+        return sflowFactory;
+    }
+
+    public IpfixFactory getIpfixFactory() {
+        return ipfixFactory;
+    }
+
+    public IcmpPingFactory getIcmpPingFactory() {
+        return icmpPingFactory;
+    }
+
+    public IcmpTracerouteFactory getIcmpTracerouteFactory() {
+        return icmpTracerouteFactory;
+    }
+
+// ===================== VPN 隧道 Getter =====================
+
+    public IpsecIkeFactory getIpsecIkeFactory() {
+        return ipsecIkeFactory;
+    }
+
+    public IpsecEspFactory getIpsecEspFactory() {
+        return ipsecEspFactory;
+    }
+
+    public IpsecAhFactory getIpsecAhFactory() {
+        return ipsecAhFactory;
+    }
+
+    public OpenVpnFactory getOpenVpnFactory() {
+        return openVpnFactory;
+    }
+
+    public WireguardFactory getWireguardFactory() {
+        return wireguardFactory;
+    }
+
+    public L2tpFactory getL2tpFactory() {
+        return l2tpFactory;
+    }
+
+    public SstpFactory getSstpFactory() {
+        return sstpFactory;
+    }
+
+// ===================== 安全防火墙 Getter =====================
+
+    public DpiFactory getDpiFactory() {
+        return dpiFactory;
+    }
+
+    public IpsFactory getIpsFactory() {
+        return ipsFactory;
+    }
+
+    public WafFactory getWafFactory() {
+        return wafFactory;
+    }
+
+    public DdosMitigationFactory getDdosMitigationFactory() {
+        return ddosMitigationFactory;
+    }
+
+    public RateLimitFactory getRateLimitFactory() {
+        return rateLimitFactory;
+    }
+
+// ===================== 加密证书 Getter =====================
+
+    public X509Factory getX509Factory() {
+        return x509Factory;
+    }
+
+    public CrlFactory getCrlFactory() {
+        return crlFactory;
+    }
+
+    public OcspFactory getOcspFactory() {
+        return ocspFactory;
+    }
+
+    public PkiFactory getPkiFactory() {
+        return pkiFactory;
+    }
+
+    public DtlsFactory getDtlsFactory() {
+        return dtlsFactory;
+    }
+
+// ===================== 访问控制 Getter =====================
+
+    public AclFactory getAclFactory() {
+        return aclFactory;
+    }
+
+    public MacAuthFactory getMacAuthFactory() {
+        return macAuthFactory;
+    }
+
+    public Dot1xFactory getDot1xFactory() {
+        return dot1xFactory;
+    }
+
+// ===================== 诊断工具 Getter =====================
+
+    public NetstatFactory getNetstatFactory() {
+        return netstatFactory;
+    }
+
+    public IpconfigFactory getIpconfigFactory() {
+        return ipconfigFactory;
+    }
+
+    public RoutePrintFactory getRoutePrintFactory() {
+        return routePrintFactory;
+    }
+
+    public NslookupFactory getNslookupFactory() {
+        return nslookupFactory;
+    }
+
+    public ArpCommandFactory getArpCommandFactory() {
+        return arpCommandFactory;
+    }
+
+    public TelnetClientFactory getTelnetClientFactory() {
+        return telnetClientFactory;
+    }
+
+    public CurlFactory getCurlFactory() {
+        return curlFactory;
+    }
+
+    public WgetFactory getWgetFactory() {
+        return wgetFactory;
+    }
+
+// ===================== 20个核心工厂 Getter =====================
+
+    public SocketFactory getSocketFactory() {
+        return socketFactory;
+    }
+
+    public TcpStateMachineFactory getTcpStateMachineFactory() {
+        return tcpStateMachineFactory;
+    }
+
+    public MacTableFactory getMacTableFactory() {
+        return macTableFactory;
+    }
+
+    public CamTableFactory getCamTableFactory() {
+        return camTableFactory;
+    }
+
+    public ForwardingEngineFactory getForwardingEngineFactory() {
+        return forwardingEngineFactory;
+    }
+
+    public SessionTableFactory getSessionTableFactory() {
+        return sessionTableFactory;
+    }
+
+    public FlowFactory getFlowFactory() {
+        return flowFactory;
+    }
+
+    public LoadBalancerFactory getLoadBalancerFactory() {
+        return loadBalancerFactory;
+    }
+
+    public SchedulerFactory getSchedulerFactory() {
+        return schedulerFactory;
+    }
+
+    public DnsZoneFactory getDnsZoneFactory() {
+        return dnsZoneFactory;
+    }
+
+    public DhcpLeaseFactory getDhcpLeaseFactory() {
+        return dhcpLeaseFactory;
+    }
+
+    public ArpTableFactory getArpTableFactory() {
+        return arpTableFactory;
+    }
+
+    public NeighborTableFactory getNeighborTableFactory() {
+        return neighborTableFactory;
+    }
+
+    public MulticastRoutingFactory getMulticastRoutingFactory() {
+        return multicastRoutingFactory;
+    }
+
+    public MplsLabelFactory getMplsLabelFactory() {
+        return mplsLabelFactory;
+    }
+
+    public CertificateStoreFactory getCertificateStoreFactory() {
+        return certificateStoreFactory;
+    }
+
+    public EventFactory getEventFactory() {
+        return eventFactory;
+    }
+
+    public StatisticsFactory getStatisticsFactory() {
+        return statisticsFactory;
+    }
+
+    public LogFactory getLogFactory() {
+        return logFactory;
+    }
+
+    public PacketCaptureFactory getPacketCaptureFactory() {
+        return packetCaptureFactory;
+    }
 }
