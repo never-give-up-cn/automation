@@ -7,6 +7,7 @@ import com.never_give_up.automation.demo.factory.address.PortFactory;
 import com.never_give_up.automation.demo.factory.application.*;
 import com.never_give_up.automation.demo.factory.application.dhcp.DhcpLeaseFactory;
 import com.never_give_up.automation.demo.factory.application.dns.DnsZoneFactory;
+import com.never_give_up.automation.demo.factory.application.ftp.*;
 import com.never_give_up.automation.demo.factory.attack.TransportAttackFactory;
 import com.never_give_up.automation.demo.factory.balance.*;
 import com.never_give_up.automation.demo.factory.capture.PacketCaptureFactory;
@@ -87,7 +88,6 @@ import com.never_give_up.automation.demo.factory.link.LACPFactory;
 import com.never_give_up.automation.demo.factory.link.MplsFactory;
 
 // ===================== 本次新增：应用层协议全量 =====================
-import com.never_give_up.automation.demo.factory.application.ftp.FtpPacketFactory;
 import com.never_give_up.automation.demo.factory.application.mail.SmtpPacketFactory;
 import com.never_give_up.automation.demo.factory.application.mail.Pop3PacketFactory;
 import com.never_give_up.automation.demo.factory.application.mail.ImapPacketFactory;
@@ -544,7 +544,24 @@ public class FactoryManager {
         subnetFactory.reset();
         queueFactory.reset();
     }
+// 在 FactoryManager.java 中添加
 
+    // ===================== FTP 子工厂 Getter =====================
+    public FtpCommandFactory getFtpCommandFactory() {
+        return ftpPacketFactory != null ? ftpPacketFactory.getCommandFactory() : null;
+    }
+
+    public FtpResponseParser getFtpResponseParser() {
+        return ftpPacketFactory != null ? ftpPacketFactory.getResponseParser() : null;
+    }
+
+    public FtpDataChannelFactory getFtpDataChannelFactory() {
+        return ftpPacketFactory != null ? ftpPacketFactory.getDataChannelFactory() : null;
+    }
+
+    public FtpAuthFactory getFtpAuthFactory() {
+        return ftpPacketFactory != null ? ftpPacketFactory.getAuthFactory() : null;
+    }
     // ===================== Getter 方法 =====================
 
     public ChecksumFactory getChecksumFactory() {

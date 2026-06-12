@@ -1965,8 +1965,8 @@ public class DataPacket {
             case 84: // FTP
                 if (!hasFtp && ftpPacketFactory != null && cartType.equals("FTP")) {
                     hasFtp = true;
-                    byte[] userCmd = ftpPacketFactory.buildFtpCommand("USER anonymous");
-                    byte[] passCmd = ftpPacketFactory.buildFtpCommand("PASS test@example.com");
+//                    byte[] userCmd = ftpPacketFactory.buildFtpCommand("USER anonymous");
+//                    byte[] passCmd = ftpPacketFactory.buildFtpCommand("PASS test@example.com");
                     appendToConsole("【📁 FTP】: USER/PASS 命令已发送");
                 }
                 break;

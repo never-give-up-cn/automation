@@ -10,7 +10,7 @@ import com.never_give_up.automation.demo.factory.application.auth.DiameterPacket
 import com.never_give_up.automation.demo.factory.application.auth.RadiusPacketFactory;
 import com.never_give_up.automation.demo.factory.application.dhcp.DhcpLeaseFactory;
 import com.never_give_up.automation.demo.factory.application.dns.DnsZoneFactory;
-import com.never_give_up.automation.demo.factory.application.ftp.FtpPacketFactory;
+import com.never_give_up.automation.demo.factory.application.ftp.*;
 import com.never_give_up.automation.demo.factory.application.ldap.LdapPacketFactory;
 import com.never_give_up.automation.demo.factory.application.mail.ImapPacketFactory;
 import com.never_give_up.automation.demo.factory.application.mail.Pop3PacketFactory;
@@ -204,6 +204,7 @@ public class DataCartFactoryGame extends JFrame {
             this.sendTime = sendTime;
         }
     }
+
     private int udpPacketsSent = 0;  // UDP 已发送包计数
     // 在类的字段声明区域添加
     private double canvasScale = 1.0;      // 当前缩放比例
@@ -219,6 +220,15 @@ public class DataCartFactoryGame extends JFrame {
     private boolean demoCompleted = false;
     private FactoryManager factoryManager;
     private PacketAdapter packetAdapter;
+    // FTP 相关
+    private boolean ftpDemoEnabled = false;
+    private boolean ftpLoginSent = false;
+    private boolean ftpPassSent = false;
+    private boolean ftpLoggedIn = false;
+    private int ftpDataPort = 0;
+    private boolean ftpPasvMode = false;
+    private boolean ftpListSent = false;
+    private String ftpCurrentDir = "/";
     // ===================== 新增 14 个工厂实例 =====================
     private BitStreamFactory bitStreamFactory;
     private PhysicalChannelFactory physicalChannelFactory;
@@ -1007,6 +1017,25 @@ public class DataCartFactoryGame extends JFrame {
         JButton tracerouteButton = new JButton("🔎 TRACEROUTE");
         tracerouteButton.addActionListener(e -> startTraceroute());
 
+        // ========== 新增 FTP 复选框 ==========
+        JCheckBox cbFtp = new JCheckBox("📁 FTP 演示", false);
+        cbFtp.addActionListener(e -> {
+            ftpDemoEnabled = cbFtp.isSelected();
+            if (ftpDemoEnabled) {
+                // 如果启用FTP，自动禁用HTTP演示避免冲突
+                if (cbHttp.isSelected()) {
+                    cbHttp.setSelected(false);
+                    httpDemoEnabled = false;
+                }
+                appendToConsole("【📁 FTP】: 启用FTP演示模式");
+                resetTcpSession();
+            } else {
+                appendToConsole("【📁 FTP】: 关闭FTP演示模式");
+                resetTcpSession();
+            }
+        });
+// ========== FTP 复选框结束 ==========
+        btnPanel.add(cbFtp);//添加FTP
         btnPanel.add(resetButton);
         btnPanel.add(clearArpButton);
         btnPanel.add(clearDnsButton);
@@ -1265,7 +1294,20 @@ public class DataCartFactoryGame extends JFrame {
                         "SNMP", "📊 SNMP管理(73)",
                         "HTTP23", "📡 HTTP/2.3协议(74)"}, {"【26. IPv6 协议栈】", "IPV6", "🌐 IPv6 封装(76)", "IPV6_FRAG", "✂️ IPv6分片(77)", "IPV6_OPTION", "🔧 IPv6选项(78)", "IPV6_ND", "📡 IPv6邻居发现(79)"},
                 {"【27. TCP 高级特性】", "TCP_KEEPALIVE", "🔁 Keep-Alive(80)", "TCP_SACK", "📊 SACK(81)", "TCP_ECN", "⚠️ ECN(82)", "TCP_FASTOPEN", "🚀 FastOpen(83)"},
-                {"【28. 应用层协议】", "FTP", "📁 FTP(84)", "SMTP", "📧 SMTP(85)", "POP3", "📬 POP3(86)", "IMAP", "📨 IMAP(87)", "SSH", "🔐 SSH(88)", "TELNET", "💻 Telnet(89)", "RTP", "🎵 RTP(90)", "SIP", "📞 SIP(91)", "RADIUS", "🔑 RADIUS(92)"},
+                {"【28. 应用层协议】",
+                        "FTP_AUTH", "🔐 FTP认证(161)",
+                        "FTP_COMMAND", "📝 FTP命令(162)",
+                        "FTP_CHANNEL", "🔌 FTP数据通道(163)",
+                        "FTP_RESPONSE", "📋 FTP响应(164)",
+                        "FTP_MAIN", "📁 FTP主工厂(165)",
+                        "SMTP", "📧 SMTP(85)",
+                        "POP3", "📬 POP3(86)",
+                        "IMAP", "📨 IMAP(87)",
+                        "SSH", "🔐 SSH(88)",
+                        "TELNET", "💻 Telnet(89)",
+                        "RTP", "🎵 RTP(90)",
+                        "SIP", "📞 SIP(91)",
+                        "RADIUS", "🔑 RADIUS(92)"},
                 {"【29. 安全防护】", "DPI", "🔍 DPI深度检测(96)", "WAF", "🛡️ WAF防火墙(97)", "DDOS", "💥 DDoS防护(98)", "RATELIMIT", "⏱️ 速率限制(99)", "ACL", "🚫 访问控制(100)"}
                 , {"【30. 核心网络服务 Stage 101-120】",
                 "SOCKET", "🔌 Socket(101)",
@@ -1707,6 +1749,15 @@ public class DataCartFactoryGame extends JFrame {
 // 放在行 5 的空闲列
         int stageRow6 = 5;
         buildingLayout[stageRow6][44] = "IPS";
+
+        int ftpRow = 19;  // 使用最后一行（与 IPS 同行）
+        int ftpStartCol = 50;  // 从第 50 列开始（避开其他建筑）
+
+        buildingLayout[ftpRow][ftpStartCol] = "FTP_AUTH";
+        buildingLayout[ftpRow][ftpStartCol + 1] = "FTP_COMMAND";
+        buildingLayout[ftpRow][ftpStartCol + 2] = "FTP_CHANNEL";
+        buildingLayout[ftpRow][ftpStartCol + 3] = "FTP_RESPONSE";
+        buildingLayout[ftpRow][ftpStartCol + 4] = "FTP_MAIN";
     }
 
     // 在 DataCartFactoryGame() 构造函数中，initMap() 之后添加
@@ -1934,6 +1985,13 @@ public class DataCartFactoryGame extends JFrame {
         buildingZoneMap.put("RX_APP", BuildingZone.ZONE_APPLICATION);
         buildingZoneMap.put("RX_PORT", BuildingZone.ZONE_TRANSPORT);
         buildingZoneMap.put("MPLS_LABEL", BuildingZone.ZONE_LINK_ENHANCE);
+
+        // FTP 相关建筑映射
+        buildingZoneMap.put("FTP_AUTH", BuildingZone.ZONE_APPLICATION_PROTOCOL);
+        buildingZoneMap.put("FTP_COMMAND", BuildingZone.ZONE_APPLICATION_PROTOCOL);
+        buildingZoneMap.put("FTP_CHANNEL", BuildingZone.ZONE_APPLICATION_PROTOCOL);
+        buildingZoneMap.put("FTP_RESPONSE", BuildingZone.ZONE_APPLICATION_PROTOCOL);
+        buildingZoneMap.put("FTP_MAIN", BuildingZone.ZONE_APPLICATION_PROTOCOL);
     }
 
     private void sendPing() {
@@ -1984,6 +2042,23 @@ public class DataCartFactoryGame extends JFrame {
             appendToConsole("【🔎 DHCP】: 发送 DHCP Discover (PC 尚无 IP)");
             updateTopLabel();
         }
+    }
+
+    private void startFtpSession() {
+        currentTcpState = TcpState.SYN_SENT;
+        stateTimerWatchdog = System.currentTimeMillis();
+        ftpLoginSent = false;
+        ftpPassSent = false;
+        ftpLoggedIn = false;
+        ftpDataPort = 0;
+
+        // FTP使用端口21
+        DataCart syn = new DataCart(pcFactory.x, pcFactory.y, "SYN", 0);
+        syn.sequenceNumber = 100;
+        syn.dstPort = 21;  // FTP控制端口
+        syn.ttl = 64;
+        pendingDataCarts.add(syn);
+        appendToConsole("【📁 FTP】: 开始连接服务器端口21 (控制连接)");
     }
 
     private void startDnsResolution() {
@@ -2272,6 +2347,45 @@ public class DataCartFactoryGame extends JFrame {
                     sendHttpGet();
                 }
             }
+
+            // ========== 在这段代码后面添加 FTP 触发逻辑 ==========
+// FTP 专用逻辑
+            if (ftpDemoEnabled && pcIpAssigned && !useUdp && currentTcpState == TcpState.ESTABLISHED && !ftpLoggedIn) {
+                if (!ftpLoginSent) {
+                    // 发送 USER 命令
+                    DataCart ftpUser = new DataCart(pcFactory.x, pcFactory.y, "FTP_USER", 0);
+                    ftpUser.stage = 5;
+                    ftpUser.ftpCommand = "USER anonymous";
+                    pendingDataCarts.add(ftpUser);
+                    ftpLoginSent = true;
+                    appendToConsole("【📁 FTP】: 发送 USER anonymous");
+                } else if (ftpLoginSent && !ftpPassSent) {
+                    // 发送 PASS 命令
+                    DataCart ftpPass = new DataCart(pcFactory.x, pcFactory.y, "FTP_PASS", 0);
+                    ftpPass.stage = 5;
+                    ftpPass.ftpCommand = "PASS anonymous@example.com";
+                    pendingDataCarts.add(ftpPass);
+                    ftpPassSent = true;
+                    appendToConsole("【📁 FTP】: 发送 PASS 命令");
+                }
+            } else if (ftpDemoEnabled && ftpLoggedIn && !ftpPasvMode && !ftpListSent) {
+                // 登录成功后进入 PASV 模式
+                DataCart ftpPasv = new DataCart(pcFactory.x, pcFactory.y, "FTP_PASV", 0);
+                ftpPasv.stage = 5;
+                ftpPasv.ftpCommand = "PASV";
+                pendingDataCarts.add(ftpPasv);
+                ftpPasvMode = true;
+                appendToConsole("【📁 FTP】: 请求被动模式 PASV");
+            } else if (ftpDemoEnabled && ftpLoggedIn && ftpPasvMode && ftpDataPort > 0 && !ftpListSent) {
+                // PASV 模式成功后，发送 LIST 命令
+                DataCart ftpList = new DataCart(pcFactory.x, pcFactory.y, "FTP_LIST", 0);
+                ftpList.stage = 5;
+                ftpList.ftpCommand = "LIST";
+                pendingDataCarts.add(ftpList);
+                ftpListSent = true;
+                appendToConsole("【📁 FTP】: 发送 LIST 命令");
+            }
+// ========== FTP 触发逻辑结束 ==========
 
             // UDP 数据发送
             // UDP 数据发送 - 只发送 totalDataToTransmit 个包
@@ -2989,7 +3103,15 @@ public class DataCartFactoryGame extends JFrame {
                         } else if (!tlsEnabled) {
                             sendHttpGet();
                         }
-                    } else if (!useUdp && !httpDemoEnabled) {
+                    }
+                    // ========== 新增：FTP 演示模式 ==========
+                    else if (!useUdp && ftpDemoEnabled) {
+                        // FTP 模式：开始 FTP 登录流程
+                        appendToConsole("【📁 FTP】: 连接建立，开始 FTP 登录流程");
+                        // FTP 登录流程将在 gameTick 中通过状态标志触发
+                    }
+                    // ========== 新增结束 ==========
+                    else if (!useUdp && !httpDemoEnabled && !ftpDemoEnabled) {
                         // 普通 TCP 模式：直接开始发送 DATA
                         if (helloStock >= 2 && sayStock >= 1) {
                             helloStock -= 2;
@@ -3044,6 +3166,45 @@ public class DataCartFactoryGame extends JFrame {
                                 appendToConsole("【⏸️ 无法发送】: canSend=" + canSend);
                             }
                         }
+                        // 在handleCartArrival方法中，找到TCP ESTABLISHED后的数据处理部分
+                        if (currentTcpState == TcpState.ESTABLISHED && !useUdp && !httpDemoEnabled) {
+                            if (ftpDemoEnabled && !ftpLoggedIn) {
+                                // FTP登录流程
+                                if (!ftpLoginSent) {
+                                    // 发送USER命令
+                                    DataCart ftpUser = new DataCart(pcFactory.x, pcFactory.y, "FTP_USER", 0);
+                                    ftpUser.stage = 5;
+                                    ftpUser.ftpCommand = "USER anonymous";
+                                    pendingDataCarts.add(ftpUser);
+                                    ftpLoginSent = true;
+                                    appendToConsole("【📁 FTP】: 发送 USER anonymous");
+                                } else if (ftpLoginSent && !ftpPassSent) {
+                                    // 发送PASS命令
+                                    DataCart ftpPass = new DataCart(pcFactory.x, pcFactory.y, "FTP_PASS", 0);
+                                    ftpPass.stage = 5;
+                                    ftpPass.ftpCommand = "PASS anonymous@example.com";
+                                    pendingDataCarts.add(ftpPass);
+                                    ftpPassSent = true;
+                                    appendToConsole("【📁 FTP】: 发送 PASS 命令");
+                                }
+                            } else if (ftpDemoEnabled && ftpLoggedIn && !ftpPasvMode) {
+                                // 登录成功后进入PASV模式
+                                DataCart ftpPasv = new DataCart(pcFactory.x, pcFactory.y, "FTP_PASV", 0);
+                                ftpPasv.stage = 5;
+                                ftpPasv.ftpCommand = "PASV";
+                                pendingDataCarts.add(ftpPasv);
+                                ftpPasvMode = true;
+                                appendToConsole("【📁 FTP】: 请求被动模式 PASV");
+                            } else if (ftpDemoEnabled && ftpLoggedIn && ftpPasvMode && ftpDataPort > 0) {
+                                // PASV模式成功后，发送LIST命令
+                                DataCart ftpList = new DataCart(pcFactory.x, pcFactory.y, "FTP_LIST", 0);
+                                ftpList.stage = 5;
+                                ftpList.ftpCommand = "LIST";
+                                pendingDataCarts.add(ftpList);
+                                appendToConsole("【📁 FTP】: 发送 LIST 命令");
+                                ftpPasvMode = false; // 防止重复发送
+                            }
+                        }
                     }
                     break;
                 case "FIN_ACK_SRV":
@@ -3087,6 +3248,52 @@ public class DataCartFactoryGame extends JFrame {
                     fin.ttl = 64;
                     pendingDataCarts.add(fin);
                     appendToConsole("【🏁 HTTP 完成】: 发送 FIN，开始四次挥手");
+                    break;
+                // ========== 新增：FTP 响应处理 ==========
+                case "FTP_RESPONSE":
+                    if (cart.isReturnTrip && cart.isArrived && cart.ftpPayload != null) {
+                        FtpPacketFactory ftpFactory = factoryManager.getFtpPacketFactory();
+                        FtpResponseParser.FtpResponse response = ftpFactory.parseResponse(cart.ftpPayload);
+
+                        if (response != null) {
+                            int responseCode = response.getCode();
+                            String message = response.getMessage();
+                            cart.ftpResponseCode = responseCode;  // 设置到 cart 对象
+
+                            appendToConsole(String.format("【📁 FTP响应】: %d %s", responseCode, message));
+
+                            // 根据响应码更新 FTP 会话状态
+                            if (responseCode == 220) {
+                                appendToConsole("【📁 FTP】: 服务器就绪");
+                            } else if (responseCode == 331) {
+                                appendToConsole("【📁 FTP】: 需要密码");
+                            } else if (responseCode == 230) {
+                                ftpLoggedIn = true;
+                                appendToConsole("【📁 FTP】: 登录成功！");
+                            } else if (responseCode == 227) {
+                                int dataPort = ftpFactory.parsePassivePort(cart.ftpPayload);
+                                if (dataPort > 0) {
+                                    ftpDataPort = dataPort;
+                                    appendToConsole(String.format("【📁 FTP】: 被动模式，数据端口=%d", dataPort));
+                                }
+                            } else if (responseCode == 226) {
+                                appendToConsole("【📁 FTP】: 数据传输完成");
+                                // 发送 QUIT
+                                DataCart ftpQuit = new DataCart(pcFactory.x, pcFactory.y, "FTP_QUIT", 0);
+                                ftpQuit.stage = 5;
+                                ftpQuit.ftpCommand = "QUIT";
+                                pendingDataCarts.add(ftpQuit);
+                            } else if (responseCode == 221) {
+                                appendToConsole("【📁 FTP】: 连接关闭");
+                                // 开始四次挥手
+                                currentTcpState = TcpState.FIN_WAIT_1;
+                                stateTimerWatchdog = now;
+                                DataCart finFtp = new DataCart(pcFactory.x, pcFactory.y, "FIN_PC", 0);
+                                finFtp.ttl = 64;
+                                pendingDataCarts.add(finFtp);
+                            }
+                        }
+                    }
                     break;
             }
         }
@@ -3165,6 +3372,7 @@ public class DataCartFactoryGame extends JFrame {
             appendToConsole(String.format("【📤 TCP 发送】: SEQ=%d", seq));
         }
     }
+
     // 修改 updateTopLabel() 方法，添加更多调试信息
     private void updateTopLabel() {
         int effectiveWin = Math.min(cwnd, rwnd);
@@ -3283,6 +3491,11 @@ public class DataCartFactoryGame extends JFrame {
 
     @Data
     private class DataCart {
+        // ========== FTP 相关字段 ==========
+        private String ftpCommand;      // FTP命令字符串，如 "USER anonymous"
+        private byte[] ftpPayload;      // FTP命令载荷（构建后的字节数组）
+        private int ftpResponseCode;    // FTP响应码（用于接收端）
+        private int ftpDataPort;        // FTP数据端口（PASV模式返回的端口）
         // ===================== 新增 20 个核心工厂引用 =====================
         private transient SocketFactory socketFactory;
         private transient TcpStateMachineFactory tcpStateMachineFactory;
@@ -3772,6 +3985,51 @@ public class DataCartFactoryGame extends JFrame {
                 this.logFactory = factoryManager.getLogFactory();
                 this.packetCaptureFactory = factoryManager.getPacketCaptureFactory();
             }
+            // 在 DataCart 构造函数中修改 FTP 相关类型的 stage
+            // 在 DataCart 构造函数中修改 FTP 相关类型的处理
+
+            if (type.equals("FTP_USER")) {
+                this.stage = 161;              // 从 FTP_AUTH 开始
+                this.protocol = "FTP";
+                this.dstPort = 21;             // FTP 控制端口 21
+                this.srcPort = 1234;           // 源端口
+                this.ftpCommand = "USER anonymous";
+                this.cartType = "FTP_DATA";
+                this.packetClass = PacketClass.TCP_DATA;
+                appendToConsole("【📁 FTP】: 创建 FTP_USER 包, stage=161, dstPort=21");
+            } else if (type.equals("FTP_PASS")) {
+                this.stage = 161;
+                this.protocol = "FTP";
+                this.dstPort = 21;
+                this.srcPort = 1234;
+                this.ftpCommand = "PASS anonymous@example.com";
+                this.cartType = "FTP_DATA";
+                this.packetClass = PacketClass.TCP_DATA;
+            } else if (type.equals("FTP_PASV")) {
+                this.stage = 161;
+                this.protocol = "FTP";
+                this.dstPort = 21;
+                this.srcPort = 1234;
+                this.ftpCommand = "PASV";
+                this.cartType = "FTP_DATA";
+                this.packetClass = PacketClass.TCP_DATA;
+            } else if (type.equals("FTP_LIST")) {
+                this.stage = 161;
+                this.protocol = "FTP";
+                this.dstPort = 21;
+                this.srcPort = 1234;
+                this.ftpCommand = "LIST";
+                this.cartType = "FTP_DATA";
+                this.packetClass = PacketClass.TCP_DATA;
+            } else if (type.equals("FTP_QUIT")) {
+                this.stage = 161;
+                this.protocol = "FTP";
+                this.dstPort = 21;
+                this.srcPort = 1234;
+                this.ftpCommand = "QUIT";
+                this.cartType = "FTP_DATA";
+                this.packetClass = PacketClass.TCP_DATA;
+            }
         }
 
         private String getSrcIp() {
@@ -4001,15 +4259,24 @@ public class DataCartFactoryGame extends JFrame {
         // 根据包类型获取最大 stage
         private int getMaxStageForPacketType() {
             if (packetClass == PacketClass.CONTROL_FAST) {
-                return 1;  // 控制包只需要 1 个 stage
+                return 1;
             }
             if (packetClass == PacketClass.UDP_DATA) {
-                return 49;  // UDP 最多到校验和
+                return 49;
             }
             if (packetClass == PacketClass.TCP_CONTROL) {
-                return 21;  // TCP 控制包到 FCS 即可
+                return 21;
             }
-            return 160;  // TCP 数据包完整路径
+            // FTP 数据包需要经过 stage 161-165，然后继续到 5
+            if (cartType != null && cartType.equals("FTP_DATA")) {
+                if (stage >= 161 && stage < 165) {
+                    return 165;  // 继续到下一个 FTP 子工厂
+                }
+                if (stage == 165) {
+                    return 5;    // FTP 主工厂完成后转到应用层
+                }
+            }
+            return 160;
         }
 
         private int getMaxStageForControlPacket() {
@@ -4657,6 +4924,22 @@ public class DataCartFactoryGame extends JFrame {
                 case 160:
                     tag = "IPS";
                     break;
+// ========== FTP 子工厂 Stage 映射 (使用 161-165) ==========
+                case 161:  // FTP 认证工厂
+                    tag = "FTP_AUTH";
+                    break;
+                case 162:  // FTP 命令工厂
+                    tag = "FTP_COMMAND";
+                    break;
+                case 163:  // FTP 数据通道工厂
+                    tag = "FTP_CHANNEL";
+                    break;
+                case 164:  // FTP 响应解析器
+                    tag = "FTP_RESPONSE";
+                    break;
+                case 165:  // FTP 主工厂（门面）
+                    tag = "FTP_MAIN";
+                    break;
                 default:
                     return null;
             }
@@ -4692,20 +4975,66 @@ public class DataCartFactoryGame extends JFrame {
 
             switch (stage) {
                 // ========== 应用层 ==========
-                case 5:
-                    if (!hasApp && cartType.equals("HTTP_GET")) {
+                case 5: // 应用层
+                    if (!hasApp) {
                         hasApp = true;
-                        // 使用 factoryManager 的 httpFactory
-                        httpBody = factoryManager.getHttpFactory().createGetRequest("/index.html").getBody();
-                        appendToConsole("【📦 应用层】: HTTP GET 请求封装");
-                    } else if (!hasApp && cartType.equals("TLS_CLIENT_HELLO")) {
-                        hasApp = true;
-                        // 使用 factoryManager 的 tlsFactory
-                        httpBody = factoryManager.getTlsFactory().createClientHello(new byte[32]).getTlsMessageType();
-                        appendToConsole("【🔒 应用层】: TLS Client Hello 封装");
-                    } else if (!hasApp && cartType.equals("UDP_DATA")) {
-                        hasApp = true;
-                        appendToConsole("【📦 应用层】: UDP 数据载荷");
+
+                        // FTP 命令处理（优先级最高）
+                        if (ftpCommand != null && !ftpCommand.isEmpty()) {
+                            FtpPacketFactory ftpFactory = factoryManager.getFtpPacketFactory();
+                            byte[] ftpData = null;
+
+                            if (ftpCommand.startsWith("USER")) {
+                                String username = ftpCommand.substring(4).trim();
+                                ftpData = ftpFactory.buildUserCommand(username);
+                                appendToConsole("【📁 FTP】: USER " + username);
+                            } else if (ftpCommand.startsWith("PASS")) {
+                                ftpData = ftpFactory.buildPassCommand(ftpCommand.substring(4).trim());
+                                appendToConsole("【📁 FTP】: PASS ****");
+                            } else if (ftpCommand.equals("PASV")) {
+                                ftpData = ftpFactory.buildPasvCommand();
+                                appendToConsole("【📁 FTP】: PASV");
+                            } else if (ftpCommand.equals("LIST")) {
+                                ftpData = ftpFactory.buildListCommand();
+                                appendToConsole("【📁 FTP】: LIST");
+                            } else if (ftpCommand.startsWith("RETR")) {
+                                ftpData = ftpFactory.buildRetrCommand(ftpCommand.substring(4).trim());
+                                appendToConsole("【📁 FTP】: RETR");
+                            } else if (ftpCommand.startsWith("STOR")) {
+                                ftpData = ftpFactory.buildStorCommand(ftpCommand.substring(4).trim());
+                                appendToConsole("【📁 FTP】: STOR");
+                            } else if (ftpCommand.equals("QUIT")) {
+                                ftpData = ftpFactory.buildQuitCommand();
+                                appendToConsole("【📁 FTP】: QUIT");
+                            } else if (ftpCommand.equals("TYPE I")) {
+                                ftpData = ftpFactory.buildTypeBinaryCommand();
+                                appendToConsole("【📁 FTP】: TYPE I");
+                            } else if (ftpCommand.equals("TYPE A")) {
+                                ftpData = ftpFactory.buildTypeAsciiCommand();
+                                appendToConsole("【📁 FTP】: TYPE A");
+                            } else {
+                                ftpData = ftpFactory.buildFtpCommand(ftpCommand);
+                                appendToConsole("【📁 FTP】: " + ftpCommand);
+                            }
+
+                            if (ftpData != null) {
+                                this.ftpPayload = ftpData;
+                            }
+                        }
+                        // HTTP 请求
+                        else if (cartType.equals("HTTP_GET")) {
+                            httpBody = factoryManager.getHttpFactory().createGetRequest("/index.html").getBody();
+                            appendToConsole("【📦 HTTP】: GET /index.html");
+                        }
+                        // TLS Client Hello
+                        else if (cartType.equals("TLS_CLIENT_HELLO")) {
+                            httpBody = factoryManager.getTlsFactory().createClientHello(new byte[32]).getTlsMessageType();
+                            appendToConsole("【🔒 TLS】: Client Hello");
+                        }
+                        // UDP 数据
+                        else if (cartType.equals("UDP_DATA")) {
+                            appendToConsole("【📦 UDP】: 数据载荷");
+                        }
                     }
                     break;
 
@@ -5435,8 +5764,8 @@ public class DataCartFactoryGame extends JFrame {
                 case 84: // FTP
                     if (!hasFtp && ftpPacketFactory != null && cartType.equals("FTP")) {
                         hasFtp = true;
-                        byte[] userCmd = ftpPacketFactory.buildFtpCommand("USER anonymous");
-                        byte[] passCmd = ftpPacketFactory.buildFtpCommand("PASS test@example.com");
+//                        byte[] userCmd = ftpPacketFactory.buildFtpCommand("USER anonymous");
+//                        byte[] passCmd = ftpPacketFactory.buildFtpCommand("PASS test@example.com");
                         appendToConsole("【📁 FTP】: USER/PASS 命令已发送");
                     }
                     break;
@@ -6063,6 +6392,107 @@ public class DataCartFactoryGame extends JFrame {
                             return;
                         }
                         appendToConsole("【🛡️ IPS】: 流量正常");
+                    }
+                    break;
+// 在 processStageCraft 方法的 switch 中修改
+
+// ========== FTP 子工厂处理 Stage 161-165 ==========
+                case 161: // FTP_AUTH - 认证工厂
+                    if (ftpCommand != null && (ftpCommand.startsWith("USER") || ftpCommand.startsWith("PASS"))) {
+                        FtpAuthFactory authFactory = factoryManager.getFtpAuthFactory();
+                        if (authFactory != null) {
+                            if (ftpCommand.startsWith("USER")) {
+                                String username = ftpCommand.substring(4).trim();
+                                appendToConsole("【🔐 FTP_AUTH(161)】: 处理 USER " + username);
+                            } else if (ftpCommand.startsWith("PASS")) {
+                                authFactory.setAuthenticated(true);
+                                appendToConsole("【🔐 FTP_AUTH(161)】: 认证成功");
+                                this.ftpResponseCode = 230;
+                            }
+                        }
+                    }
+                    break;
+
+                case 162: // FTP_COMMAND - 命令工厂
+                    if (ftpCommand != null && !ftpCommand.isEmpty()) {
+                        FtpCommandFactory cmdFactory = factoryManager.getFtpCommandFactory();
+                        if (cmdFactory != null) {
+                            appendToConsole("【📝 FTP_COMMAND(162)】: 验证命令 - " + ftpCommand);
+
+                            if (ftpCommand.startsWith("USER")) {
+                                this.ftpResponseCode = 331;
+                                appendToConsole("【📝 FTP_COMMAND(162)】: 响应 331 - 需要密码");
+                            } else if (ftpCommand.startsWith("PASS")) {
+                                this.ftpResponseCode = 230;
+                                appendToConsole("【📝 FTP_COMMAND(162)】: 响应 230 - 登录成功");
+                            } else if (ftpCommand.equals("PASV")) {
+                                this.ftpResponseCode = 227;
+                                appendToConsole("【📝 FTP_COMMAND(162)】: 响应 227 - 进入被动模式");
+                            } else if (ftpCommand.equals("LIST")) {
+                                this.ftpResponseCode = 150;
+                                appendToConsole("【📝 FTP_COMMAND(162)】: 响应 150 - 准备打开数据连接");
+                            } else if (ftpCommand.equals("QUIT")) {
+                                this.ftpResponseCode = 221;
+                                appendToConsole("【📝 FTP_COMMAND(162)】: 响应 221 - 服务关闭");
+                            }
+                        }
+                    }
+                    break;
+
+                case 163: // FTP_CHANNEL - 数据通道工厂
+                    FtpDataChannelFactory channelFactory = factoryManager.getFtpDataChannelFactory();
+                    if (channelFactory != null && ftpCommand != null) {
+                        if (ftpCommand.equals("PASV")) {
+                            int dataPort = 60000 + (int)(Math.random() * 1000);
+                            channelFactory.setPassiveMode(true);
+                            this.ftpDataPort = dataPort;
+                            appendToConsole(String.format("【🔌 FTP_CHANNEL(163)】: 被动模式，数据端口=%d", dataPort));
+                        } else if (ftpCommand.equals("LIST") || ftpCommand.startsWith("RETR") || ftpCommand.startsWith("STOR")) {
+                            appendToConsole("【🔌 FTP_CHANNEL(163)】: 数据通道准备就绪");
+                        }
+                    }
+                    break;
+
+                case 164: // FTP_RESPONSE - 响应解析器
+                    if (ftpPayload != null && ftpPayload.length > 0) {
+                        FtpResponseParser parser = factoryManager.getFtpResponseParser();
+                        if (parser != null) {
+                            FtpResponseParser.FtpResponse response = parser.parse(ftpPayload);
+                            if (response != null) {
+                                this.ftpResponseCode = response.getCode();
+                                appendToConsole(String.format("【📋 FTP_RESPONSE(164)】: 解析响应 %d", response.getCode()));
+                            }
+                        }
+                    }
+                    break;
+
+                case 165: // FTP_MAIN - 主工厂（门面）
+                    FtpPacketFactory mainFactory = factoryManager.getFtpPacketFactory();
+                    if (mainFactory != null && ftpCommand != null && !ftpCommand.isEmpty()) {
+                        byte[] finalCommand = null;
+
+                        if (ftpCommand.startsWith("USER")) {
+                            finalCommand = mainFactory.buildUserCommand(ftpCommand.substring(4).trim());
+                        } else if (ftpCommand.startsWith("PASS")) {
+                            finalCommand = mainFactory.buildPassCommand(ftpCommand.substring(4).trim());
+                        } else if (ftpCommand.equals("PASV")) {
+                            finalCommand = mainFactory.buildPasvCommand();
+                        } else if (ftpCommand.equals("LIST")) {
+                            finalCommand = mainFactory.buildListCommand();
+                        } else if (ftpCommand.equals("QUIT")) {
+                            finalCommand = mainFactory.buildQuitCommand();
+                        } else if (ftpCommand.equals("TYPE I")) {
+                            finalCommand = mainFactory.buildTypeBinaryCommand();
+                        } else if (ftpCommand.equals("TYPE A")) {
+                            finalCommand = mainFactory.buildTypeAsciiCommand();
+                        }
+
+                        if (finalCommand != null) {
+                            this.ftpPayload = finalCommand;
+                            appendToConsole(String.format("【📁 FTP_MAIN(165)】: 构建 %d 字节命令", finalCommand.length));
+                            // 构建完成后，下一个 stage 应该是应用层封装
+                            this.stage = 5;
+                        }
                     }
                     break;
             }
