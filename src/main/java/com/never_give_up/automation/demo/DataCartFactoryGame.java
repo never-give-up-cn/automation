@@ -204,7 +204,7 @@ public class DataCartFactoryGame extends JFrame {
             this.sendTime = sendTime;
         }
     }
-
+    private int udpPacketsSent = 0;  // UDP 已发送包计数
     // 在类的字段声明区域添加
     private double canvasScale = 1.0;      // 当前缩放比例
     private final double MIN_SCALE = 0.5;   // 最小缩放比例
@@ -2109,6 +2109,7 @@ public class DataCartFactoryGame extends JFrame {
         lastUdpSendTime = 0;
         serverReceivedCount = 0;
         serverBufferCount = 0;
+        udpPacketsSent = 0;  // 新增：记录已发送数量
         appendToConsole("【🚀 UDP 模式】: 跳过握手，直接发送数据");
     }
 
@@ -2273,14 +2274,17 @@ public class DataCartFactoryGame extends JFrame {
             }
 
             // UDP 数据发送
-            if (udpActive && serverReceivedCount < totalDataToTransmit) {
+            // UDP 数据发送 - 只发送 totalDataToTransmit 个包
+            if (udpActive && udpPacketsSent < totalDataToTransmit) {
                 if (now - lastUdpSendTime > 200) {
                     DataCart udpData = new DataCart(pcFactory.x, pcFactory.y, "UDP_DATA", udpSeqToSend++);
                     udpData.stage = 5;
                     udpData.ttl = 64;
                     pendingDataCarts.add(udpData);
                     lastUdpSendTime = now;
-                    appendToConsole(String.format("【📤 UDP 发送】: SEQ=%d (无 ACK)", udpData.sequenceNumber));
+                    udpPacketsSent++;  // 递增已发送计数
+                    appendToConsole(String.format("【📤 UDP 发送】: SEQ=%d (无 ACK), 已发送 %d/%d",
+                            udpData.sequenceNumber, udpPacketsSent, totalDataToTransmit));
                 }
             }
 
@@ -2289,8 +2293,6 @@ public class DataCartFactoryGame extends JFrame {
                 udpCompleted = true;
                 udpActive = false;
                 appendToConsole("【🎉 UDP 传输完成】: 共发送 " + totalDataToTransmit + " 个数据包");
-
-                // 延迟后显示弹窗
                 Timer timer = new Timer(500, e -> {
                     JOptionPane.showMessageDialog(this,
                             "🎉 UDP 数据传输完成！\n\n" +
@@ -2616,7 +2618,14 @@ public class DataCartFactoryGame extends JFrame {
                 if (serverBufferCount == 1) lastServerConsumeTime = now;
                 rwnd = SERVER_BUFFER_MAX - serverBufferCount;
                 funds += 500;
-                appendToConsole(String.format("【📦 UDP 数据】: SEQ=%d 已接收（无 ACK）", cart.sequenceNumber));
+
+                // 关键修复：增加已接收计数
+                if (serverReceivedCount < totalDataToTransmit) {
+                    serverReceivedCount++;
+                }
+
+                appendToConsole(String.format("【📦 UDP 数据】: SEQ=%d 已接收（无 ACK）, 进度 %d/%d",
+                        cart.sequenceNumber, serverReceivedCount, totalDataToTransmit));
             } else {
                 appendToConsole(String.format("【💥 缓冲区溢出】: UDP SEQ=%d 丢失", cart.sequenceNumber));
             }
