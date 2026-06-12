@@ -136,6 +136,7 @@ public class DataCartFactoryGame extends JFrame {
 
     // 添加建筑到区域的映射
     private Map<String, BuildingZone> buildingZoneMap = new HashMap<>();
+
     enum TcpState {
         CLOSED, SYN_SENT, ESTABLISHED, FIN_WAIT_1, FIN_WAIT_2, CLOSE_WAIT, LAST_ACK, TIME_WAIT
     }
@@ -203,6 +204,7 @@ public class DataCartFactoryGame extends JFrame {
             this.sendTime = sendTime;
         }
     }
+
     // 在类的字段声明区域添加
     private double canvasScale = 1.0;      // 当前缩放比例
     private final double MIN_SCALE = 0.5;   // 最小缩放比例
@@ -493,6 +495,7 @@ public class DataCartFactoryGame extends JFrame {
 
     private boolean httpSent = false;
     private String httpResponseContent = "";
+
     // 添加一个方法来获取当前缩放后的坐标/尺寸（用于坐标转换）
     public int scaleX(int x) {
         return (int) (x * canvasScale);
@@ -501,6 +504,7 @@ public class DataCartFactoryGame extends JFrame {
     public int scaleSize(int size) {
         return (int) (size * canvasScale);
     }
+
     public DataCartFactoryGame() {
         setTitle("🌐 全协议栈网络可视化模拟器 (DHCP + TCP连接表 + ICMP Ping/Traceroute)");
         setSize(2000, 1050);
@@ -1129,6 +1133,7 @@ public class DataCartFactoryGame extends JFrame {
             updateTcpConnTable();
         }).start();
     }
+
     // 添加一个重置视图的方法（可选）
     private void resetView() {
         canvasScale = 1.0;
@@ -1139,6 +1144,7 @@ public class DataCartFactoryGame extends JFrame {
         canvas.repaint();
         appendToConsole("【🔄 视图重置】: 缩放比例恢复100%，偏移归零");
     }
+
     private void appendToConsole(String text) {
         SwingUtilities.invokeLater(() -> {
             txtHexDisplay.append(text + "\n");
@@ -1261,7 +1267,7 @@ public class DataCartFactoryGame extends JFrame {
                 {"【27. TCP 高级特性】", "TCP_KEEPALIVE", "🔁 Keep-Alive(80)", "TCP_SACK", "📊 SACK(81)", "TCP_ECN", "⚠️ ECN(82)", "TCP_FASTOPEN", "🚀 FastOpen(83)"},
                 {"【28. 应用层协议】", "FTP", "📁 FTP(84)", "SMTP", "📧 SMTP(85)", "POP3", "📬 POP3(86)", "IMAP", "📨 IMAP(87)", "SSH", "🔐 SSH(88)", "TELNET", "💻 Telnet(89)", "RTP", "🎵 RTP(90)", "SIP", "📞 SIP(91)", "RADIUS", "🔑 RADIUS(92)"},
                 {"【29. 安全防护】", "DPI", "🔍 DPI深度检测(96)", "WAF", "🛡️ WAF防火墙(97)", "DDOS", "💥 DDoS防护(98)", "RATELIMIT", "⏱️ 速率限制(99)", "ACL", "🚫 访问控制(100)"}
-                ,{"【30. 核心网络服务 Stage 101-120】",
+                , {"【30. 核心网络服务 Stage 101-120】",
                 "SOCKET", "🔌 Socket(101)",
                 "TCP_STATE", "📊 TCP状态机(102)",
                 "MAC_TABLE", "🔌 MAC表(103)",
@@ -1282,11 +1288,11 @@ public class DataCartFactoryGame extends JFrame {
                 "STATS", "📈 统计收集(118)",
                 "LOG", "📝 日志记录(119)",
                 "PCAP", "📦 PCAP抓包(120)"}
-                ,{"【31. 链路层增强 Stage 121-124】",
-                        "LLDP", "🔍 LLDP链路发现(121)",
-                        "STP", "🌲 STP生成树(122)",
-                        "LACP", "🔗 LACP链路聚合(123)",
-                        "MPLS", "🏷️ MPLS标签交换(124)"},
+                , {"【31. 链路层增强 Stage 121-124】",
+                "LLDP", "🔍 LLDP链路发现(121)",
+                "STP", "🌲 STP生成树(122)",
+                "LACP", "🔗 LACP链路聚合(123)",
+                "MPLS", "🏷️ MPLS标签交换(124)"},
 
                 {"【32. 多播路由 Stage 125-127】",
                         "PIM_SM", "📡 PIM-SM组播(125)",
@@ -1355,6 +1361,7 @@ public class DataCartFactoryGame extends JFrame {
             }
         }
     }
+
     // 在 buildShopUI() 方法之后、initMap() 方法之前添加新方法
     private void copyConsoleLog() {
         String consoleText = txtHexDisplay.getText();
@@ -1378,6 +1385,7 @@ public class DataCartFactoryGame extends JFrame {
                 "复制成功",
                 JOptionPane.INFORMATION_MESSAGE);
     }
+
     private void initMap() {
         // 初始化矿石资源点
         mapLayout[2][1] = 1;
@@ -1700,6 +1708,7 @@ public class DataCartFactoryGame extends JFrame {
         int stageRow6 = 5;
         buildingLayout[stageRow6][44] = "IPS";
     }
+
     // 在 DataCartFactoryGame() 构造函数中，initMap() 之后添加
     private void initZoneMapping() {
         // 采矿/数据源区域
@@ -1978,6 +1987,8 @@ public class DataCartFactoryGame extends JFrame {
     }
 
     private void startDnsResolution() {
+        // 更新 watchdog，防止在 DNS 解析期间超时
+        stateTimerWatchdog = System.currentTimeMillis();
         if (!pcIpAssigned) {
             appendToConsole("【⛔ DNS 阻断】: PC 未获取 IP，等待 DHCP 完成...");
             return;
@@ -2051,18 +2062,17 @@ public class DataCartFactoryGame extends JFrame {
     }
 
     private void performArpResolution(String targetIp) {
-        // 使用 factoryManager 的 arpCache
         String mac = factoryManager.getArpCache().getMac(targetIp);
-        if (mac == null) {
-            appendToConsole("【🔍 ARP 请求】: 谁拥有 " + targetIp + "？");
+        if (mac == null || mac.equals("null")) {
             String newMac = String.format("00:1A:2B:%02X:%02X:%02X",
                     new Random().nextInt(256), new Random().nextInt(256), new Random().nextInt(256));
             factoryManager.getArpCache().addEntry(targetIp, newMac);
-            appendToConsole("【📥 ARP 响应】: " + targetIp + " → " + newMac);
-            updateArpDisplay();
+            mac = newMac;
+            appendToConsole("【📥 ARP 响应】: " + targetIp + " → " + mac);
         } else {
             appendToConsole("【✅ ARP 缓存命中】: " + targetIp + " → " + mac);
         }
+        updateArpDisplay();
     }
 
     // ========== 新增：加密初始化 ==========
@@ -2102,6 +2112,27 @@ public class DataCartFactoryGame extends JFrame {
 
     private long lastResourceTick = 0;
 
+    // 在 gameTick 中添加重传清理逻辑
+    private void cleanupRetransmissionTasks() {
+        // 清理已确认的任务
+        List<RetransmissionTask> completed = new ArrayList<>();
+        for (RetransmissionTask task : activeTimers) {
+            if (task.isAcked) {
+                completed.add(task);
+            }
+        }
+        activeTimers.removeAll(completed);
+
+        // 清理超时的任务（超过 5 次重传）
+        List<RetransmissionTask> failed = new ArrayList<>();
+        for (RetransmissionTask task : activeTimers) {
+            if (task.retryCount >= 5) {
+                failed.add(task);
+            }
+        }
+        activeTimers.removeAll(failed);
+    }
+
     private void gameTick() {
         long now = System.currentTimeMillis();
         // 如果传输完成但超过 5 秒没有关闭，强制关闭
@@ -2120,7 +2151,9 @@ public class DataCartFactoryGame extends JFrame {
 
         // 修改超时处理，增加状态检查避免重复重置
         if (!useUdp && now - stateTimerWatchdog > 300000) {
-            // 如果正在 DNS 解析中，不要重置，而是重试 DNS
+            appendToConsole("【🔍 超时检查】: watchdog=" + stateTimerWatchdog +
+                    ", now=" + now + ", diff=" + (now - stateTimerWatchdog) +
+                    ", isDnsResolving=" + isDnsResolving);
             if (isDnsResolving) {
                 appendToConsole("【⏰ DNS 超时】: 重新尝试 DNS 解析");
                 isDnsResolving = false;
@@ -2370,7 +2403,7 @@ public class DataCartFactoryGame extends JFrame {
                 pendingDataCarts.clear();
             }
         }
-
+        cleanupRetransmissionTasks();
         dnsCache.entrySet().removeIf(entry -> entry.getValue().isExpired());
         prgNetwork.setValue((int) (((double) serverReceivedCount / totalDataToTransmit) * 100));
         canvas.repaint();
@@ -2471,21 +2504,24 @@ public class DataCartFactoryGame extends JFrame {
                     resolvedServerIp = cart.resolvedIp;
                     isDnsResolved = true;
                     isDnsResolving = false;
+
+                    // 关键：更新 watchdog
+                    stateTimerWatchdog = System.currentTimeMillis();
+
                     dnsCache.put(targetDomain, new DnsEntry(targetDomain, resolvedServerIp, 3600000));
                     updateDnsDisplay();
                     appendToConsole("【 DNS 解析成功】: " + targetDomain + " → " + resolvedServerIp);
                     performArpResolution(resolvedServerIp);
 
-                    // 修复：延迟一点再开始握手，避免状态混乱
-                    Timer startTimer = new Timer(100, ev -> {
-                        if (!useUdp && currentTcpState == TcpState.CLOSED) {
-                            startTcpHandshake();
-                        } else if (useUdp && !udpActive) {
-                            startUdpTransmission();
-                        }
-                    });
-                    startTimer.setRepeats(false);
-                    startTimer.start();
+                    // 清除之前的定时器，避免立即重置
+                    // 取消之前的 Timer（如果有）
+
+                    // 直接启动 TCP 握手，不加延迟
+                    if (!useUdp && currentTcpState == TcpState.CLOSED) {
+                        startTcpHandshake();
+                    } else if (useUdp && !udpActive) {
+                        startUdpTransmission();
+                    }
                     return;
                 case "DHCP_OFFER":
                     appendToConsole("【 DHCP】: Offer 到达客户端");
@@ -2753,6 +2789,14 @@ public class DataCartFactoryGame extends JFrame {
                     break;
                 case "SYN":
                 case "DATA":
+                    if (cart.isArrived && !cart.isReturnTrip) {
+                        // 记录接收统计
+                        if (statisticsFactory != null) {
+                            statisticsFactory.rx(1500);
+                        }
+                        // ... 其余处理逻辑
+                    }
+                    break;
                 case "FIN_PC":
                 case "ZWP":
                     if (cart.currentLayerStatus.contains("Router")) {
@@ -3446,6 +3490,15 @@ public class DataCartFactoryGame extends JFrame {
 
         String httpBody = null;
 
+        public enum PacketClass {
+            CONTROL_FAST,      // DNS、DHCP、ICMP 控制包 - 最快路径
+            TCP_CONTROL,       // SYN、ACK、FIN - 中等路径
+            TCP_DATA,          // 普通数据 - 完整路径
+            UDP_DATA           // UDP 数据 - 跳过 TCP 层
+        }
+
+        private PacketClass packetClass;
+
         /**
          * IP 地址字符串转 int
          */
@@ -3475,8 +3528,35 @@ public class DataCartFactoryGame extends JFrame {
                     (ip & 0xFF);
         }
 
+        private void initPacketClass() {
+            // 添加空值检查，防止 NullPointerException
+            if (cartType == null) {
+                packetClass = PacketClass.TCP_DATA; // 默认值
+                return;
+            }
+
+            if (cartType.startsWith("DNS_") || cartType.startsWith("DHCP_") ||
+                    cartType.equals("ICMP_ECHO_REQ") || cartType.equals("ICMP_ECHO_REPLY") ||
+                    cartType.equals("ICMP_TIMEEXCEEDED")) {
+                packetClass = PacketClass.CONTROL_FAST;
+            } else if (cartType.equals("SYN") || cartType.equals("SYN_ACK") ||
+                    cartType.equals("ACK_PC") || cartType.equals("FIN_PC") ||
+                    cartType.equals("FIN_ACK_SRV") || cartType.equals("FIN_SRV") ||
+                    cartType.equals("LAST_ACK_PC") || cartType.equals("ZWP")) {
+                packetClass = PacketClass.TCP_CONTROL;
+            } else if (cartType.equals("DATA") || cartType.equals("HTTP_GET") ||
+                    cartType.equals("HTTP_200_OK") || cartType.startsWith("TLS_")) {
+                packetClass = PacketClass.TCP_DATA;
+            } else if (cartType.equals("UDP_DATA")) {
+                packetClass = PacketClass.UDP_DATA;
+            } else {
+                packetClass = PacketClass.TCP_DATA; // 默认值
+            }
+        }
+
         // 在 DataCart 构造函数中，修改 UDP/TLS 的 stage
         public DataCart(double sx, double sy, String type, int seq) {
+
             this.srcPort = 1234;  // 默认源端口
             this.dstPort = 443;   // 默认目的端口
             this.protocol = "TCP";
@@ -3484,6 +3564,7 @@ public class DataCartFactoryGame extends JFrame {
             this.y = sy;
             this.cartType = type;
             this.sequenceNumber = seq;
+            initPacketClass();
             // DNS 相关包的特殊处理 - 走 DNS 专用路径
             if (type.equals("DNS_QUERY") || type.equals("DNS_RESPONSE") ||
                     type.equals("DNS_RECURSION_ROOT") || type.equals("DNS_ROOT_TO_LOCAL") ||
@@ -3725,7 +3806,32 @@ public class DataCartFactoryGame extends JFrame {
                 if (dist <= speed) {
                     x = target.x;
                     y = target.y;
-                    isArrived = true;
+
+                    if (!isReturnTrip || isDnsOrDhcp()) {
+                        processStageCraft();
+
+                        // 根据包类型决定是否递增 stage
+                        if (!isDnsOrDhcp()) {
+                            int maxStage = getMaxStageForPacketType();
+                            if (stage < maxStage) {
+                                timer = 1;
+                                stage++;
+                            } else {
+                                isArrived = true;
+                            }
+                        } else {
+                            // DNS/DHCP 专用 stage 控制
+                            int maxStage = getMaxStageForControlPacket();
+                            if (stage < maxStage) {
+                                timer = 1;
+                                stage++;
+                            } else {
+                                isArrived = true;
+                            }
+                        }
+                    } else {
+                        isArrived = true;
+                    }
                 } else {
                     x += (dx / dist) * speed;
                     y += (dy / dist) * speed;
@@ -3828,24 +3934,48 @@ public class DataCartFactoryGame extends JFrame {
             }
         }
 
+        // 根据包类型获取最大 stage
+        private int getMaxStageForPacketType() {
+            if (packetClass == PacketClass.CONTROL_FAST) {
+                return 1;  // 控制包只需要 1 个 stage
+            }
+            if (packetClass == PacketClass.UDP_DATA) {
+                return 49;  // UDP 最多到校验和
+            }
+            if (packetClass == PacketClass.TCP_CONTROL) {
+                return 21;  // TCP 控制包到 FCS 即可
+            }
+            return 160;  // TCP 数据包完整路径
+        }
+
+        private int getMaxStageForControlPacket() {
+            if (cartType.equals("DNS_QUERY")) return 4;
+            if (cartType.startsWith("DNS_RECURSION")) return 2;
+            if (cartType.startsWith("DHCP")) return 2;
+            return 1;
+        }
+
         private void applyNatMapping() {
+            // 避免重复创建 NAT 映射
+            if (isNatted) return;
+
             String insideIp = pcIpAddress != null ? pcIpAddress : "192.168.1.100";
-            int insidePort = 1234;
+            int insidePort = srcPort > 0 ? srcPort : 1234;
+
+            String key = insideIp + ":" + insidePort;
 
             // 使用 factoryManager 的 natFactory
-            NatMappingFactory.NatEntry factoryEntry = factoryManager.getNatFactory().createMapping(insideIp, insidePort);
-
-            // 同步到本地 NAT 表
-            String key = insideIp + ":" + insidePort;
             if (!natTable.containsKey(key)) {
+                NatMappingFactory.NatEntry factoryEntry = factoryManager.getNatFactory().createMapping(insideIp, insidePort);
                 NatEntry localEntry = new NatEntry(factoryEntry.getInsideIp(), factoryEntry.getInsidePort(),
                         factoryEntry.getPublicIp(), factoryEntry.getPublicPort());
                 natTable.put(key, localEntry);
             }
 
+            NatEntry entry = natTable.get(key);
             this.isNatted = true;
-            this.natPublicIp = factoryEntry.getPublicIp();
-            this.natPublicPort = factoryEntry.getPublicPort();
+            this.natPublicIp = entry.publicIp;
+            this.natPublicPort = entry.publicPort;
         }
 
 
@@ -3856,7 +3986,27 @@ public class DataCartFactoryGame extends JFrame {
 
         // 在 DataCart 类中，修改 stage 对应的 tag 映射
         private Point findTargetMachine(int s, String type) {
-
+// 确保 TCP 控制包的 stage 映射正确
+            if (type.equals("SYN") || type.equals("SYN_ACK") || type.equals("ACK_PC")) {
+                if (s == 13) return findBuildingCoords("T_CORE");
+                if (s == 14) return findBuildingCoords("TX_IPH");
+                if (s == 15) return findBuildingCoords("TX_ARP");
+                if (s == 16) return findBuildingCoords("ETH_DST");
+                if (s == 17) return findBuildingCoords("ETH_SRC");
+                if (s == 18) return findBuildingCoords("ETH_TYPE");
+                if (s == 19) return findBuildingCoords("TX_FCS");
+                if (s == 20) return findBuildingCoords("R_LAN");
+                if (s == 21) return findBuildingCoords("R_TAB");
+                if (s == 22) return findBuildingCoords("R_NAT");
+                if (s == 23) return findBuildingCoords("R_WAN");
+                if (s == 24) return findBuildingCoords("ROUTER1");
+                if (s == 25) return findBuildingCoords("ROUTER2");
+                if (s == 26) return findBuildingCoords("ROUTER3");
+                if (s == 27) return findBuildingCoords("RX_ETH");
+                if (s == 28) return findBuildingCoords("RX_IP");
+                if (s == 29) return findBuildingCoords("RX_TCP");
+                if (s == 30) return findBuildingCoords("RX_APP");
+            }
             // 为 ACK_PC 添加快速路由
             if (type.equals("ACK_PC")) {
                 if (s == 2) {
@@ -3870,11 +4020,16 @@ public class DataCartFactoryGame extends JFrame {
             // DNS 递归查询专用路由
             if (type.equals("DNS_QUERY")) {
                 switch (s) {
-                    case 1: return findBuildingCoords("DNS_CLIENT");
-                    case 2: return findBuildingCoords("DNS_LOCAL");
-                    case 3: return findBuildingCoords("DNS_ROOT");
-                    case 4: return findBuildingCoords("DNS_AUTH");
-                    default: return null;
+                    case 1:
+                        return findBuildingCoords("DNS_CLIENT");
+                    case 2:
+                        return findBuildingCoords("DNS_LOCAL");
+                    case 3:
+                        return findBuildingCoords("DNS_ROOT");
+                    case 4:
+                        return findBuildingCoords("DNS_AUTH");
+                    default:
+                        return null;
                 }
             }
             if (type.equals("DNS_RESPONSE")) {
@@ -4261,65 +4416,183 @@ public class DataCartFactoryGame extends JFrame {
                 case 100:
                     tag = "ACL";
                     break;
-                case 101: tag = "SOCKET"; break;
-                case 102: tag = "TCP_STATE"; break;
-                case 103: tag = "MAC_TABLE"; break;
-                case 104: tag = "CAM_TABLE"; break;
-                case 105: tag = "FIB"; break;
-                case 106: tag = "SESSION_TABLE"; break;
-                case 107: tag = "FLOW"; break;
-                case 108: tag = "LOAD_BALANCER"; break;
-                case 109: tag = "SCHEDULER"; break;
-                case 110: tag = "DNS_ZONE"; break;
-                case 111: tag = "DHCP_LEASE"; break;
-                case 112: tag = "ARP_TABLE"; break;
-                case 113: tag = "NEIGHBOR_TABLE"; break;
-                case 114: tag = "MCAST_ROUTE"; break;
-                case 115: tag = "MPLS_LABEL"; break;
-                case 116: tag = "CERT_STORE"; break;
-                case 117: tag = "EVENT"; break;
-                case 118: tag = "STATS"; break;
-                case 119: tag = "LOG"; break;
-                case 120: tag = "PCAP"; break;
-                case 121: tag = "LLDP"; break;
-                case 122: tag = "STP"; break;
-                case 123: tag = "LACP"; break;
-                case 124: tag = "MPLS"; break;
-                case 125: tag = "PIM_SM"; break;
-                case 126: tag = "MLD"; break;
-                case 127: tag = "DVMRP"; break;
-                case 128: tag = "NETFLOW"; break;
-                case 129: tag = "SFLOW"; break;
-                case 130: tag = "IPFIX"; break;
-                case 131: tag = "ICMP_PING"; break;
-                case 132: tag = "ICMP_TRACE"; break;
-                case 133: tag = "X509"; break;
-                case 134: tag = "CRL"; break;
-                case 135: tag = "OCSP"; break;
-                case 136: tag = "PKI"; break;
-                case 137: tag = "DTLS"; break;
-                case 138: tag = "MAC_AUTH"; break;
-                case 139: tag = "DOT1X"; break;
-                case 141: tag = "NETSTAT"; break;
-                case 142: tag = "IPCONFIG"; break;
-                case 143: tag = "ROUTEPRINT"; break;
-                case 144: tag = "NSLOOKUP"; break;
-                case 145: tag = "ARPCMD"; break;
-                case 146: tag = "CURL"; break;
-                case 147: tag = "WGET"; break;
-                case 148: tag = "TELNET_CLIENT"; break;
-                case 149: tag = "NAT_HAIRPIN"; break;
-                case 150: tag = "NAT_HOLE"; break;
-                case 151: tag = "UPNP"; break;
-                case 152: tag = "PCP"; break;
-                case 153: tag = "IPSEC_IKE"; break;
-                case 154: tag = "IPSEC_ESP"; break;
-                case 155: tag = "IPSEC_AH"; break;
-                case 156: tag = "OPENVPN"; break;
-                case 157: tag = "WIREGUARD"; break;
-                case 158: tag = "L2TP"; break;
-                case 159: tag = "SSTP"; break;
-                case 160: tag = "IPS"; break;
+                case 101:
+                    tag = "SOCKET";
+                    break;
+                case 102:
+                    tag = "TCP_STATE";
+                    break;
+                case 103:
+                    tag = "MAC_TABLE";
+                    break;
+                case 104:
+                    tag = "CAM_TABLE";
+                    break;
+                case 105:
+                    tag = "FIB";
+                    break;
+                case 106:
+                    tag = "SESSION_TABLE";
+                    break;
+                case 107:
+                    tag = "FLOW";
+                    break;
+                case 108:
+                    tag = "LOAD_BALANCER";
+                    break;
+                case 109:
+                    tag = "SCHEDULER";
+                    break;
+                case 110:
+                    tag = "DNS_ZONE";
+                    break;
+                case 111:
+                    tag = "DHCP_LEASE";
+                    break;
+                case 112:
+                    tag = "ARP_TABLE";
+                    break;
+                case 113:
+                    tag = "NEIGHBOR_TABLE";
+                    break;
+                case 114:
+                    tag = "MCAST_ROUTE";
+                    break;
+                case 115:
+                    tag = "MPLS_LABEL";
+                    break;
+                case 116:
+                    tag = "CERT_STORE";
+                    break;
+                case 117:
+                    tag = "EVENT";
+                    break;
+                case 118:
+                    tag = "STATS";
+                    break;
+                case 119:
+                    tag = "LOG";
+                    break;
+                case 120:
+                    tag = "PCAP";
+                    break;
+                case 121:
+                    tag = "LLDP";
+                    break;
+                case 122:
+                    tag = "STP";
+                    break;
+                case 123:
+                    tag = "LACP";
+                    break;
+                case 124:
+                    tag = "MPLS";
+                    break;
+                case 125:
+                    tag = "PIM_SM";
+                    break;
+                case 126:
+                    tag = "MLD";
+                    break;
+                case 127:
+                    tag = "DVMRP";
+                    break;
+                case 128:
+                    tag = "NETFLOW";
+                    break;
+                case 129:
+                    tag = "SFLOW";
+                    break;
+                case 130:
+                    tag = "IPFIX";
+                    break;
+                case 131:
+                    tag = "ICMP_PING";
+                    break;
+                case 132:
+                    tag = "ICMP_TRACE";
+                    break;
+                case 133:
+                    tag = "X509";
+                    break;
+                case 134:
+                    tag = "CRL";
+                    break;
+                case 135:
+                    tag = "OCSP";
+                    break;
+                case 136:
+                    tag = "PKI";
+                    break;
+                case 137:
+                    tag = "DTLS";
+                    break;
+                case 138:
+                    tag = "MAC_AUTH";
+                    break;
+                case 139:
+                    tag = "DOT1X";
+                    break;
+                case 141:
+                    tag = "NETSTAT";
+                    break;
+                case 142:
+                    tag = "IPCONFIG";
+                    break;
+                case 143:
+                    tag = "ROUTEPRINT";
+                    break;
+                case 144:
+                    tag = "NSLOOKUP";
+                    break;
+                case 145:
+                    tag = "ARPCMD";
+                    break;
+                case 146:
+                    tag = "CURL";
+                    break;
+                case 147:
+                    tag = "WGET";
+                    break;
+                case 148:
+                    tag = "TELNET_CLIENT";
+                    break;
+                case 149:
+                    tag = "NAT_HAIRPIN";
+                    break;
+                case 150:
+                    tag = "NAT_HOLE";
+                    break;
+                case 151:
+                    tag = "UPNP";
+                    break;
+                case 152:
+                    tag = "PCP";
+                    break;
+                case 153:
+                    tag = "IPSEC_IKE";
+                    break;
+                case 154:
+                    tag = "IPSEC_ESP";
+                    break;
+                case 155:
+                    tag = "IPSEC_AH";
+                    break;
+                case 156:
+                    tag = "OPENVPN";
+                    break;
+                case 157:
+                    tag = "WIREGUARD";
+                    break;
+                case 158:
+                    tag = "L2TP";
+                    break;
+                case 159:
+                    tag = "SSTP";
+                    break;
+                case 160:
+                    tag = "IPS";
+                    break;
                 default:
                     return null;
             }
@@ -4327,6 +4600,25 @@ public class DataCartFactoryGame extends JFrame {
         }
 
         private void processStageCraft() {
+
+            // 控制类包快速通过，不做任何封装处理
+            if (packetClass == PacketClass.CONTROL_FAST) {
+                return;
+            }
+
+            // UDP 数据包跳过 TCP 相关 stage
+            if (packetClass == PacketClass.UDP_DATA) {
+                processUdpStage();
+                return;
+            }
+
+            // TCP 控制包只经过必要的 stage
+            if (packetClass == PacketClass.TCP_CONTROL) {
+                processTcpControlStage();
+                return;
+            }
+            // TCP 数据包走完整路径
+//            processTcpDataStage();
             if (cartType != null && cartType.startsWith("DNS_")) {
                 // DNS 包不需要任何封装处理
                 return;
@@ -4506,10 +4798,12 @@ public class DataCartFactoryGame extends JFrame {
                     if (!hasFiveTuple) {
                         hasFiveTuple = true;
                         protocol = useUdp ? "UDP" : "TCP";
-                        // 使用 factoryManager 的 fiveTupleFactory
-                        factoryManager.getFiveTupleFactory().extract(srcIp, dstIp, srcPort, dstPort, protocol);
+                        // 确保 IP 不为 null
+                        String fiveSrcIp = srcIp != null ? srcIp : (pcIpAddress != null ? pcIpAddress : "192.168.1.100");
+                        String fiveDstIp = dstIp != null ? dstIp : (resolvedServerIp != null ? resolvedServerIp : "10.0.0.1");
+                        factoryManager.getFiveTupleFactory().extract(fiveSrcIp, fiveDstIp, srcPort, dstPort, protocol);
                         appendToConsole(String.format("【🔢 五元组】: %s %s:%d → %s:%d",
-                                protocol, srcIp, srcPort, dstIp, dstPort));
+                                protocol, fiveSrcIp, srcPort, fiveDstIp, dstPort));
                     }
                     break;
 
@@ -5181,6 +5475,10 @@ public class DataCartFactoryGame extends JFrame {
 
                 case 99: // 速率限制
                     if (rateLimitFactory != null) {
+                        // DATA 包是核心数据流，不应被速率限制
+                        if (cartType != null && (cartType.equals("DATA") || cartType.equals("IP_FRAGMENT"))) {
+                            break;  // 直接跳过速率限制
+                        }
                         String key = getSrcIp() + ":" + cartType;
                         if (!rateLimitFactory.allow(key)) {
                             appendToConsole("【⏱️ 速率限制】: " + key + " 超过限制，已丢弃");
@@ -5700,6 +5998,93 @@ public class DataCartFactoryGame extends JFrame {
                     break;
             }
         }
+
+        // UDP 专用 stage 处理
+        private void processUdpStage() {
+            switch (stage) {
+                case 5:  // 应用层
+                    if (!hasApp) {
+                        hasApp = true;
+                        appendToConsole("【📦 UDP】: 应用层数据准备");
+                    }
+                    break;
+                case 6:
+                case 7:
+                case 8:
+                case 9:
+                case 10:
+                case 11:
+                case 12:
+                case 13:
+                    // UDP 跳过 TCP 层，直接进入 IP 层
+                    stage = 13;
+                    break;
+                case 14:  // IP 层
+                    if (!hasIp) {
+                        hasIp = true;
+                        srcIp = pcIpAddress != null ? pcIpAddress : "192.168.1.100";
+                        dstIp = resolvedServerIp != null ? resolvedServerIp : "10.0.0.1";
+                        appendToConsole("【📦 UDP IP首部】: " + srcIp + " → " + dstIp);
+                    }
+                    break;
+                case 49:  // UDP 校验和
+                    if (!hasUdpChecksum) {
+                        hasUdpChecksum = true;
+                        appendToConsole("【🔢 UDP校验和】: 已计算");
+                    }
+                    break;
+            }
+        }
+
+        // TCP 控制包专用 stage 处理
+        private void processTcpControlStage() {
+            switch (stage) {
+                case 5:  // 应用层 - 控制包跳过
+                    stage = 12;
+                    break;
+                case 6:
+                case 7:
+                case 8:
+                case 9:
+                case 10:
+                case 11:
+                case 12:  // TCP 必要字段
+                    if (!c_SP && stage == 6) {
+                        c_SP = true;
+                        srcPort = 1234;
+                    }
+                    if (!c_DP && stage == 7) {
+                        c_DP = true;
+                        dstPort = 443;
+                    }
+                    if (!c_SEQ && stage == 8 && cartType.equals("SYN")) {
+                        c_SEQ = true;
+                        sequenceNumber = 100;
+                    }
+                    if (!c_CTL && stage == 10) {
+                        c_CTL = true;
+                    }
+                    break;
+                case 14:  // IP 层
+                    if (!hasIp) {
+                        hasIp = true;
+                        srcIp = pcIpAddress != null ? pcIpAddress : "192.168.1.100";
+                        dstIp = resolvedServerIp != null ? resolvedServerIp : "10.0.0.1";
+                        appendToConsole("【📦 IP首部】: " + srcIp + " → " + dstIp + ", TTL=" + ttl);
+                    }
+                    break;
+                // 控制包不需要分片、ARP 等完整处理
+                case 15:
+                case 16:
+                case 17:
+                case 18:
+                case 19:
+                case 20:
+                case 21:
+                    stage = 21;
+                    break;
+            }
+        }
     }
 
     private class GameCanvas extends JPanel {
@@ -5841,8 +6226,7 @@ public class DataCartFactoryGame extends JFrame {
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.WHITE);
                         g2.drawString("[PC] 源PC", x + 4, y + 24);
-                    }
-                    else if (tag.equals("RX_ST")) {
+                    } else if (tag.equals("RX_ST")) {
                         g2.setColor(new Color(190, 30, 50));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.YELLOW);
@@ -5858,14 +6242,12 @@ public class DataCartFactoryGame extends JFrame {
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.CYAN);
                         g2.drawString("[H] 矿机", x + 4, y + 24);
-                    }
-                    else if (tag.startsWith("MINER_S")) {
+                    } else if (tag.startsWith("MINER_S")) {
                         g2.setColor(new Color(0, 255, 0, 100));
                         g2.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                         g2.setColor(Color.GREEN);
                         g2.drawString("[S] 矿机", x + 4, y + 24);
-                    }
-                    else {
+                    } else {
                         // 普通建筑，文字颜色使用区域边框颜色
                         g2.setColor(baseColor);
                         String displayText = tag.length() > 8 ? tag.substring(0, 6) : tag;
@@ -5966,8 +6348,7 @@ public class DataCartFactoryGame extends JFrame {
                     else if (tag.startsWith("MINER_H")) {
                         g2.setColor(Color.CYAN);
                         g2.drawString("[H] 矿机", x + 4, y + 24);
-                    }
-                    else if (tag.startsWith("MINER_S")) {
+                    } else if (tag.startsWith("MINER_S")) {
                         g2.setColor(Color.GREEN);
                         g2.drawString("[S] 矿机", x + 4, y + 24);
                     }
@@ -6001,7 +6382,8 @@ public class DataCartFactoryGame extends JFrame {
                 else if (cart.cartType.startsWith("DNS")) g2.setColor(new Color(0, 200, 200));
                 else if (cart.isRetransmission) g2.setColor(Color.ORANGE);
                 else if (cart.cartType.startsWith("TLS_")) g2.setColor(new Color(255, 165, 0));
-                else if (cart.cartType.equals("HTTP_GET") || cart.cartType.equals("HTTP_200_OK")) g2.setColor(new Color(150, 0, 200));
+                else if (cart.cartType.equals("HTTP_GET") || cart.cartType.equals("HTTP_200_OK"))
+                    g2.setColor(new Color(150, 0, 200));
                 else if (cart.cartType.equals("UDP_DATA")) g2.setColor(new Color(50, 150, 255));
                 else g2.setColor(Color.LIGHT_GRAY);
                 g2.fillOval(cx - 7, cy - 7, 14, 14);
