@@ -170,4 +170,9 @@ public class FtpPacketFactory {
     public FtpAuthFactory getAuthFactory() {
         return authFactory;
     }
+
+    public byte[] buildFtpResponse(int code, String message) {
+        String response = code + " " + message + "\r\n";
+        return response.getBytes(java.nio.charset.StandardCharsets.ISO_8859_1);
+    }
 }
