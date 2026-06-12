@@ -3966,6 +3966,34 @@ public class DataCartFactoryGame extends JFrame {
         }
 
         private PacketClass packetClass;
+        // 在 DataCart 类中添加视觉反馈相关字段
+        private static class VisualFeedback {
+            String label;
+            Color color;
+            long timestamp;
+
+            VisualFeedback(String label, Color color) {
+                this.label = label;
+                this.color = color;
+                this.timestamp = System.currentTimeMillis();
+            }
+        }
+        private List<VisualFeedback> visualFeedbacks = new CopyOnWriteArrayList<>();
+        private long lastVisualUpdate = 0;
+        private static final long VISUAL_FEEDBACK_DURATION = 2000; // 2秒
+        // 添加视觉反馈方法
+        public void addVisualFeedback(String label, Color color) {
+            visualFeedbacks.add(new VisualFeedback(label, color));
+            lastVisualUpdate = System.currentTimeMillis();
+        }
+
+        public List<VisualFeedback> getVisualFeedbacks() {
+            // 清理过期的反馈
+            long now = System.currentTimeMillis();
+            visualFeedbacks.removeIf(f -> now - f.timestamp > VISUAL_FEEDBACK_DURATION);
+            return visualFeedbacks;
+        }
+
 
         /**
          * IP 地址字符串转 int
@@ -4504,37 +4532,6 @@ public class DataCartFactoryGame extends JFrame {
                 y += (dy / dist) * speed;
             }
         }
-
-        // 根据包类型获取最大 stage
-        private int getMaxStageForPacketType() {
-            if (packetClass == PacketClass.CONTROL_FAST) {
-                return 1;
-            }
-            if (packetClass == PacketClass.UDP_DATA) {
-                return 49;
-            }
-            if (packetClass == PacketClass.TCP_CONTROL) {
-                return 21;
-            }
-            // FTP 数据包需要经过 stage 161-165，然后继续到 5
-            if (cartType != null && cartType.equals("FTP_DATA")) {
-                if (stage >= 161 && stage < 165) {
-                    return 165;  // 继续到下一个 FTP 子工厂
-                }
-                if (stage == 165) {
-                    return 5;    // FTP 主工厂完成后转到应用层
-                }
-            }
-            return 160;
-        }
-
-        private int getMaxStageForControlPacket() {
-            if (cartType.equals("DNS_QUERY")) return 4;
-            if (cartType.startsWith("DNS_RECURSION")) return 2;
-            if (cartType.startsWith("DHCP")) return 2;
-            return 1;
-        }
-
         private void applyNatMapping() {
             // 避免重复创建 NAT 映射
             if (isNatted) return;
@@ -5497,6 +5494,9 @@ public class DataCartFactoryGame extends JFrame {
                 case 26: // NAT 转换
                     if (!isNatted && !isReturnTrip) {
                         applyNatMapping();
+                        addVisualFeedback(String.format("🌍 NAT: %s:%d → %s:%d",
+                                        srcIp, srcPort, natPublicIp, natPublicPort),
+                                new Color(255, 165, 0));
                         appendToConsole("【🌍 NAT 转换】: " + srcIp + ":" + srcPort + " → " + natPublicIp + ":" + natPublicPort);
                         updateNatDisplay();
                     }
