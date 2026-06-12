@@ -2383,6 +2383,16 @@ public class DataCartFactoryGame extends JFrame {
                     ftpPasvMode = true;
                     appendToConsole("【📁 FTP】: 创建并发送 PASV 命令");
                 }
+                // ========== 新增：发送 LIST 命令 ==========
+                else if (ftpDemoEnabled && ftpLoggedIn && ftpPasvMode && ftpDataPort > 0 && !ftpListSent) {
+                    DataCart ftpList = new DataCart(pcFactory.x, pcFactory.y, "FTP_LIST", 0);
+                    ftpList.stage = 161;
+                    ftpList.dstPort = 21;
+                    ftpList.ftpCommand = "LIST";
+                    pendingDataCarts.add(ftpList);
+                    ftpListSent = true;
+                    appendToConsole("【📁 FTP】: 创建并发送 LIST 命令");
+                }
             }
 // ========== FTP 触发逻辑结束 ==========
 
