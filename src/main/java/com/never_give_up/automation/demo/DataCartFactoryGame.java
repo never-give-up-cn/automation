@@ -329,6 +329,9 @@ public class DataCartFactoryGame extends JFrame {
     private OcspFactory ocspFactory;
     private PkiFactory pkiFactory;
     private DtlsFactory dtlsFactory;
+//添加 FTP 响应确认标志
+    private boolean ftpUserAcked = false;
+    private boolean ftpPassAcked = false;
 
     // ===================== 新增：访问控制工厂 =====================
     private AclFactory aclFactory;
@@ -2350,40 +2353,36 @@ public class DataCartFactoryGame extends JFrame {
 
             // ========== 在这段代码后面添加 FTP 触发逻辑 ==========
 // FTP 专用逻辑
-            if (ftpDemoEnabled && pcIpAssigned && !useUdp && currentTcpState == TcpState.ESTABLISHED && !ftpLoggedIn) {
+            // FTP 专用逻辑 - 修改为更清晰的流程
+            if (ftpDemoEnabled && pcIpAssigned && !useUdp && currentTcpState == TcpState.ESTABLISHED) {
                 if (!ftpLoginSent) {
                     // 发送 USER 命令
                     DataCart ftpUser = new DataCart(pcFactory.x, pcFactory.y, "FTP_USER", 0);
-                    ftpUser.stage = 5;
+                    ftpUser.stage = 161;  // 明确设置 stage
+                    ftpUser.dstPort = 21;
                     ftpUser.ftpCommand = "USER anonymous";
                     pendingDataCarts.add(ftpUser);
                     ftpLoginSent = true;
-                    appendToConsole("【📁 FTP】: 发送 USER anonymous");
-                } else if (ftpLoginSent && !ftpPassSent) {
-                    // 发送 PASS 命令
+                    appendToConsole("【📁 FTP】: 创建并发送 USER 命令 (stage=161, port=21)");
+                } else if (ftpLoginSent && !ftpPassSent && ftpUserAcked) {
+                    // 等待 USER 命令的响应后再发送 PASS
                     DataCart ftpPass = new DataCart(pcFactory.x, pcFactory.y, "FTP_PASS", 0);
-                    ftpPass.stage = 5;
+                    ftpPass.stage = 161;
+                    ftpPass.dstPort = 21;
                     ftpPass.ftpCommand = "PASS anonymous@example.com";
                     pendingDataCarts.add(ftpPass);
                     ftpPassSent = true;
-                    appendToConsole("【📁 FTP】: 发送 PASS 命令");
+                    appendToConsole("【📁 FTP】: 创建并发送 PASS 命令");
+                } else if (ftpPassSent && !ftpPasvMode && ftpPassAcked) {
+                    // PASS 成功后发送 PASV
+                    DataCart ftpPasv = new DataCart(pcFactory.x, pcFactory.y, "FTP_PASV", 0);
+                    ftpPasv.stage = 161;
+                    ftpPasv.dstPort = 21;
+                    ftpPasv.ftpCommand = "PASV";
+                    pendingDataCarts.add(ftpPasv);
+                    ftpPasvMode = true;
+                    appendToConsole("【📁 FTP】: 创建并发送 PASV 命令");
                 }
-            } else if (ftpDemoEnabled && ftpLoggedIn && !ftpPasvMode && !ftpListSent) {
-                // 登录成功后进入 PASV 模式
-                DataCart ftpPasv = new DataCart(pcFactory.x, pcFactory.y, "FTP_PASV", 0);
-                ftpPasv.stage = 5;
-                ftpPasv.ftpCommand = "PASV";
-                pendingDataCarts.add(ftpPasv);
-                ftpPasvMode = true;
-                appendToConsole("【📁 FTP】: 请求被动模式 PASV");
-            } else if (ftpDemoEnabled && ftpLoggedIn && ftpPasvMode && ftpDataPort > 0 && !ftpListSent) {
-                // PASV 模式成功后，发送 LIST 命令
-                DataCart ftpList = new DataCart(pcFactory.x, pcFactory.y, "FTP_LIST", 0);
-                ftpList.stage = 5;
-                ftpList.ftpCommand = "LIST";
-                pendingDataCarts.add(ftpList);
-                ftpListSent = true;
-                appendToConsole("【📁 FTP】: 发送 LIST 命令");
             }
 // ========== FTP 触发逻辑结束 ==========
 
@@ -3253,45 +3252,22 @@ public class DataCartFactoryGame extends JFrame {
                 case "FTP_RESPONSE":
                     if (cart.isReturnTrip && cart.isArrived && cart.ftpPayload != null) {
                         FtpPacketFactory ftpFactory = factoryManager.getFtpPacketFactory();
-                        FtpResponseParser.FtpResponse response = ftpFactory.parseResponse(cart.ftpPayload);
+                        int responseCode = ftpFactory.getResponseCode(cart.ftpPayload);
 
-                        if (response != null) {
-                            int responseCode = response.getCode();
-                            String message = response.getMessage();
-                            cart.ftpResponseCode = responseCode;  // 设置到 cart 对象
+                        appendToConsole(String.format("【📁 FTP响应】: %d", responseCode));
 
-                            appendToConsole(String.format("【📁 FTP响应】: %d %s", responseCode, message));
-
-                            // 根据响应码更新 FTP 会话状态
-                            if (responseCode == 220) {
-                                appendToConsole("【📁 FTP】: 服务器就绪");
-                            } else if (responseCode == 331) {
-                                appendToConsole("【📁 FTP】: 需要密码");
-                            } else if (responseCode == 230) {
-                                ftpLoggedIn = true;
-                                appendToConsole("【📁 FTP】: 登录成功！");
-                            } else if (responseCode == 227) {
-                                int dataPort = ftpFactory.parsePassivePort(cart.ftpPayload);
-                                if (dataPort > 0) {
-                                    ftpDataPort = dataPort;
-                                    appendToConsole(String.format("【📁 FTP】: 被动模式，数据端口=%d", dataPort));
-                                }
-                            } else if (responseCode == 226) {
-                                appendToConsole("【📁 FTP】: 数据传输完成");
-                                // 发送 QUIT
-                                DataCart ftpQuit = new DataCart(pcFactory.x, pcFactory.y, "FTP_QUIT", 0);
-                                ftpQuit.stage = 5;
-                                ftpQuit.ftpCommand = "QUIT";
-                                pendingDataCarts.add(ftpQuit);
-                            } else if (responseCode == 221) {
-                                appendToConsole("【📁 FTP】: 连接关闭");
-                                // 开始四次挥手
-                                currentTcpState = TcpState.FIN_WAIT_1;
-                                stateTimerWatchdog = now;
-                                DataCart finFtp = new DataCart(pcFactory.x, pcFactory.y, "FIN_PC", 0);
-                                finFtp.ttl = 64;
-                                pendingDataCarts.add(finFtp);
-                            }
+                        if (responseCode == 331) {
+                            // 收到 USER 命令的响应，可以发送 PASS
+                            ftpUserAcked = true;
+                            appendToConsole("【📁 FTP】: USER 命令确认，可以发送 PASS");
+                        } else if (responseCode == 230) {
+                            ftpLoggedIn = true;
+                            ftpPassAcked = true;
+                            appendToConsole("【📁 FTP】: 登录成功！");
+                        } else if (responseCode == 227) {
+                            int dataPort = ftpFactory.parsePassivePort(cart.ftpPayload);
+                            ftpDataPort = dataPort;
+                            appendToConsole(String.format("【📁 FTP】: PASV 响应，数据端口=%d", dataPort));
                         }
                     }
                     break;
@@ -4128,22 +4104,60 @@ public class DataCartFactoryGame extends JFrame {
                 if (dist <= speed) {
                     x = target.x;
                     y = target.y;
-
                     if (!isReturnTrip || isDnsOrDhcp()) {
                         processStageCraft();
 
-                        // 根据包类型决定是否递增 stage
+                        // ========== FTP 子工厂特殊处理（stage 161-165）==========
+                        if (ftpCommand != null && !ftpCommand.isEmpty() && stage >= 161 && stage <= 165) {
+                            if (stage < 165) {
+                                timer = 1;
+                                stage++;
+                                appendToConsole("【📁 FTP】: stage " + (stage - 1) + " → " + stage);
+                                return;
+                            } else if (stage == 165) {
+                                if (timer == 0) {
+                                    timer = 1;
+                                }
+                                return;
+                            }
+                        }
+
+                        // ========== 原有的 NAT 和 TTL 处理 ==========
+                        if (stage == 24 && !isNatted && !isReturnTrip) {
+                            applyNatMapping();
+                        }
+                        if (stage >= 26 && stage <= 28) {
+                            ttl--;
+                            if (ttl <= 0) {
+                                isDropped = true;
+                                if (stage == 26) droppedAtRouterTag = "ROUTER1";
+                                else if (stage == 27) droppedAtRouterTag = "ROUTER2";
+                                else if (stage == 28) droppedAtRouterTag = "ROUTER3";
+                                droppedAtPosition = new Point((int) x, (int) y);
+                                return;
+                            }
+                        }
+
+                        // ========== 常规 stage 递增 ==========
                         if (!isDnsOrDhcp()) {
-                            int maxStage = getMaxStageForPacketType();
-                            if (stage < maxStage) {
+                            if (stage < 160) {
                                 timer = 1;
                                 stage++;
                             } else {
                                 isArrived = true;
                             }
                         } else {
-                            // DNS/DHCP 专用 stage 控制
-                            int maxStage = getMaxStageForControlPacket();
+                            // DNS/DHCP 处理
+                            int maxStage = 0;
+                            if (cartType.equals("DNS_QUERY")) {
+                                maxStage = 4;
+                            } else if (cartType.startsWith("DNS_RECURSION")) {
+                                maxStage = 2;
+                            } else if (cartType.startsWith("DHCP")) {
+                                maxStage = 2;
+                            } else {
+                                maxStage = 2;
+                            }
                             if (stage < maxStage) {
                                 timer = 1;
                                 stage++;
@@ -4151,7 +4165,7 @@ public class DataCartFactoryGame extends JFrame {
                                 isArrived = true;
                             }
                         }
-                    } else {
+                    }else {
                         isArrived = true;
                     }
                 } else {
@@ -4204,6 +4218,19 @@ public class DataCartFactoryGame extends JFrame {
                         }
                     }
                     processStageCraft();
+                    // ========== FTP 子工厂特殊处理（stage 161-165）==========
+                    if (ftpCommand != null && !ftpCommand.isEmpty() && stage >= 161 && stage <= 165) {
+                        if (stage < 165) {
+                            timer = 1;
+                            stage++;
+                            appendToConsole("【📁 FTP】: stage " + (stage - 1) + " → " + stage);
+                            return;
+                        } else if (stage == 165) {
+                            stage = 5;
+                            appendToConsole("【📁 FTP】: FTP 完成，进入应用层 stage=5");
+                        }
+                    }
+                    // ========== NAT 和 TTL 处理 ==========
                     if (stage == 24 && !isNatted && !isReturnTrip) {
                         applyNatMapping();
                     }
@@ -5049,8 +5076,11 @@ public class DataCartFactoryGame extends JFrame {
                 case 7: // 目的端口
                     if (!c_DP) {
                         c_DP = true;
-                        dstPort = 443;
-                        portFactory.reservePort(dstPort);
+                        // 如果已经是 FTP 端口，不要覆盖
+                        if (dstPort != 21) {
+                            dstPort = 443;
+                            portFactory.reservePort(dstPort);
+                        }
                         appendToConsole("【🎯 目的端口】: 目标端口 " + dstPort);
                     }
                     break;
@@ -6490,8 +6520,10 @@ public class DataCartFactoryGame extends JFrame {
                         if (finalCommand != null) {
                             this.ftpPayload = finalCommand;
                             appendToConsole(String.format("【📁 FTP_MAIN(165)】: 构建 %d 字节命令", finalCommand.length));
-                            // 构建完成后，下一个 stage 应该是应用层封装
+                            // 关键修复：设置 stage = 5 并重置 timer 让数据包继续移动
                             this.stage = 5;
+                            this.timer = 1;  // 让数据包继续移动到下一个建筑
+                            // 注意：不要在这里设置 isArrived = true
                         }
                     }
                     break;
