@@ -2923,16 +2923,105 @@ public class DataCartFactoryGame extends JFrame {
                     updateTopLabel();
                     appendToConsole("【 网络就绪】: PC IP = " + pcIpAddress);
                     break;
+                case "FTP_DATA":
+                    appendToConsole("【🔍 FTP_DATA】: FTP 数据包到达, SEQ=" + cart.sequenceNumber +
+                            ", dstPort=" + cart.dstPort + ", srcPort=" + cart.srcPort);
+
+                    if (cart.isArrived && !cart.isReturnTrip) {
+                        // FTP 命令处理逻辑
+                        String ftpCommandStr = null;
+
+                        if (cart.ftpPayload != null && cart.ftpPayload.length > 0) {
+                            ftpCommandStr = new String(cart.ftpPayload, java.nio.charset.StandardCharsets.ISO_8859_1).trim();
+                        } else if (cart.ftpCommand != null && !cart.ftpCommand.isEmpty()) {
+                            ftpCommandStr = cart.ftpCommand;
+                        }
+
+                        if (ftpCommandStr != null && !ftpCommandStr.isEmpty()) {
+                            appendToConsole("【📁 FTP 服务器】: 收到命令 - " + ftpCommandStr);
+
+                            // ========== 在这里定义 cmdUpper 变量 ==========
+                            String cmdUpper = ftpCommandStr.toUpperCase();
+                            // ==========================================
+
+                            // 生成 FTP 响应
+                            DataCart ftpResponse = new DataCart(serverPos.x, serverPos.y, "FTP_RESPONSE", 0);
+                            ftpResponse.isReturnTrip = true;
+                            ftpResponse.stage = -1;
+                            ftpResponse.dstPort = cart.srcPort;
+                            ftpResponse.srcPort = 21;
+                            ftpResponse.sequenceNumber = cart.ackNumber;
+                            ftpResponse.ackNumber = cart.sequenceNumber + 1;
+
+                            FtpPacketFactory ftpFactory = factoryManager.getFtpPacketFactory();
+
+                            if (cmdUpper.startsWith("USER")) {
+                                ftpResponse.ftpPayload = ftpFactory.buildFtpResponse(331, "User name okay, need password");
+                                appendToConsole("【📁 FTP 服务器】: 响应 331 - 需要密码");
+                            } else if (cmdUpper.startsWith("PASS")) {
+                                ftpResponse.ftpPayload = ftpFactory.buildFtpResponse(230, "User logged in successfully");
+                                appendToConsole("【📁 FTP 服务器】: 响应 230 - 登录成功");
+                                ftpLoggedIn = true;
+                            } else if (cmdUpper.equals("PASV")) {
+                                int dataPort = 60000 + (int)(Math.random() * 1000);
+                                int p1 = dataPort / 256;
+                                int p2 = dataPort % 256;
+                                String pasvResp = String.format("227 Entering Passive Mode (192,168,1,100,%d,%d)", p1, p2);
+                                ftpResponse.ftpPayload = pasvResp.getBytes();
+                                appendToConsole(String.format("【📁 FTP 服务器】: 响应 227 - 进入被动模式，端口=%d", dataPort));
+                                ftpDataPort = dataPort;
+                            } else if (cmdUpper.equals("LIST")) {
+                                ftpResponse.ftpPayload = ftpFactory.buildFtpResponse(150, "File status okay; about to open data connection");
+                                appendToConsole("【📁 FTP 服务器】: 响应 150 - 准备打开数据连接");
+
+                                Timer listTimer = new Timer(500, e -> {
+                                    DataCart listComplete = new DataCart(serverPos.x, serverPos.y, "FTP_RESPONSE", 0);
+                                    listComplete.isReturnTrip = true;
+                                    listComplete.stage = -1;
+                                    listComplete.dstPort = cart.srcPort;
+                                    listComplete.srcPort = 21;
+                                    listComplete.ftpPayload = ftpFactory.buildFtpResponse(226, "Closing data connection, directory listing sent");
+                                    pendingDataCarts.add(listComplete);
+                                    appendToConsole("【📁 FTP 服务器】: 响应 226 - 目录列表发送完成");
+                                });
+                                listTimer.setRepeats(false);
+                                listTimer.start();
+                            } else if (cmdUpper.equals("QUIT")) {
+                                ftpResponse.ftpPayload = ftpFactory.buildFtpResponse(221, "Service closing control connection");
+                                appendToConsole("【📁 FTP 服务器】: 响应 221 - 关闭连接");
+                            } else {
+                                ftpResponse.ftpPayload = ftpFactory.buildFtpResponse(500, "Command not recognized");
+                                appendToConsole("【📁 FTP 服务器】: 响应 500 - 未知命令: " + ftpCommandStr);
+                            }
+
+                            pendingDataCarts.add(ftpResponse);
+                            return;
+                        }
+                    }
+                    break;
                 case "SYN":
                 case "DATA":
-                    appendToConsole("【🔍 DEBUG】: DATA包到达, SEQ=" + cart.sequenceNumber +
-                            ", isReturnTrip=" + cart.isReturnTrip +
-                            ", isArrived=" + cart.isArrived);
+                    // 添加调试信息
+                    appendToConsole("【🔍 DEBUG】: DATA包到达, cartType=" + cart.cartType +
+                            ", SEQ=" + cart.sequenceNumber +
+                            ", dstPort=" + cart.dstPort +
+                            ", srcPort=" + cart.srcPort +
+                            ", ftpPayload=" + (cart.ftpPayload != null ? "存在" : "null"));
+
+                    // 如果是 FTP_DATA 类型，也可以在这里处理
+                    if ("FTP_DATA".equals(cart.cartType)) {
+                        appendToConsole("【📁 FTP】: 这是 FTP_DATA 类型的数据包");
+                    }
 
                     if (cart.isArrived && !cart.isReturnTrip) {
                         // ========== FTP 命令处理（服务器端） ==========
                         // 检查目的端口是否是 FTP 端口 21
                         boolean isFtpPort = (cart.dstPort == 21);
+
+                        // 添加调试信息
+                        if (isFtpPort) {
+                            appendToConsole("【🔍 FTP 调试】: 检测到 FTP 端口 21 的数据包");
+                        }
 
                         // 尝试从不同来源获取 FTP 命令
                         String ftpCommandStr = null;
@@ -2942,10 +3031,29 @@ public class DataCartFactoryGame extends JFrame {
                             ftpCommandStr = new String(cart.ftpPayload, java.nio.charset.StandardCharsets.ISO_8859_1).trim();
                             appendToConsole("【📁 FTP 调试】: 从 ftpPayload 获取命令: " + ftpCommandStr);
                         }
-                        // 2. 如果没有 ftpPayload，尝试从其他字段获取（比如 TCP 载荷）
+                        // 2. 从 ftpCommand 获取
                         else if (cart.ftpCommand != null && !cart.ftpCommand.isEmpty()) {
                             ftpCommandStr = cart.ftpCommand;
                             appendToConsole("【📁 FTP 调试】: 从 ftpCommand 获取命令: " + ftpCommandStr);
+                        }
+                        // 3. 如果是 FTP 端口，根据 SEQ 号模拟命令（因为 ftpPayload 可能在传输中丢失）
+                        else if (isFtpPort) {
+                            if (cart.sequenceNumber == 100) {
+                                ftpCommandStr = "USER anonymous";
+                                appendToConsole("【📁 FTP 调试】: 根据 SEQ=100 模拟 USER 命令");
+                            } else if (cart.sequenceNumber == 101) {
+                                ftpCommandStr = "PASS anonymous@example.com";
+                                appendToConsole("【📁 FTP 调试】: 根据 SEQ=101 模拟 PASS 命令");
+                            } else if (cart.sequenceNumber == 102) {
+                                ftpCommandStr = "PASV";
+                                appendToConsole("【📁 FTP 调试】: 根据 SEQ=102 模拟 PASV 命令");
+                            } else if (cart.sequenceNumber == 103) {
+                                ftpCommandStr = "LIST";
+                                appendToConsole("【📁 FTP 调试】: 根据 SEQ=103 模拟 LIST 命令");
+                            } else if (cart.sequenceNumber == 104) {
+                                ftpCommandStr = "QUIT";
+                                appendToConsole("【📁 FTP 调试】: 根据 SEQ=104 模拟 QUIT 命令");
+                            }
                         }
 
                         // 如果是 FTP 端口且有命令，处理 FTP
@@ -2959,31 +3067,37 @@ public class DataCartFactoryGame extends JFrame {
                             ftpResponse.dstPort = cart.srcPort;  // 响应发送回客户端
                             ftpResponse.srcPort = 21;
                             ftpResponse.sequenceNumber = cart.ackNumber;  // 使用正确的序列号
+                            ftpResponse.ackNumber = cart.sequenceNumber + 1;
 
                             FtpPacketFactory ftpFactory = factoryManager.getFtpPacketFactory();
                             String cmdUpper = ftpCommandStr.toUpperCase();
 
                             if (cmdUpper.startsWith("USER")) {
-                                ftpResponse.ftpPayload = ftpFactory.buildFtpResponse(331, "User name okay, need password");
+                                String username = ftpCommandStr.substring(4).trim();
+                                ftpResponse.ftpPayload = ftpFactory.buildFtpResponse(331, "User name okay, need password for " + username);
                                 appendToConsole("【📁 FTP 服务器】: 响应 331 - 需要密码");
                             }
                             else if (cmdUpper.startsWith("PASS")) {
                                 ftpResponse.ftpPayload = ftpFactory.buildFtpResponse(230, "User logged in successfully");
                                 appendToConsole("【📁 FTP 服务器】: 响应 230 - 登录成功");
+                                // 更新 FTP 登录状态
+                                ftpLoggedIn = true;
                             }
                             else if (cmdUpper.equals("PASV")) {
-                                int dataPort = 60000 + (int)(Math.random() * 10);
+                                int dataPort = 60000 + (int)(Math.random() * 1000);
                                 int p1 = dataPort / 256;
                                 int p2 = dataPort % 256;
                                 String pasvResp = String.format("227 Entering Passive Mode (192,168,1,100,%d,%d)", p1, p2);
                                 ftpResponse.ftpPayload = pasvResp.getBytes();
                                 appendToConsole(String.format("【📁 FTP 服务器】: 响应 227 - 进入被动模式，端口=%d", dataPort));
+                                // 保存数据端口供后续使用
+                                ftpDataPort = dataPort;
                             }
                             else if (cmdUpper.equals("LIST")) {
                                 ftpResponse.ftpPayload = ftpFactory.buildFtpResponse(150, "File status okay; about to open data connection");
                                 appendToConsole("【📁 FTP 服务器】: 响应 150 - 准备打开数据连接");
 
-                                // 延迟发送 226 响应
+                                // 延迟发送 226 响应（模拟数据传输完成）
                                 Timer listTimer = new Timer(500, e -> {
                                     DataCart listComplete = new DataCart(serverPos.x, serverPos.y, "FTP_RESPONSE", 0);
                                     listComplete.isReturnTrip = true;
@@ -3002,12 +3116,21 @@ public class DataCartFactoryGame extends JFrame {
                                 appendToConsole("【📁 FTP 服务器】: 响应 221 - 关闭连接");
                             }
                             else if (cmdUpper.startsWith("TYPE")) {
-                                ftpResponse.ftpPayload = ftpFactory.buildFtpResponse(200, "Type set successfully");
-                                appendToConsole("【📁 FTP 服务器】: 响应 200 - 传输类型设置成功");
+                                String type = cmdUpper.substring(4).trim();
+                                ftpResponse.ftpPayload = ftpFactory.buildFtpResponse(200, "Type set to " + type);
+                                appendToConsole("【📁 FTP 服务器】: 响应 200 - 传输类型设置为 " + type);
                             }
                             else if (cmdUpper.equals("SYST")) {
                                 ftpResponse.ftpPayload = ftpFactory.buildFtpResponse(215, "UNIX Type: L8");
                                 appendToConsole("【📁 FTP 服务器】: 响应 215 - 系统类型");
+                            }
+                            else if (cmdUpper.equals("NOOP")) {
+                                ftpResponse.ftpPayload = ftpFactory.buildFtpResponse(200, "NOOP command successful");
+                                appendToConsole("【📁 FTP 服务器】: 响应 200 - NOOP");
+                            }
+                            else if (cmdUpper.equals("PWD") || cmdUpper.equals("XPWD")) {
+                                ftpResponse.ftpPayload = ftpFactory.buildFtpResponse(257, "\"/\" is current directory");
+                                appendToConsole("【📁 FTP 服务器】: 响应 257 - 当前目录");
                             }
                             else {
                                 ftpResponse.ftpPayload = ftpFactory.buildFtpResponse(500, "Command not recognized");
@@ -3017,8 +3140,8 @@ public class DataCartFactoryGame extends JFrame {
                             pendingDataCarts.add(ftpResponse);
                             return;  // FTP 命令处理完毕，不继续执行下面的 ACK 逻辑
                         }
-
                         // ========== FTP 命令处理结束 ==========
+
                         // 记录接收统计
                         if (statisticsFactory != null) {
                             statisticsFactory.rx(1500);
