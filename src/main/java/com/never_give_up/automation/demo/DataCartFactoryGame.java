@@ -2306,7 +2306,7 @@ public class DataCartFactoryGame extends JFrame {
             // 如果传输完成后等待超过 10 秒，强制关闭
             if (serverReceivedCount >= totalDataToTransmit && !useUdp && !httpDemoEnabled) {
                 if (activeTimers.isEmpty() && serverBufferCount == 0) {
-                    // 正常关闭
+                    // 正常关闭 - 发送 FIN
                     if (currentTcpState != TcpState.FIN_WAIT_1 &&
                             currentTcpState != TcpState.TIME_WAIT) {
                         currentTcpState = TcpState.FIN_WAIT_1;
@@ -2316,14 +2316,16 @@ public class DataCartFactoryGame extends JFrame {
                         pendingDataCarts.add(fin);
                         appendToConsole("【🏁 数据传输完成】: 发送 FIN，开始四次挥手");
                     }
-                } else if (now - stateTimerWatchdog > 10000) {  // 10秒超时
-                    appendToConsole("【⏰ 等待超时】: 强制重置会话");
-                    resetTcpSession();
+                } else if (now - stateTimerWatchdog > 10000 && serverReceivedCount >= totalDataToTransmit) {
+                    // 传输完成后 10 秒，显示成功并重置
+                    appendToConsole("【🎉 传输完成】: 共传输 " + totalDataToTransmit + " 个数据包");
                     JOptionPane.showMessageDialog(this,
                             "✅ TCP 数据传输完成！\n\n" +
                                     "共传输 " + totalDataToTransmit + " 个数据包\n" +
                                     "演示了: TCP 三次握手、滑动窗口、拥塞控制、IP 分片、NAT、Ethernet II 封装",
                             "传输成功", JOptionPane.INFORMATION_MESSAGE);
+                    resetTcpSession();
+                    demoCompleted = true;
                 }
             }
 
