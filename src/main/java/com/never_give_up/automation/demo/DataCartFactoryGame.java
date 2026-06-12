@@ -2072,6 +2072,8 @@ public class DataCartFactoryGame extends JFrame {
         } else {
             appendToConsole("【✅ ARP 缓存命中】: " + targetIp + " → " + mac);
         }
+        // 同时更新本地 arpCache
+        arpCache.put(targetIp, new ArpEntry(targetIp, mac));
         updateArpDisplay();
     }
 
@@ -2166,11 +2168,15 @@ public class DataCartFactoryGame extends JFrame {
 
         if (serverBufferCount > 0 && (now - lastServerConsumeTime >= serverDecodeDelay)) {
             serverBufferCount--;
-            serverReceivedCount++;
+            // 确保不超过 totalDataToTransmit
+            if (serverReceivedCount < totalDataToTransmit) {
+                serverReceivedCount++;
+            }
             lastServerConsumeTime = now;
             rwnd = SERVER_BUFFER_MAX - serverBufferCount;
             updateTopLabel();
-            appendToConsole(String.format("【📥 服务器处理】: 已处理 %d/%d 个数据包", serverReceivedCount, totalDataToTransmit));
+            appendToConsole(String.format("【📥 服务器处理】: 已处理 %d/%d 个数据包",
+                    Math.min(serverReceivedCount, totalDataToTransmit), totalDataToTransmit));
         }
 
         if (!useUdp && currentTcpState == TcpState.ESTABLISHED) {
@@ -2297,21 +2303,27 @@ public class DataCartFactoryGame extends JFrame {
             }
 // 普通 TCP 完成传输
             // 改为：
+            // 如果传输完成后等待超过 10 秒，强制关闭
             if (serverReceivedCount >= totalDataToTransmit && !useUdp && !httpDemoEnabled) {
-                // 等待一段时间让缓冲区清空和 ACK 完成
                 if (activeTimers.isEmpty() && serverBufferCount == 0) {
-                    currentTcpState = TcpState.FIN_WAIT_1;
-                    stateTimerWatchdog = System.currentTimeMillis();
-                    DataCart fin = new DataCart(pcFactory.x, pcFactory.y, "FIN_PC", 0);
-                    fin.ttl = 64;
-                    pendingDataCarts.add(fin);
-                    appendToConsole("【🏁 数据传输完成】: 发送 FIN，开始四次挥手");
-                } else if (serverBufferCount > 0) {
-                    // 缓冲区还有数据，等待处理
-                    appendToConsole("【⏳ 等待处理】: 缓冲区还有 " + serverBufferCount + " 个包，等待清空...");
-                } else if (!activeTimers.isEmpty()) {
-                    // 还有未确认的包，等待 ACK
-                    appendToConsole("【⏳ 等待确认】: 还有 " + activeTimers.size() + " 个包等待 ACK...");
+                    // 正常关闭
+                    if (currentTcpState != TcpState.FIN_WAIT_1 &&
+                            currentTcpState != TcpState.TIME_WAIT) {
+                        currentTcpState = TcpState.FIN_WAIT_1;
+                        stateTimerWatchdog = System.currentTimeMillis();
+                        DataCart fin = new DataCart(pcFactory.x, pcFactory.y, "FIN_PC", 0);
+                        fin.ttl = 64;
+                        pendingDataCarts.add(fin);
+                        appendToConsole("【🏁 数据传输完成】: 发送 FIN，开始四次挥手");
+                    }
+                } else if (now - stateTimerWatchdog > 10000) {  // 10秒超时
+                    appendToConsole("【⏰ 等待超时】: 强制重置会话");
+                    resetTcpSession();
+                    JOptionPane.showMessageDialog(this,
+                            "✅ TCP 数据传输完成！\n\n" +
+                                    "共传输 " + totalDataToTransmit + " 个数据包\n" +
+                                    "演示了: TCP 三次握手、滑动窗口、拥塞控制、IP 分片、NAT、Ethernet II 封装",
+                            "传输成功", JOptionPane.INFORMATION_MESSAGE);
                 }
             }
 
@@ -2789,12 +2801,39 @@ public class DataCartFactoryGame extends JFrame {
                     break;
                 case "SYN":
                 case "DATA":
+                    appendToConsole("【🔍 DEBUG】: DATA包到达, SEQ=" + cart.sequenceNumber +
+                            ", isReturnTrip=" + cart.isReturnTrip +
+                            ", isArrived=" + cart.isArrived);
+
                     if (cart.isArrived && !cart.isReturnTrip) {
                         // 记录接收统计
                         if (statisticsFactory != null) {
                             statisticsFactory.rx(1500);
                         }
-                        // ... 其余处理逻辑
+
+                        if (serverBufferCount < SERVER_BUFFER_MAX) {
+                            serverBufferCount++;
+                            if (serverBufferCount == 1) lastServerConsumeTime = now;
+                            rwnd = SERVER_BUFFER_MAX - serverBufferCount;
+
+                            int receivedSeq = cart.sequenceNumber;
+                            // 关键修复：只有 SEQ > 0 且未被确认过才处理
+                            if (receivedSeq > 0 && !ackedSeq.contains(receivedSeq)) {
+                                ackedSeq.add(receivedSeq);
+                                DataCart dataAck = new DataCart(serverPos.x, serverPos.y, "DATA_ACK", receivedSeq);
+                                dataAck.advertisedWindow = rwnd;
+                                dataAck.isReturnTrip = true;
+                                pendingDataCarts.add(dataAck);
+                                funds += 500;
+                                appendToConsole(String.format("【📦 数据交付】: SEQ=%d 已接收，回复 ACK (rwnd=%d)", receivedSeq, rwnd));
+                            } else if (ackedSeq.contains(receivedSeq)) {
+                                appendToConsole("【⚠️ 重复包】: SEQ=" + receivedSeq + " 已处理过");
+                            } else if (receivedSeq <= 0) {
+                                appendToConsole("【❌ 无效SEQ】: SEQ=" + receivedSeq + " 被忽略");
+                            }
+                        } else {
+                            appendToConsole(String.format("【💥 缓冲区溢出】: SEQ=%d 丢失", cart.sequenceNumber));
+                        }
                     }
                     break;
                 case "FIN_PC":
@@ -2869,26 +2908,6 @@ public class DataCartFactoryGame extends JFrame {
                 pendingDataCarts.add(synAck);
                 appendToConsole("【🤝 三次握手】: 收到 SYN，回复 SYN-ACK (seq=200, ack=" + (cart.sequenceNumber + 1) + ")");
                 stateTimerWatchdog = now;
-                return;
-            }
-            if (cart.cartType.equals("DATA") && !cart.isReturnTrip && cart.isArrived) {
-                if (serverBufferCount < SERVER_BUFFER_MAX) {
-                    serverBufferCount++;
-                    if (serverBufferCount == 1) lastServerConsumeTime = now;
-                    rwnd = SERVER_BUFFER_MAX - serverBufferCount;
-
-                    if (!ackedSeq.contains(cart.sequenceNumber)) {
-                        ackedSeq.add(cart.sequenceNumber);
-                        DataCart dataAck = new DataCart(serverPos.x, serverPos.y, "DATA_ACK", cart.sequenceNumber);
-                        dataAck.advertisedWindow = rwnd;
-                        dataAck.isReturnTrip = true;
-                        pendingDataCarts.add(dataAck);
-                        funds += 500;
-                        appendToConsole(String.format("【📦 数据交付】: SEQ=%d 已接收，回复 ACK (rwnd=%d)", cart.sequenceNumber, rwnd));
-                    }
-                } else {
-                    appendToConsole(String.format("【💥 缓冲区溢出】: SEQ=%d 丢失", cart.sequenceNumber));
-                }
                 return;
             }
             if (cart.cartType.equals("FIN_PC") && !cart.isReturnTrip && cart.isArrived) {
@@ -2976,6 +2995,7 @@ public class DataCartFactoryGame extends JFrame {
                 case "ACK_PC":
                     break;
                 case "DATA_ACK":
+                    appendToConsole("【🔍 ACK收到】: SEQ=" + cart.sequenceNumber + ", advertisedWindow=" + cart.advertisedWindow);
                     rwnd = cart.advertisedWindow;
                     if (cart.sequenceNumber > 0) {
                         if (cwnd < ssthresh) {
@@ -3002,8 +3022,15 @@ public class DataCartFactoryGame extends JFrame {
                             int unackedCount = sentSeq.size() - ackedSeq.size();
                             int canSend = effectiveWin - unackedCount;
 
+                            appendToConsole(String.format("【🔍 ACK处理】: cwnd=%d, rwnd=%d, effectiveWin=%d, unackedCount=%d, canSend=%d, 已发送=%d, 已确认=%d",
+                                    cwnd, rwnd, effectiveWin, unackedCount, canSend, sentSeq.size(), ackedSeq.size()));
+
                             if (canSend > 0 && serverReceivedCount < totalDataToTransmit) {
                                 sendDataPackets();
+                            } else if (serverReceivedCount >= totalDataToTransmit) {
+                                appendToConsole("【🏁 数据已发送完毕】: 等待确认");
+                            } else {
+                                appendToConsole("【⏸️ 无法发送】: canSend=" + canSend);
                             }
                         }
                     }
@@ -3092,22 +3119,41 @@ public class DataCartFactoryGame extends JFrame {
     }
 
     private void sendDataPackets() {
-        // 普通 TCP 模式：发送 DATA 包
-        int packetsToSend = Math.min(cwnd, totalDataToTransmit - serverReceivedCount);
+        // 计算还能发送多少个包
+        int sent = sentSeq.size();
+        int acked = ackedSeq.size();
+        int unacked = sent - acked;
+        int window = Math.min(cwnd, rwnd);
+        int canSend = window - unacked;
+
+        if (canSend <= 0) {
+            appendToConsole("【⏸️ 窗口已满】: cwnd=" + cwnd + ", rwnd=" + rwnd + ", unacked=" + unacked);
+            return;
+        }
+
+        int packetsToSend = Math.min(canSend, totalDataToTransmit - serverReceivedCount);
+        if (packetsToSend <= 0) {
+            return;
+        }
+
+        appendToConsole(String.format("【📤 发送数据包】: cwnd=%d, rwnd=%d, sent=%d, acked=%d, unacked=%d, canSend=%d, 待发送=%d",
+                cwnd, rwnd, sent, acked, unacked, canSend, packetsToSend));
+
         for (int i = 0; i < packetsToSend; i++) {
-            DataCart data = new DataCart(pcFactory.x, pcFactory.y, "DATA", nextSeqNum++);
+            int seq = nextSeqNum++;
+            DataCart data = new DataCart(pcFactory.x, pcFactory.y, "DATA", seq);
             data.ttl = 64;
             data.advertisedWindow = rwnd;
+            data.c_SEQ = true;  // 跳过 SEQ 重新分配
             pendingDataCarts.add(data);
-            sentSeq.add(data.sequenceNumber);
+            sentSeq.add(seq);
 
-            RetransmissionTask task = new RetransmissionTask(data.sequenceNumber, System.currentTimeMillis());
+            RetransmissionTask task = new RetransmissionTask(seq, System.currentTimeMillis());
             activeTimers.add(task);
 
-            appendToConsole(String.format("【📤 TCP 发送】: SEQ=%d (cwnd=%d)", data.sequenceNumber, cwnd));
+            appendToConsole(String.format("【📤 TCP 发送】: SEQ=%d", seq));
         }
     }
-
     // 修改 updateTopLabel() 方法，添加更多调试信息
     private void updateTopLabel() {
         int effectiveWin = Math.min(cwnd, rwnd);
@@ -3565,6 +3611,13 @@ public class DataCartFactoryGame extends JFrame {
             this.cartType = type;
             this.sequenceNumber = seq;
             initPacketClass();
+
+            // DATA 包特殊处理：保留 stage 和 sequenceNumber
+            if (type.equals("DATA")) {
+                this.stage = 1;
+                // 关键：不要覆盖 sequenceNumber
+                return;
+            }
             // DNS 相关包的特殊处理 - 走 DNS 专用路径
             if (type.equals("DNS_QUERY") || type.equals("DNS_RESPONSE") ||
                     type.equals("DNS_RECURSION_ROOT") || type.equals("DNS_ROOT_TO_LOCAL") ||
@@ -4664,8 +4717,13 @@ public class DataCartFactoryGame extends JFrame {
                 case 8: // SEQ
                     if (!c_SEQ) {
                         c_SEQ = true;
-                        sequenceNumber = tcpFactory.getNextSeq();
-                        appendToConsole("【🔢 序列号】: SEQ=" + sequenceNumber);
+                        // 如果已经是 DATA 包且有 sequenceNumber，不要覆盖
+                        if (cartType.equals("DATA") && sequenceNumber > 0) {
+                            appendToConsole("【🔢 序列号】: SEQ=" + sequenceNumber + " (保留)");
+                        } else {
+                            sequenceNumber = tcpFactory.getNextSeq();
+                            appendToConsole("【🔢 序列号】: SEQ=" + sequenceNumber);
+                        }
                     }
                     break;
                 case 9: // ACK
