@@ -104,8 +104,8 @@ import java.util.Random;
     private final GameContext context;
     private transient FactoryManager factoryManager;
         // ========== FTP 相关字段 ==========
-        private String ftpCommand;      // FTP命令字符串，如 "USER anonymous"
-        private byte[] ftpPayload;      // FTP命令载荷（构建后的字节数组）
+        public String ftpCommand;      // FTP命令字符串，如 "USER anonymous"
+        public byte[] ftpPayload;      // FTP命令载荷（构建后的字节数组）
         private int ftpResponseCode;    // FTP响应码（用于接收端）
         private int ftpDataPort;        // FTP数据端口（PASV模式返回的端口）
         // ===================== 新增 20 个核心工厂引用 =====================
@@ -341,8 +341,8 @@ import java.util.Random;
         private String dstMac;
         private String srcIp;
         private String dstIp;
-        private int srcPort;
-        private int dstPort;
+        public int srcPort;
+        public int dstPort;
         private String protocol;
         private static final AtomicInteger cartIdGenerator = new AtomicInteger(0);
         public final int cartId = cartIdGenerator.getAndIncrement();
