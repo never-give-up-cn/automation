@@ -11,6 +11,7 @@ import com.never_give_up.automation.demo.factory.application.auth.RadiusPacketFa
 import com.never_give_up.automation.demo.factory.application.dhcp.DhcpLeaseFactory;
 import com.never_give_up.automation.demo.factory.application.dns.DnsZoneFactory;
 import com.never_give_up.automation.demo.factory.application.ftp.*;
+import com.never_give_up.automation.demo.factory.application.http.*;
 import com.never_give_up.automation.demo.factory.application.ldap.LdapPacketFactory;
 import com.never_give_up.automation.demo.factory.application.mail.ImapPacketFactory;
 import com.never_give_up.automation.demo.factory.application.mail.Pop3PacketFactory;
@@ -495,6 +496,8 @@ public class DataCartFactoryGame extends JFrame {
 
     private boolean useUdp = false;
     private boolean httpDemoEnabled = false;
+    private boolean httpSubDemoActive = false;  // HTTP 子工厂测试激活
+    private int httpSubDemoIndex = 0;           // 当前测试的 stage 偏移 (0-10)
     private boolean tlsEnabled = false;
     private java.security.KeyPair serverRsaKeyPair;
     private Cipher rsaCipher;
@@ -1046,6 +1049,35 @@ public class DataCartFactoryGame extends JFrame {
         btnPanel.add(copyConsoleButton);  // 新增复制按钮
         btnPanel.add(pingButton);
         btnPanel.add(tracerouteButton);
+        // HTTP 子工厂测试按钮
+        JButton httpSubTestBtn = new JButton("🧪 HTTP 子工厂");
+        httpSubTestBtn.addActionListener(e -> {
+            if (!httpSubDemoActive) {
+                httpSubDemoActive = true;
+                httpSubDemoIndex = 0;
+                appendToConsole("【🧪 HTTP 子工厂测试】: 开始遍历 Stage 166-176");
+                String[] httpTags = {"HTTP_REQ","HTTP_RES","HTTP_HDR","HTTP_BODY","HTTP_CK",
+                                     "HTTP_AUTH","HTTP_CACHE","HTTP_CHUNK","HTTP2_FRAME","HTTP2_SET","HTTP2_STR"};
+                javax.swing.Timer demoStep = new javax.swing.Timer(1000, null);
+                demoStep.addActionListener(ev -> {
+                    if (httpSubDemoIndex <= 10) {
+                        int stage = 166 + httpSubDemoIndex;
+                        DataCart hc = new DataCart(pcFactory.x, pcFactory.y, "HTTP_DEMO", 0);
+                        hc.stage = stage;
+                        pendingDataCarts.add(hc);
+                        appendToConsole("  -> 派出 cart, stage=" + stage + " (" + httpTags[httpSubDemoIndex] + ")");
+                        httpSubDemoIndex++;
+                    } else {
+                        httpSubDemoActive = false;
+                        httpSubDemoIndex = 0;
+                        appendToConsole("【🧪 HTTP 子工厂测试】: 全部 Stage 遍历完成!");
+                        ((javax.swing.Timer) ev.getSource()).stop();
+                    }
+                });
+                demoStep.start();
+            }
+        });
+        btnPanel.add(httpSubTestBtn);
         btnPanel.add(rbTcp);
         btnPanel.add(rbUdp);
         btnPanel.add(cbHttp);
@@ -1389,6 +1421,18 @@ public class DataCartFactoryGame extends JFrame {
 
                 {"【39. 安全增强 Stage 160】",
                         "IPS", "🛡️ IPS入侵防御(160)"}
+                , {"【40. HTTP 子工厂 Stage 166-176】",
+                        "HTTP_REQ", "📤 HTTP请求(166)",
+                        "HTTP_RES", "📥 HTTP响应(167)",
+                        "HTTP_HDR", "📋 HTTP头部(168)",
+                        "HTTP_BODY", "📦 HTTP消息体(169)",
+                        "HTTP_CK", "🍪 HTTP Cookie(170)",
+                        "HTTP_AUTH", "🔑 HTTP认证(171)",
+                        "HTTP_CACHE", "💾 HTTP缓存(172)",
+                        "HTTP_CHUNK", "🧩 HTTP分块(173)",
+                        "HTTP2_FRAME", "📡 HTTP/2帧(174)",
+                        "HTTP2_SET", "⚙️ HTTP/2设置(175)",
+                        "HTTP2_STR", "🌊 HTTP/2流(176)"}
                 ,};
 
         for (String[] cat : categories) {
@@ -1761,6 +1805,21 @@ public class DataCartFactoryGame extends JFrame {
         buildingLayout[ftpRow][ftpStartCol + 2] = "FTP_CHANNEL";
         buildingLayout[ftpRow][ftpStartCol + 3] = "FTP_RESPONSE";
         buildingLayout[ftpRow][ftpStartCol + 4] = "FTP_MAIN";
+
+        // ========== HTTP 子工厂 Stage 166-176 ==========
+        int httpRow = 18;  // 倒数第二行
+        int httpStartCol = 38;
+        buildingLayout[httpRow][httpStartCol] = "HTTP_REQ";
+        buildingLayout[httpRow][httpStartCol + 1] = "HTTP_RES";
+        buildingLayout[httpRow][httpStartCol + 2] = "HTTP_HDR";
+        buildingLayout[httpRow][httpStartCol + 3] = "HTTP_BODY";
+        buildingLayout[httpRow][httpStartCol + 4] = "HTTP_CK";
+        buildingLayout[httpRow][httpStartCol + 5] = "HTTP_AUTH";
+        buildingLayout[httpRow][httpStartCol + 6] = "HTTP_CACHE";
+        buildingLayout[httpRow][httpStartCol + 7] = "HTTP_CHUNK";
+        buildingLayout[httpRow][httpStartCol + 8] = "HTTP2_FRAME";
+        buildingLayout[httpRow][httpStartCol + 9] = "HTTP2_SET";
+        buildingLayout[httpRow][httpStartCol + 10] = "HTTP2_STR";
     }
 
     // 在 DataCartFactoryGame() 构造函数中，initMap() 之后添加
@@ -3740,6 +3799,19 @@ public class DataCartFactoryGame extends JFrame {
         private boolean hasNtp = false;            // NTP 已处理
         private boolean hasSnmp = false;           // SNMP 已处理
         private boolean hasHttp23 = false;         // HTTP/2.3 已处理
+        // ===================== HTTP 1.1 子工厂标志 =====================
+        private boolean hasHttpReq = false;         // HTTP 请求工厂已处理
+        private boolean hasHttpRes = false;         // HTTP 响应工厂已处理
+        private boolean hasHttpHdr = false;         // HTTP 头部工厂已处理
+        private boolean hasHttpBody = false;        // HTTP 消息体工厂已处理
+        private boolean hasHttpCookie = false;      // HTTP Cookie 工厂已处理
+        private boolean hasHttpAuth = false;        // HTTP 认证工厂已处理
+        private boolean hasHttpCache = false;       // HTTP 缓存工厂已处理
+        private boolean hasHttpChunked = false;     // HTTP 分块传输工厂已处理
+        // ===================== HTTP/2 子工厂标志 =====================
+        private boolean hasHttp2Frame = false;      // HTTP/2 帧工厂已处理
+        private boolean hasHttp2Settings = false;   // HTTP/2 设置工厂已处理
+        private boolean hasHttp2Stream = false;     // HTTP/2 流工厂已处理
         private boolean hasIpsec = false;          // IPsec 已加密
         // ===================== 新增：IPv6 相关字段 =====================
         private boolean hasIpv6 = false;
@@ -5186,6 +5258,40 @@ public class DataCartFactoryGame extends JFrame {
                 case 165:  // FTP 主工厂（门面）
                     tag = "FTP_MAIN";
                     break;
+// ========== HTTP 子工厂 Stage 映射 (使用 166-176) ==========
+                case 166:
+                    tag = "HTTP_REQ";
+                    break;
+                case 167:
+                    tag = "HTTP_RES";
+                    break;
+                case 168:
+                    tag = "HTTP_HDR";
+                    break;
+                case 169:
+                    tag = "HTTP_BODY";
+                    break;
+                case 170:
+                    tag = "HTTP_CK";
+                    break;
+                case 171:
+                    tag = "HTTP_AUTH";
+                    break;
+                case 172:
+                    tag = "HTTP_CACHE";
+                    break;
+                case 173:
+                    tag = "HTTP_CHUNK";
+                    break;
+                case 174:
+                    tag = "HTTP2_FRAME";
+                    break;
+                case 175:
+                    tag = "HTTP2_SET";
+                    break;
+                case 176:
+                    tag = "HTTP2_STR";
+                    break;
                 default:
                     return null;
             }
@@ -5932,7 +6038,14 @@ public class DataCartFactoryGame extends JFrame {
                         hasHttp23 = true;
                         int streamId = 1;
                         byte[] http2Frame = http23PacketFactory.buildHttp2Frame(streamId);
-                        appendToConsole(String.format("【📡 HTTP/2.3】: HEADERS 帧 (StreamID=%d)", streamId));
+                        // 同时使用新的 Http2FrameFactory 展示更多帧类型
+                        Http2FrameFactory h2ff = factoryManager.getHttp2FrameFactory();
+                        if (h2ff != null) {
+                            byte[] goaway = h2ff.buildGoAwayFrame(0, 0x00, "OK");
+                            appendToConsole(String.format("【📡 HTTP/2.3】: HEADERS 帧 (StreamID=%d), GOAWAY(%dB)", streamId, goaway.length));
+                        } else {
+                            appendToConsole(String.format("【📡 HTTP/2.3】: HEADERS 帧 (StreamID=%d)", streamId));
+                        }
                     }
                     break;
 
@@ -6750,6 +6863,184 @@ public class DataCartFactoryGame extends JFrame {
                             appendToConsole(String.format("【📁 FTP_MAIN(165)】: 构建 %d 字节命令", finalCommand.length));
                             this.stage = 5;
                             this.timer = 1;
+                        }
+                    }
+                    break;
+                // ========== HTTP/1.1 子工厂处理 Stage 166-173 ==========
+                case 166: // HTTP_REQ - 请求工厂
+                    if (!hasHttpReq) {
+                        hasHttpReq = true;
+                        HttpRequestFactory reqFactory = factoryManager.getHttpRequestFactory();
+                        if (reqFactory != null) {
+                            byte[] getLine = reqFactory.buildGet("/index.html");
+                            byte[] postLine = reqFactory.buildPost("/api/data");
+                            byte[] putLine = reqFactory.buildPut("/api/update");
+                            byte[] delLine = reqFactory.buildDelete("/api/remove");
+                            appendToConsole(String.format("【📤 HTTP_REQ(166)】: GET(%dB) POST(%dB) PUT(%dB) DELETE(%dB)",
+                                    getLine.length, postLine.length, putLine.length, delLine.length));
+                            appendToConsole("【📤 HTTP_REQ(166)】: 支持 GET/POST/PUT/DELETE/PATCH/HEAD/OPTIONS/CONNECT/TRACE");
+                        }
+                    }
+                    break;
+
+                case 167: // HTTP_RES - 响应工厂
+                    if (!hasHttpRes) {
+                        hasHttpRes = true;
+                        HttpResponseFactory resFactory = factoryManager.getHttpResponseFactory();
+                        if (resFactory != null) {
+                            byte[] ok200 = resFactory.buildOk();
+                            byte[] nf404 = resFactory.buildNotFound();
+                            byte[] err500 = resFactory.buildServerError();
+                            byte[] redirect = resFactory.buildStatusLine("HTTP/1.1", 302);
+                            appendToConsole(String.format("【📥 HTTP_RES(167)】: 200OK(%dB) 404(%dB) 500(%dB) 302(%dB)",
+                                    ok200.length, nf404.length, err500.length, redirect.length));
+                            appendToConsole("【📥 HTTP_RES(167)】: 支持 60+ 标准状态码(1xx~5xx)");
+                        }
+                    }
+                    break;
+
+                case 168: // HTTP_HDR - 头部工厂
+                    if (!hasHttpHdr) {
+                        hasHttpHdr = true;
+                        HttpHeaderFactory hdrFactory = factoryManager.getHttpHeaderFactory();
+                        if (hdrFactory != null) {
+                            Map<String, String> reqHeaders = hdrFactory.buildDefaultRequestHeaders("example.com");
+                            Map<String, String> resHeaders = hdrFactory.buildDefaultResponseHeaders("text/html", 1024);
+                            byte[] hdrBytes = hdrFactory.buildHeaders(reqHeaders);
+                            appendToConsole(String.format("【📋 HTTP_HDR(168)】: 请求头 %d 个/%dB 响应头 %d 个",
+                                    reqHeaders.size(), hdrBytes.length, resHeaders.size()));
+                            appendToConsole("【📋 HTTP_HDR(168)】: 支持 30+ 标准头字段");
+                        }
+                    }
+                    break;
+
+                case 169: // HTTP_BODY - 消息体工厂
+                    if (!hasHttpBody) {
+                        hasHttpBody = true;
+                        HttpBodyFactory bodyFactorySub = factoryManager.getHttpBodyFactory();
+                        if (bodyFactorySub != null) {
+                            byte[] json = bodyFactorySub.buildJsonBody("{\"key\":\"value\"}");
+                            byte[] form = bodyFactorySub.buildFormBodyFromMap(Map.of("user", "admin", "pass", "123"));
+                            byte[] html = bodyFactorySub.buildHtmlBody("<html><body>OK</body></html>");
+                            appendToConsole(String.format("【📦 HTTP_BODY(169)】: JSON(%dB) FORM(%dB) HTML(%dB)",
+                                    json.length, form.length, html.length));
+                            appendToConsole("【📦 HTTP_BODY(169)】: 支持 JSON/XML/Form/Multipart/HTML/Text");
+                        }
+                    }
+                    break;
+
+                case 170: // HTTP_CK - Cookie 工厂
+                    if (!hasHttpCookie) {
+                        hasHttpCookie = true;
+                        HttpCookieFactory ckFactory = factoryManager.getHttpCookieFactory();
+                        if (ckFactory != null) {
+                            HttpCookieFactory.Cookie sessionCookie = new HttpCookieFactory.Cookie("session", "abc123");
+                            sessionCookie.setDomain("example.com");
+                            sessionCookie.setPath("/");
+                            sessionCookie.setMaxAge(3600);
+                            sessionCookie.setHttpOnly(true);
+                            sessionCookie.setSecure(true);
+                            sessionCookie.setSameSite("Lax");
+                            String setCookie = ckFactory.buildSetCookieHeader(sessionCookie);
+                            String cookieHeader = ckFactory.buildCookieHeader(java.util.List.of(sessionCookie));
+                            appendToConsole(String.format("【🍪 HTTP_CK(170)】: Set-Cookie: %s", setCookie));
+                            appendToConsole(String.format("【🍪 HTTP_CK(170)】: Cookie: %s", cookieHeader));
+                        }
+                    }
+                    break;
+
+                case 171: // HTTP_AUTH - 认证工厂
+                    if (!hasHttpAuth) {
+                        hasHttpAuth = true;
+                        HttpAuthFactory authFactorySub = factoryManager.getHttpAuthFactory();
+                        if (authFactorySub != null) {
+                            String basic = authFactorySub.buildBasicAuth("admin", "secret");
+                            String bearer = authFactorySub.buildBearerAuth("eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTYifQ");
+                            String digestChallenge = authFactorySub.buildDigestChallenge("api@example.com", false);
+                            appendToConsole(String.format("【🔑 HTTP_AUTH(171)】: Basic: %s", basic.substring(0, 20) + "..."));
+                            appendToConsole(String.format("【🔑 HTTP_AUTH(171)】: Bearer: %s...", bearer.substring(0, 20)));
+                            appendToConsole("【🔑 HTTP_AUTH(171)】: 支持 Basic/Digest/Bearer 三种认证");
+                        }
+                    }
+                    break;
+
+                case 172: // HTTP_CACHE - 缓存工厂
+                    if (!hasHttpCache) {
+                        hasHttpCache = true;
+                        HttpCacheFactory cacheFactorySub = factoryManager.getHttpCacheFactory();
+                        if (cacheFactorySub != null) {
+                            String cc = cacheFactorySub.buildResponseCacheControl(3600, true, true);
+                            String etag = cacheFactorySub.buildEtag("Hello World".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                            String lm = cacheFactorySub.buildLastModified(System.currentTimeMillis());
+                            appendToConsole(String.format("【💾 HTTP_CACHE(172)】: Cache-Control: %s", cc));
+                            appendToConsole(String.format("【💾 HTTP_CACHE(172)】: ETag: %s", etag));
+                            appendToConsole(String.format("【💾 HTTP_CACHE(172)】: Last-Modified: %s", lm));
+                        }
+                    }
+                    break;
+
+                case 173: // HTTP_CHUNK - 分块传输工厂
+                    if (!hasHttpChunked) {
+                        hasHttpChunked = true;
+                        HttpChunkedFactory chunkedFactorySub = factoryManager.getHttpChunkedFactory();
+                        if (chunkedFactorySub != null) {
+                            byte[] chunk1 = chunkedFactorySub.encodeChunk("Hello ".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                            byte[] chunk2 = chunkedFactorySub.encodeChunk("World".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                            byte[] last = chunkedFactorySub.encodeLastChunk();
+                            int totalSize = chunk1.length + chunk2.length + last.length;
+                            byte[] combined = new byte[totalSize];
+                            System.arraycopy(chunk1, 0, combined, 0, chunk1.length);
+                            System.arraycopy(chunk2, 0, combined, chunk1.length, chunk2.length);
+                            System.arraycopy(last, 0, combined, chunk1.length + chunk2.length, last.length);
+                            byte[] decoded = chunkedFactorySub.decodeAndJoin(combined);
+                            appendToConsole(String.format("【🧩 HTTP_CHUNK(173)】: 分块编码 %d 字节, 解码=%s",
+                                    totalSize, new String(decoded, java.nio.charset.StandardCharsets.UTF_8)));
+                        }
+                    }
+                    break;
+
+                // ========== HTTP/2 子工厂处理 Stage 174-176 ==========
+                case 174: // HTTP2_FRAME - HTTP/2 帧工厂
+                    if (!hasHttp2Frame) {
+                        hasHttp2Frame = true;
+                        Http2FrameFactory h2FrameFactory = factoryManager.getHttp2FrameFactory();
+                        if (h2FrameFactory != null) {
+                            byte[] headers = h2FrameFactory.buildHeadersFrame(1, new byte[]{0x00}, true, true);
+                            byte[] data = h2FrameFactory.buildDataFrame(1, "Hello HTTP/2".getBytes(java.nio.charset.StandardCharsets.UTF_8), true);
+                            byte[] settings = h2FrameFactory.buildSettingsFrame(new byte[]{0x00, 0x03, 0x00, 0x00, 0x00, 0x64}, false);
+                            byte[] goaway = h2FrameFactory.buildGoAwayFrame(0, 0x00, "OK");
+                            appendToConsole(String.format("【📡 HTTP2_FRAME(174)】: HEADERS(%dB) DATA(%dB) SETTINGS(%dB) GOAWAY(%dB)",
+                                    headers.length, data.length, settings.length, goaway.length));
+                            appendToConsole("【📡 HTTP2_FRAME(174)】: 支持 10 种帧类型");
+                        }
+                    }
+                    break;
+
+                case 175: // HTTP2_SET - HTTP/2 设置工厂
+                    if (!hasHttp2Settings) {
+                        hasHttp2Settings = true;
+                        Http2SettingsFactory.Http2Settings h2Settings = new Http2SettingsFactory.Http2Settings();
+                        h2Settings.setMaxConcurrentStreams(128);
+                        h2Settings.setInitialWindowSize(1048576);
+                        h2Settings.setMaxFrameSize(65536);
+                        byte[] payload = h2Settings.serialize();
+                        appendToConsole(String.format("【⚙️ HTTP2_SET(175)】: 序列化 %d 字节, 并发流=%d, 窗口=%d",
+                                payload.length, h2Settings.getMaxConcurrentStreams(), h2Settings.getInitialWindowSize()));
+                    }
+                    break;
+
+                case 176: // HTTP2_STR - HTTP/2 流管理工厂
+                    if (!hasHttp2Stream) {
+                        hasHttp2Stream = true;
+                        Http2StreamFactory h2StreamFactory = factoryManager.getHttp2StreamFactory();
+                        if (h2StreamFactory != null) {
+                            h2StreamFactory.createStream(h2StreamFactory.allocateClientStreamId());
+                            h2StreamFactory.createStream(h2StreamFactory.allocateClientStreamId());
+                            h2StreamFactory.createStream(h2StreamFactory.allocateClientStreamId());
+                            long active = h2StreamFactory.getActiveStreamCount();
+                            appendToConsole(String.format("【🌊 HTTP2_STR(176)】: 已创建 3 个流, 活跃 %d", active));
+                            h2StreamFactory.reset();
+                            appendToConsole("【🌊 HTTP2_STR(176)】: 流已重置, 支持 IDLE/OPEN/HALF_CLOSED/CLOSED 状态机");
                         }
                     }
                     break;

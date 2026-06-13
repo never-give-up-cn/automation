@@ -5,6 +5,7 @@ import com.never_give_up.automation.demo.factory.address.IpAddressFactory;
 import com.never_give_up.automation.demo.factory.address.MacAddressFactory;
 import com.never_give_up.automation.demo.factory.address.PortFactory;
 import com.never_give_up.automation.demo.factory.application.*;
+import com.never_give_up.automation.demo.factory.application.http.*;
 import com.never_give_up.automation.demo.factory.application.dhcp.DhcpLeaseFactory;
 import com.never_give_up.automation.demo.factory.application.dns.DnsZoneFactory;
 import com.never_give_up.automation.demo.factory.application.ftp.*;
@@ -610,6 +611,51 @@ public class FactoryManager {
 
     public HttpPacketFactory getHttpFactory() {
         return httpFactory;
+    }
+
+    // ===================== HTTP 子工厂 Getter =====================
+    public HttpRequestFactory getHttpRequestFactory() {
+        return httpFactory != null ? httpFactory.getRequestFactory() : null;
+    }
+
+    public HttpResponseFactory getHttpResponseFactory() {
+        return httpFactory != null ? httpFactory.getResponseFactory() : null;
+    }
+
+    public HttpHeaderFactory getHttpHeaderFactory() {
+        return httpFactory != null ? httpFactory.getHeaderFactory() : null;
+    }
+
+    public HttpBodyFactory getHttpBodyFactory() {
+        return httpFactory != null ? httpFactory.getBodyFactory() : null;
+    }
+
+    public HttpCookieFactory getHttpCookieFactory() {
+        return httpFactory != null ? httpFactory.getCookieFactory() : null;
+    }
+
+    public HttpAuthFactory getHttpAuthFactory() {
+        return httpFactory != null ? httpFactory.getAuthFactory() : null;
+    }
+
+    public HttpCacheFactory getHttpCacheFactory() {
+        return httpFactory != null ? httpFactory.getCacheFactory() : null;
+    }
+
+    public HttpChunkedFactory getHttpChunkedFactory() {
+        return httpFactory != null ? httpFactory.getChunkedFactory() : null;
+    }
+
+    public Http2FrameFactory getHttp2FrameFactory() {
+        return httpFactory != null ? httpFactory.getHttp2FrameFactory() : null;
+    }
+
+    public Http2SettingsFactory getHttp2SettingsFactory() {
+        return httpFactory != null ? httpFactory.getHttp2SettingsFactory() : null;
+    }
+
+    public Http2StreamFactory getHttp2StreamFactory() {
+        return httpFactory != null ? httpFactory.getHttp2StreamFactory() : null;
     }
 
     public TlsPacketFactory getTlsFactory() {
