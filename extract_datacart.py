@@ -76,7 +76,7 @@ for fld, (setter, getter) in mutable_fields.items():
     # Handle ++field
     content = content.replace('++' + fld, f'__W_{fld}_PREINC__')
     # Handle field = value;  (but NOT field == value or field != value)
-    content = re.sub(r'(?<![.\w!<>])' + fld + r'\s*=\s*([^;]+);', setter + r'(\1);', content)
+    content = re.sub(r'(?<![.\w!<>])' + fld + r'\s*=(?!=)\s*([^;]+);', setter + r'(\1);', content)
     # Handle field += value;
     content = re.sub(r'(?<![.\w])' + fld + r'\s*\+=\s*([^;]+);', f'__W_{fld}_ADD__\\1__END__', content)
     # Handle field -= value;
