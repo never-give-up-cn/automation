@@ -1,5 +1,8 @@
 package com.never_give_up.automation.demo;
 
+import com.never_give_up.automation.demo.conveyor.BeltNetwork;
+import com.never_give_up.automation.demo.model.BeltDirection;
+import com.never_give_up.automation.demo.model.BeltItem;
 import com.never_give_up.automation.demo.model.BuildingZone;
 
 import javax.swing.*;
@@ -283,6 +286,141 @@ public class GameCanvas extends JPanel {
             }
         }
 
+        // ========== 绘制传送带瓦片 ==========
+        for (int r = 0; r < game.MAP_ROWS; r++) {
+            for (int c = 0; c < game.MAP_COLS; c++) {
+                BeltDirection dir = game.beltGrid[r][c];
+                if (dir == BeltDirection.NONE) continue;
+                int x = c * game.TILE_SIZE, y = r * game.TILE_SIZE;
+                boolean isBuilding = !"NONE".equals(game.buildingLayout[r][c]);
+
+                if (isBuilding) {
+                    // 建筑瓦片上的传送带：仅绘制小箭头，不覆盖建筑背景
+                    int cx = x + game.TILE_SIZE / 2;
+                    int cy = y + game.TILE_SIZE / 2;
+                    int arrowLen = 8;
+                    g2.setColor(new Color(80, 100, 130, 180));
+                    g2.setStroke(new BasicStroke(2f));
+                    switch (dir) {
+                        case RIGHT:
+                            g2.drawLine(cx - arrowLen, cy, cx + arrowLen, cy);
+                            g2.drawLine(cx + arrowLen - 3, cy - 3, cx + arrowLen, cy);
+                            g2.drawLine(cx + arrowLen - 3, cy + 3, cx + arrowLen, cy);
+                            break;
+                        case DOWN:
+                            g2.drawLine(cx, cy - arrowLen, cx, cy + arrowLen);
+                            g2.drawLine(cx - 3, cy + arrowLen - 3, cx, cy + arrowLen);
+                            g2.drawLine(cx + 3, cy + arrowLen - 3, cx, cy + arrowLen);
+                            break;
+                        case LEFT:
+                            g2.drawLine(cx - arrowLen, cy, cx + arrowLen, cy);
+                            g2.drawLine(cx - arrowLen + 3, cy - 3, cx - arrowLen, cy);
+                            g2.drawLine(cx - arrowLen + 3, cy + 3, cx - arrowLen, cy);
+                            break;
+                        case UP:
+                            g2.drawLine(cx, cy - arrowLen, cx, cy + arrowLen);
+                            g2.drawLine(cx - 3, cy - arrowLen + 3, cx, cy - arrowLen);
+                            g2.drawLine(cx + 3, cy - arrowLen + 3, cx, cy - arrowLen);
+                            break;
+                    }
+                    g2.setStroke(new BasicStroke(1f));
+                } else {
+                    // 非建筑瓦片（间隙）：暗色背景 + 方向箭头
+                    g2.setColor(new Color(50, 55, 65, 200));
+                    g2.fillRect(x + 1, y + 1, game.TILE_SIZE - 2, game.TILE_SIZE - 2);
+
+                    int cx = x + game.TILE_SIZE / 2;
+                    int cy = y + game.TILE_SIZE / 2;
+                    g2.setColor(new Color(80, 100, 130));
+                    g2.setStroke(new BasicStroke(2f));
+                    int arrowLen = 10;
+                    switch (dir) {
+                        case RIGHT:
+                            g2.drawLine(cx - arrowLen, cy, cx + arrowLen, cy);
+                            g2.drawLine(cx + arrowLen - 4, cy - 4, cx + arrowLen, cy);
+                            g2.drawLine(cx + arrowLen - 4, cy + 4, cx + arrowLen, cy);
+                            break;
+                        case DOWN:
+                            g2.drawLine(cx, cy - arrowLen, cx, cy + arrowLen);
+                            g2.drawLine(cx - 4, cy + arrowLen - 4, cx, cy + arrowLen);
+                            g2.drawLine(cx + 4, cy + arrowLen - 4, cx, cy + arrowLen);
+                            break;
+                        case LEFT:
+                            g2.drawLine(cx - arrowLen, cy, cx + arrowLen, cy);
+                            g2.drawLine(cx - arrowLen + 4, cy - 4, cx - arrowLen, cy);
+                            g2.drawLine(cx - arrowLen + 4, cy + 4, cx - arrowLen, cy);
+                            break;
+                        case UP:
+                            g2.drawLine(cx, cy - arrowLen, cx, cy + arrowLen);
+                            g2.drawLine(cx - 4, cy - arrowLen + 4, cx, cy - arrowLen);
+                            g2.drawLine(cx + 4, cy - arrowLen + 4, cx, cy - arrowLen);
+                            break;
+                    }
+                    g2.setStroke(new BasicStroke(1f));
+                }
+            }
+        }
+
+        // ========== 绘制传送带上的物品 ==========
+        for (BeltItem item : game.beltItems) {
+            int drawX = item.tileCol * game.TILE_SIZE + (int) item.pixelX;
+            int drawY = item.tileRow * game.TILE_SIZE + (int) item.pixelY;
+
+            // 根据 type 选择颜色（与 DataCart 颜色映射一致）
+            if (item.type != null) {
+                if (item.type.equals("ICMP_ECHO_REQ")) g2.setColor(new Color(100, 100, 255));
+                else if (item.type.equals("ICMP_ECHO_REPLY")) g2.setColor(new Color(50, 200, 50));
+                else if (item.type.startsWith("DHCP")) g2.setColor(Color.MAGENTA);
+                else if (item.type.equals("ZWP")) g2.setColor(Color.YELLOW);
+                else if (item.type.startsWith("SYN")) g2.setColor(Color.CYAN);
+                else if (item.type.startsWith("FIN")) g2.setColor(Color.PINK);
+                else if (item.type.contains("ACK")) g2.setColor(Color.GREEN);
+                else if (item.type.startsWith("DNS")) g2.setColor(new Color(0, 200, 200));
+                else if (item.type.startsWith("TLS_")) g2.setColor(new Color(255, 165, 0));
+                else if (item.type.equals("HTTP_GET") || item.type.equals("HTTP_200_OK"))
+                    g2.setColor(new Color(150, 0, 200));
+                else if (item.type.equals("UDP_DATA")) g2.setColor(new Color(50, 150, 255));
+                else g2.setColor(Color.LIGHT_GRAY);
+            } else {
+                g2.setColor(Color.LIGHT_GRAY);
+            }
+            g2.fillRect(drawX + 2, drawY + 2, 12, 12);
+        }
+
+        // ========== 绘制传送带机械臂 ==========
+        for (int r = 0; r < game.MAP_ROWS; r++) {
+            for (int c = 0; c < game.MAP_COLS; c++) {
+                BeltDirection beltDir = game.beltGrid[r][c];
+                if (beltDir == BeltDirection.NONE) continue;
+                // 只在非建筑瓦片（间隙）绘制机械臂
+                if (!"NONE".equals(game.buildingLayout[r][c])) continue;
+                // 检查在传送带方向上是否有相邻建筑（双向任意一个即可）
+                int prevR = r - beltDir.dy, prevC = c - beltDir.dx;
+                int nextR = r + beltDir.dy, nextC = c + beltDir.dx;
+                boolean hasPrevBuilding = prevR >= 0 && prevR < game.MAP_ROWS && prevC >= 0 && prevC < game.MAP_COLS
+                        && !"NONE".equals(game.buildingLayout[prevR][prevC]);
+                boolean hasNextBuilding = nextR >= 0 && nextR < game.MAP_ROWS && nextC >= 0 && nextC < game.MAP_COLS
+                        && !"NONE".equals(game.buildingLayout[nextR][nextC]);
+                if (!hasPrevBuilding && !hasNextBuilding) continue;
+
+                int gx = c * game.TILE_SIZE;
+                int gy = r * game.TILE_SIZE;
+                // 在传送带两侧绘制小三角作为机械臂爪子
+                g2.setColor(new Color(180, 130, 60));
+                // 左侧爪子
+                int[] lx = {gx + 4, gx + 14, gx + 9};
+                int[] ly = {gy + 4, gy + 4, gy + 18};
+                g2.fillPolygon(lx, ly, 3);
+                // 右侧爪子
+                int[] rx = {gx + 26, gx + 36, gx + 31};
+                int[] ry = {gy + 4, gy + 4, gy + 18};
+                g2.fillPolygon(rx, ry, 3);
+                // 爪子底座
+                g2.setColor(new Color(100, 100, 100));
+                g2.fillRect(gx + 14, gy + 16, 12, 4);
+            }
+        }
+
         // 绘制采矿车
         for (OreCart c : game.oreCarts) {
             g2.setColor(c.oreType.equals("HELLO") ? Color.CYAN : Color.GREEN);
@@ -291,6 +429,7 @@ public class GameCanvas extends JPanel {
 
         // 绘制数据包
         for (DataCart cart : game.dataCarts) {
+            if (cart.isOnBelt) continue; // 传送带上的 cart 由 BeltItem 绘制
             int cx = (int) cart.x, cy = (int) cart.y;
 
             if (cart.waitInQueueTimer > 0) g2.setColor(Color.RED);
@@ -356,6 +495,18 @@ public class GameCanvas extends JPanel {
             g2.fillRect(cx - 55, cy - 25, g2.getFontMetrics().stringWidth(label) + 8, 16);
             g2.setColor(cart.waitInQueueTimer > 0 ? Color.RED : Color.YELLOW);
             g2.drawString(label, cx - 53, cy - 14);
+        }
+
+        // ========== 传送带操作提示 ==========
+        g2.setFont(new Font("微软雅黑", Font.BOLD, 12));
+        g2.setColor(new Color(255, 255, 200, 180));
+        g2.drawString("B:传送带模式  R:切换方向  T:传送带演示  左键放置/右键拆除", 10, game.MAP_ROWS * game.TILE_SIZE - 10);
+        // 传送带模式状态指示
+        if (game.beltMode) {
+            g2.setColor(new Color(255, 200, 0, 200));
+            g2.fillRect(game.MAP_COLS * game.TILE_SIZE - 220, 5, 210, 22);
+            g2.setColor(Color.BLACK);
+            g2.drawString("【传送带模式】方向: " + game.selectedBeltDir, game.MAP_COLS * game.TILE_SIZE - 215, 21);
         }
     }
 }

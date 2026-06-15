@@ -356,11 +356,12 @@ import java.util.Random;
         double speed = 12.0;
         int stage;
         int timer = 0;
-        boolean isArrived = false;
+        public boolean isArrived = false;
+        public boolean isOnBelt = false;
         boolean isDropped = false;
         boolean isReturnTrip = false;
         boolean isRetransmission = false;
-        String cartType;
+        public String cartType;
         String currentLayerStatus = "";
         int sequenceNumber = 0;
         int ackNumber = 0;
@@ -826,9 +827,9 @@ import java.util.Random;
                                 isArrived = true;
                             }
                         } else {
-                            // DNS/DHCP 处理
+                            // DNS/DHCP/传送带演示 处理
                             int maxStage = 0;
-                            if (cartType.equals("DNS_QUERY")) {
+                            if (cartType.equals("DNS_QUERY") || cartType.startsWith("BELT_")) {
                                 maxStage = 4;
                             } else if (cartType.startsWith("DNS_RECURSION")) {
                                 maxStage = 2;
@@ -990,8 +991,26 @@ import java.util.Random;
             return cartType.startsWith("DHCP") || cartType.startsWith("DNS_");
         }
 
+        /**
+         * 获取当前 stage 的下一个目标建筑坐标（公开包装，供游戏主类 tryActivateBeltForCart 调用）
+         */
+        public Point getTargetBuilding() {
+            return findTargetMachine(stage, cartType);
+        }
+
         // 在 DataCart 类中，修改 stage 对应的 tag 映射
         private Point findTargetMachine(int s, String type) {
+// ==== 传送带演示 ====
+            if (type.equals("BELT_DEMO")) {
+                switch (s) {
+                    case 1: return context.getFindBuildingCoords().apply("BELT_DEMO_IN");
+                    case 2: return context.getFindBuildingCoords().apply("BELT_DEMO_PROC1");
+                    case 3: return context.getFindBuildingCoords().apply("BELT_DEMO_PROC2");
+                    case 4: return context.getFindBuildingCoords().apply("BELT_DEMO_OUT");
+                }
+                return null;
+            }
+
 // 确保 TCP 控制包的 stage 映射正确
             if (type.equals("SYN") || type.equals("SYN_ACK") || type.equals("ACK_PC")) {
                 if (s == 13) return context.getFindBuildingCoords().apply("T_CORE");
@@ -1675,6 +1694,10 @@ import java.util.Random;
             }
             // TCP 数据包走完整路径
 //            processTcpDataStage();
+            if (cartType != null && cartType.startsWith("BELT_")) {
+                // 传送带演示包不需要封装处理
+                return;
+            }
             if (cartType != null && cartType.startsWith("DNS_")) {
                 // DNS 包不需要任何封装处理
                 return;
@@ -3488,6 +3511,88 @@ import java.util.Random;
                 case 21:
                     stage = 21;
                     break;
+            }
+        }
+
+        /**
+         * 当 BeltItem 到达目标建筑时调用，让 DataCart 进入建筑处理
+         */
+        public void enterBuilding(String buildingTag, int buildingX, int buildingY,
+                                  com.never_give_up.automation.demo.DataCartFactoryGame game) {
+            if (isArrived || isDropped) return;
+
+            this.x = buildingX;
+            this.y = buildingY;
+
+            // 检查这个建筑是否是当前 stage 的目标
+            Point expectedTarget = findTargetMachine(stage, cartType);
+            if (expectedTarget != null) {
+                int targetCol = expectedTarget.x / com.never_give_up.automation.demo.conveyor.BeltNetwork.TILE_SIZE;
+                int targetRow = expectedTarget.y / com.never_give_up.automation.demo.conveyor.BeltNetwork.TILE_SIZE;
+                if (targetRow >= 0 && targetRow < game.MAP_ROWS && targetCol >= 0 && targetCol < game.MAP_COLS) {
+                    String expectedTag = game.buildingLayout[targetRow][targetCol];
+                    if (expectedTag == null || !expectedTag.equals(buildingTag)) {
+                        return; // 不是目标建筑
+                    }
+                } else {
+                    return;
+                }
+            } else {
+                return;
+            }
+
+            // 到达目标建筑，执行处理
+            processStageCraft();
+
+            // 处理完后递增 stage
+            if (!isDnsOrDhcp()) {
+                if (stage < 160) {
+                    timer = 1;
+                    stage++;
+                } else {
+                    isArrived = true;
+                }
+            } else {
+                int maxStage = (cartType.equals("DNS_QUERY") || cartType.startsWith("BELT_")) ? 4 : 2;
+                if (stage < maxStage) {
+                    timer = 1;
+                    stage++;
+                } else {
+                    isArrived = true;
+                }
+            }
+
+            // 尝试将 DataCart 放到通往下一建筑的传送带上
+            if (!isArrived) {
+                Point nextTarget = findTargetMachine(stage, cartType);
+                if (nextTarget != null) {
+                    int nextCol = nextTarget.x / com.never_give_up.automation.demo.conveyor.BeltNetwork.TILE_SIZE;
+                    int nextRow = nextTarget.y / com.never_give_up.automation.demo.conveyor.BeltNetwork.TILE_SIZE;
+                    int dRow = (int) Math.signum(nextRow - (int)(buildingY / com.never_give_up.automation.demo.conveyor.BeltNetwork.TILE_SIZE));
+                    int dCol = (int) Math.signum(nextCol - (int)(buildingX / com.never_give_up.automation.demo.conveyor.BeltNetwork.TILE_SIZE));
+                    if (dRow != 0 || dCol != 0) {
+                        BeltDirection dir = BeltDirection.fromDelta(dCol, dRow);
+                        if (dir != BeltDirection.NONE) {
+                            // 检查建筑自身瓦片上的传送带方向是否匹配
+                            int bRow = buildingY / com.never_give_up.automation.demo.conveyor.BeltNetwork.TILE_SIZE;
+                            int bCol = buildingX / com.never_give_up.automation.demo.conveyor.BeltNetwork.TILE_SIZE;
+                            if (game.beltGrid[bRow][bCol] == dir) {
+                                com.never_give_up.automation.demo.conveyor.BeltNetwork network =
+                                        new com.never_give_up.automation.demo.conveyor.BeltNetwork();
+                                com.never_give_up.automation.demo.model.BeltItem spawned = network.spawnBeltItemFromCart(this,
+                                        (int)(buildingY / com.never_give_up.automation.demo.conveyor.BeltNetwork.TILE_SIZE),
+                                        (int)(buildingX / com.never_give_up.automation.demo.conveyor.BeltNetwork.TILE_SIZE),
+                                        dir, game);
+                                if (spawned != null) {
+                                    isOnBelt = true; // 继续在传送带上
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                }
+                // 无传送带路径 → 退回飞行模式
+                isOnBelt = false;
             }
         }
     }

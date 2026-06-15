@@ -80,10 +80,14 @@ import javax.crypto.KeyGenerator;
 import javax.crypto.spec.SecretKeySpec;
 import javax.swing.*;
 import javax.swing.Timer;
+import javax.swing.AbstractAction;
+import javax.swing.ActionMap;
+import javax.swing.InputMap;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.event.ActionEvent;
 import java.awt.geom.AffineTransform;
 import java.security.KeyFactory;
 import java.security.KeyPairGenerator;
@@ -106,6 +110,7 @@ import com.never_give_up.automation.demo.model.RetransmissionTask;
 import com.never_give_up.automation.demo.model.TcpState;
 import com.never_give_up.automation.demo.model.TlsState;
 import com.never_give_up.automation.demo.model.VisualFeedback;
+import com.never_give_up.automation.demo.model.BeltDirection;
 
 public class DataCartFactoryGame extends JFrame {
     // 添加建筑到区域的映射
@@ -343,6 +348,14 @@ public class DataCartFactoryGame extends JFrame {
     public List<OreCart> oreCarts = new CopyOnWriteArrayList<>();
     public List<DataCart> dataCarts = new CopyOnWriteArrayList<>();
     private List<DataCart> pendingDataCarts = new CopyOnWriteArrayList<>();
+
+    // ========== 传送带物流系统 ==========
+    public final int BELT_PRICE = 5;
+    public BeltDirection[][] beltGrid = new BeltDirection[MAP_ROWS][MAP_COLS];
+    public List<com.never_give_up.automation.demo.model.BeltItem> beltItems = new CopyOnWriteArrayList<>();
+    public boolean beltMode = false;
+    public BeltDirection selectedBeltDir = BeltDirection.RIGHT;
+    private com.never_give_up.automation.demo.conveyor.BeltNetwork beltNetwork;
 
     private GameCanvas canvas;
     private GameContext gameContext;
@@ -648,6 +661,23 @@ public class DataCartFactoryGame extends JFrame {
                                 String existing = buildingLayout[row][col];
                                 if (!existing.equals("NONE") || mapLayout[row][col] == 9) return;
 
+                                // 传送带模式：放置传送带
+                                if (beltMode) {
+                                    if (beltGrid[row][col] == BeltDirection.NONE && funds >= BELT_PRICE) {
+                                        funds -= BELT_PRICE;
+                                        beltGrid[row][col] = selectedBeltDir;
+                                        appendToConsole(String.format("【🔧 传送带】: 放置 %s 方向传送带，花费 %d",
+                                                selectedBeltDir, BELT_PRICE));
+                                    } else if (beltGrid[row][col] != BeltDirection.NONE) {
+                                        // 已有传送带则更改方向
+                                        beltGrid[row][col] = selectedBeltDir;
+                                        appendToConsole(String.format("【🔧 传送带】: 更改方向为 %s", selectedBeltDir));
+                                    }
+                                    updateTopLabel();
+                                    canvas.repaint();
+                                    return;
+                                }
+
                                 if (selectedBuilding.startsWith("MINER_")) {
                                     int reqType = selectedBuilding.equals("MINER_H") ? 1 : 2;
                                     if (mapLayout[row][col] == reqType && funds >= PRICE_MINER) {
@@ -681,6 +711,15 @@ public class DataCartFactoryGame extends JFrame {
                         int col = logicalX / TILE_SIZE;
                         int row = logicalY / TILE_SIZE;
                         if (row >= 0 && row < MAP_ROWS && col >= 0 && col < MAP_COLS) {
+                            // 优先删除传送带
+                            if (beltGrid[row][col] != BeltDirection.NONE) {
+                                beltGrid[row][col] = BeltDirection.NONE;
+                                funds += BELT_PRICE / 2;
+                                canvas.repaint();
+                                updateTopLabel();
+                                appendToConsole("【🔧 传送带】: 移除传送带，返还 " + (BELT_PRICE / 2) + " 资金");
+                                return;
+                            }
                             String existing = buildingLayout[row][col];
                             if (!existing.equals("NONE") && !existing.equals("PC_FACTORY") && !existing.equals("RX_ST") && !existing.equals("DHCP_SERVER") && mapLayout[row][col] != 9) {
                                 int refund = existing.startsWith("MINER") ? PRICE_MINER / 2 : PRICE_MACHINE / 2;
@@ -1066,6 +1105,47 @@ public class DataCartFactoryGame extends JFrame {
                         showPacketDetails(cart);
                     }
                 }
+            }
+        });
+
+        beltNetwork = new com.never_give_up.automation.demo.conveyor.BeltNetwork();
+
+        // 添加键盘绑定 - B 键切换传送带模式
+        getRootPane().getInputMap(JPanel.WHEN_IN_FOCUSED_WINDOW).put(
+                KeyStroke.getKeyStroke('B'), "toggleBeltMode");
+        getRootPane().getActionMap().put("toggleBeltMode", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                beltMode = !beltMode;
+                appendToConsole("【🔧】传送带模式: " + (beltMode ? "开启" : "关闭") +
+                        " | 方向: " + selectedBeltDir);
+            }
+        });
+
+        // R 键循环切换传送带方向
+        getRootPane().getInputMap(JPanel.WHEN_IN_FOCUSED_WINDOW).put(
+                KeyStroke.getKeyStroke('R'), "cycleBeltDir");
+        getRootPane().getActionMap().put("cycleBeltDir", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                switch (selectedBeltDir) {
+                    case RIGHT: selectedBeltDir = BeltDirection.DOWN; break;
+                    case DOWN: selectedBeltDir = BeltDirection.LEFT; break;
+                    case LEFT: selectedBeltDir = BeltDirection.UP; break;
+                    case UP: selectedBeltDir = BeltDirection.RIGHT; break;
+                    default: selectedBeltDir = BeltDirection.RIGHT;
+                }
+                appendToConsole("【🔧】传送带方向: " + selectedBeltDir);
+            }
+        });
+
+        // T 键触发传送带演示
+        getRootPane().getInputMap(JPanel.WHEN_IN_FOCUSED_WINDOW).put(
+                KeyStroke.getKeyStroke('T'), "startBeltDemo");
+        getRootPane().getActionMap().put("startBeltDemo", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                startBeltDemo();
             }
         });
 
@@ -1701,6 +1781,73 @@ public class DataCartFactoryGame extends JFrame {
         buildingLayout[httpRow][httpStartCol + 8] = "HTTP2_FRAME";
         buildingLayout[httpRow][httpStartCol + 9] = "HTTP2_SET";
         buildingLayout[httpRow][httpStartCol + 10] = "HTTP2_STR";
+
+        // 初始化传送带网格为 NONE
+        for (int r = 0; r < MAP_ROWS; r++)
+            for (int c = 0; c < MAP_COLS; c++)
+                beltGrid[r][c] = BeltDirection.NONE;
+
+        // ===== 通用传送带集成：所有主路径建筑瓦片设置传送带方向 =====
+        // 发送封装路径 (row 7, cols 4-26)
+        for (int c = 4; c <= 26; c++) beltGrid[7][c] = BeltDirection.RIGHT;
+        // DHCP 路径 (row 6, cols 4-8)
+        for (int c = 4; c <= 8; c++) beltGrid[6][c] = BeltDirection.RIGHT;
+        // 网关路径 (row 10, cols 20-32，含间隙瓦片)
+        for (int c = 20; c <= 32; c++) beltGrid[10][c] = BeltDirection.RIGHT;
+        // 接收解封装路径 (row 8, cols 34-42)
+        for (int c = 34; c <= 42; c++) beltGrid[8][c] = BeltDirection.RIGHT;
+        // 防火墙 (row 5, cols 20-22)
+        for (int c = 20; c <= 22; c++) beltGrid[5][c] = BeltDirection.RIGHT;
+        // 队列 (row 9, cols 22-24)
+        for (int c = 22; c <= 24; c++) beltGrid[9][c] = BeltDirection.RIGHT;
+        // 拥塞控制 (row 11, cols 14-16)
+        for (int c = 14; c <= 16; c++) beltGrid[11][c] = BeltDirection.RIGHT;
+        // 新建筑行 (row 1, cols 5-20)
+        for (int c = 5; c <= 20; c++) beltGrid[1][c] = BeltDirection.RIGHT;
+        // 新建筑行 (row 0, cols 2-15)
+        for (int c = 2; c <= 15; c++) beltGrid[0][c] = BeltDirection.RIGHT;
+        // 新建筑行 (row 0, cols 16-27)
+        for (int c = 16; c <= 27; c++) beltGrid[0][c] = BeltDirection.RIGHT;
+        // 新建筑行 (row 1, cols 21-27)
+        for (int c = 21; c <= 27; c++) beltGrid[1][c] = BeltDirection.RIGHT;
+        // IPv6 行 (row 2, cols 30-31) + 扩展 (cols 32-39)
+        for (int c = 30; c <= 39; c++) beltGrid[2][c] = BeltDirection.RIGHT;
+        // TCP 增强 (row 3, cols 33-38)
+        for (int c = 33; c <= 38; c++) beltGrid[3][c] = BeltDirection.RIGHT;
+        // 负载均衡 + IPsec (row 4, cols 36-44)
+        for (int c = 36; c <= 44; c++) beltGrid[4][c] = BeltDirection.RIGHT;
+        // 工具 + IPS (row 5, cols 41-44)
+        for (int c = 41; c <= 44; c++) beltGrid[5][c] = BeltDirection.RIGHT;
+        // 诊断工具 (rows 6-7, cols 41-43)
+        for (int c = 41; c <= 43; c++) { beltGrid[6][c] = BeltDirection.RIGHT; beltGrid[7][c] = BeltDirection.RIGHT; }
+        // 应用层协议 (row 12-14, cols 25-28)
+        for (int c = 25; c <= 28; c++) beltGrid[12][c] = BeltDirection.RIGHT;
+        for (int c = 25; c <= 28; c++) beltGrid[13][c] = BeltDirection.RIGHT;
+        for (int c = 25; c <= 27; c++) beltGrid[14][c] = BeltDirection.RIGHT;
+        // 安全防护 (row 15-17, cols 30-31)
+        for (int c = 30; c <= 31; c++) { beltGrid[15][c] = BeltDirection.RIGHT; beltGrid[16][c] = BeltDirection.RIGHT; beltGrid[17][c] = BeltDirection.RIGHT; }
+        // NAT 增强 (row 17-18, cols 35-36)
+        for (int c = 35; c <= 36; c++) { beltGrid[17][c] = BeltDirection.RIGHT; beltGrid[18][c] = BeltDirection.RIGHT; }
+        // VPN (row 18-19, cols 41-43)
+        for (int c = 41; c <= 43; c++) { beltGrid[17][c] = BeltDirection.RIGHT; beltGrid[18][c] = BeltDirection.RIGHT; }
+        // HTTP 子工厂 (row 18, cols 38-48)
+        for (int c = 38; c <= 48; c++) beltGrid[18][c] = BeltDirection.RIGHT;
+        // 核心工厂 (row 19, cols 30-54)
+        for (int c = 30; c <= 54; c++) beltGrid[19][c] = BeltDirection.RIGHT;
+        // PC 和接收站连接
+        beltGrid[10][3] = BeltDirection.RIGHT;    // PC_FACTORY
+        beltGrid[10][52] = BeltDirection.RIGHT;   // RX_ST
+
+        // ===== 传送带演示区 =====
+        // 行15: 4个建筑间隔1格，中间铺设传送带
+        buildingLayout[15][0] = "BELT_DEMO_IN";
+        buildingLayout[15][2] = "BELT_DEMO_PROC1";
+        buildingLayout[15][4] = "BELT_DEMO_PROC2";
+        buildingLayout[15][6] = "BELT_DEMO_OUT";
+        // 预置传送带连接演示建筑
+        beltGrid[15][1] = BeltDirection.RIGHT;
+        beltGrid[15][3] = BeltDirection.RIGHT;
+        beltGrid[15][5] = BeltDirection.RIGHT;
     }
 
     // 在 DataCartFactoryGame() 构造函数中，initMap() 之后添加
@@ -2418,6 +2565,21 @@ public class DataCartFactoryGame extends JFrame {
             return false;
         });
 
+        // ========== 传送带物流更新 ==========
+        if (beltNetwork != null) {
+            long now2 = System.currentTimeMillis();
+            beltNetwork.updateAll(beltItems, beltGrid, buildingLayout, this);
+            beltItems.removeIf(item ->
+                    item.consumed || (now2 - item.createdAt > com.never_give_up.automation.demo.model.BeltItem.MAX_LIFETIME));
+        }
+
+        // ===== 检测新建 DataCart 是否可以进入传送带 =====
+        for (DataCart cart : dataCarts) {
+            if (cart.isOnBelt) continue;
+            if (cart.isArrived || cart.isDropped) continue;
+            tryActivateBeltForCart(cart);
+        }
+
         List<DataCart> toRemoveCarts = new ArrayList<>();
         for (DataCart cart : dataCarts) {
             int col = (int) (cart.x / TILE_SIZE);
@@ -2444,6 +2606,15 @@ public class DataCartFactoryGame extends JFrame {
                 } else {
                     cart.waitInQueueTimer = 0;
                 }
+            }
+
+            // 传送带模式：跳过飞行 update
+            if (cart.isOnBelt) {
+                if (cart.isArrived || cart.isDropped) {
+                    toRemoveCarts.add(cart);
+                    updateTopLabel();
+                }
+                continue;
             }
 
             cart.update();
@@ -2486,6 +2657,53 @@ public class DataCartFactoryGame extends JFrame {
         dnsCache.entrySet().removeIf(entry -> entry.getValue().isExpired());
         prgNetwork.setValue((int) (((double) serverReceivedCount / totalDataToTransmit) * 100));
         canvas.repaint();
+    }
+
+    /**
+     * 启动传送带演示
+     */
+    private void startBeltDemo() {
+        int col = 0, row = 15;
+        int x = col * TILE_SIZE + TILE_SIZE / 2;
+        int y = row * TILE_SIZE + TILE_SIZE / 2;
+        DataCart cart = new DataCart(x, y, "BELT_DEMO", 1, gameContext);
+        pendingDataCarts.add(cart);
+        appendToConsole("【🧪 传送带演示】: 启动 BELT_DEMO 数据包 (按 B 放置传送带, R 切换方向)");
+    }
+
+    /**
+     * 尝试将 DataCart 从飞行模式切换到传送带模式
+     */
+    private void tryActivateBeltForCart(DataCart cart) {
+        int col = (int) (cart.x / TILE_SIZE);
+        int row = (int) (cart.y / TILE_SIZE);
+        if (row < 0 || row >= MAP_ROWS || col < 0 || col >= MAP_COLS) return;
+        if (buildingLayout[row][col].equals("NONE")) return; // 不在建筑上
+
+        Point nextTarget = cart.getTargetBuilding();
+        if (nextTarget == null) return;
+
+        int nextCol = nextTarget.x / TILE_SIZE;
+        int nextRow = nextTarget.y / TILE_SIZE;
+
+        // 计算方向（使用符号，支持非相邻建筑之间的传送带链路）
+        int dRow = (int) Math.signum(nextRow - row);
+        int dCol = (int) Math.signum(nextCol - col);
+        if (dRow == 0 && dCol == 0) return;
+
+        BeltDirection dir = BeltDirection.fromDelta(dCol, dRow);
+        if (dir == BeltDirection.NONE) return;
+
+        // 检查当前建筑瓦片上的传送带方向是否匹配（通用集成：beltGrid 直接设在建筑瓦片上）
+        if (beltGrid[row][col] != dir) return;
+
+        // 上带！
+        com.never_give_up.automation.demo.model.BeltItem spawned =
+                beltNetwork.spawnBeltItemFromCart(cart, row, col, dir, this);
+        if (spawned != null) {
+            cart.isOnBelt = true;
+            appendToConsole("【🔧 传送带】: " + cart.cartType + " 进入传送带 " + dir);
+        }
     }
 
     // 替换原有的 isForemostCartInWan 方法
