@@ -244,4 +244,54 @@ public class ProductionLine {
     public boolean isOnLine(String tag) {
         return parent.containsKey(tag) || ROOT.equals(tag);
     }
+
+    /** 产线上的全部工位标签（按链顺序去重） */
+    public List<String> getAllTags() {
+        List<String> tags = new ArrayList<>();
+        for (List<String> chain : chains) {
+            for (String tag : chain) {
+                if (!tags.contains(tag)) {
+                    tags.add(tag);
+                }
+            }
+        }
+        return tags;
+    }
+
+    /**
+     * 工位上游传送带的方向（单位向量，指向该工位）。
+     * <p>排队等待机械臂的工件就沿着这个方向往回退，让它们留在传送带上。</p>
+     *
+     * @return 形如 {dx, dy}；没有上游时返回 null
+     */
+    public double[] getUpstreamDir(String tag) {
+        String up = parent.get(tag);
+        if (up == null) {
+            return null;
+        }
+        for (Belt belt : belts) {
+            if (!belt.isForward() || !belt.getToTag().equals(tag) || !belt.getFromTag().equals(up)) {
+                continue;
+            }
+            List<Point> pts = belt.getPoints();
+            if (pts.size() < 2) {
+                continue;
+            }
+            double[] dir = unit(pts.get(pts.size() - 2), pts.get(pts.size() - 1));
+            if (dir != null) {
+                return dir;
+            }
+        }
+        return null;
+    }
+
+    private static double[] unit(Point a, Point b) {
+        double dx = b.x - a.x;
+        double dy = b.y - a.y;
+        double len = Math.hypot(dx, dy);
+        if (len < 0.5) {
+            return null;
+        }
+        return new double[]{dx / len, dy / len};
+    }
 }
