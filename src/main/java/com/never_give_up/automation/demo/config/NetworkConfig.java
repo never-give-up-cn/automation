@@ -25,9 +25,9 @@ public class NetworkConfig {
     public static final int PRICE_MACHINE = 20;
     public static final int PRICE_UPGRADE_SERVER = 400;
 
-    // 地图参数
-    public static final int TILE_SIZE = 40;
-    public static final int MAP_COLS = 55;
+    // 地图参数：传送带产线，格子大一些，工厂之间留出传送带空间
+    public static final int TILE_SIZE = 96;
+    public static final int MAP_COLS = 42;
     public static final int MAP_ROWS = 20;
 
     // 缩放参数

@@ -38,6 +38,7 @@ public class MainFrame extends JFrame implements GameEngine.GameCallback {
     private JTextArea txtArpDisplay;
     private JTextArea txtNatDisplay;
     private JTextArea txtDnsDisplay;
+    private JScrollPane mapScrollPane;
 
     private String selectedBuilding = "NONE";
     private boolean isDragging = false;
@@ -58,6 +59,8 @@ public class MainFrame extends JFrame implements GameEngine.GameCallback {
         setupTimers();
 
         setVisible(true);
+        // 打开时把视图停在产线起点（源 PC）
+        SwingUtilities.invokeLater(this::scrollToStart);
     }
 
     private void initializeComponents() {
@@ -223,7 +226,7 @@ public class MainFrame extends JFrame implements GameEngine.GameCallback {
     }
 
     private JPanel createCenterPanel() {
-        JScrollPane mapScrollPane = new JScrollPane(canvas);
+        mapScrollPane = new JScrollPane(canvas);
         mapScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
         mapScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
         mapScrollPane.getHorizontalScrollBar().setUnitIncrement(40);
@@ -231,7 +234,7 @@ public class MainFrame extends JFrame implements GameEngine.GameCallback {
 
         JPanel mapPanelWithHint = new JPanel(new BorderLayout());
         mapPanelWithHint.add(mapScrollPane, BorderLayout.CENTER);
-        JLabel hintLabel = new JLabel("  💡 提示：按住 Ctrl 键 + 滚动鼠标滚轮可缩放地图", JLabel.LEFT);
+        JLabel hintLabel = new JLabel("  💡 提示：按住 Ctrl 键 + 滚动鼠标滚轮可缩放产线，拖拽可平移", JLabel.LEFT);
         hintLabel.setFont(new Font("微软雅黑", Font.PLAIN, 11));
         hintLabel.setForeground(Color.GRAY);
         mapPanelWithHint.add(hintLabel, BorderLayout.SOUTH);
@@ -239,6 +242,33 @@ public class MainFrame extends JFrame implements GameEngine.GameCallback {
         setupCanvasMouseListeners(mapScrollPane);
 
         return mapPanelWithHint;
+    }
+
+    /** 把视图拉回产线起点 */
+    private void scrollToStart() {
+        if (mapScrollPane != null) {
+            mapScrollPane.getHorizontalScrollBar().setValue(0);
+            mapScrollPane.getVerticalScrollBar().setValue(0);
+        }
+        viewOffsetX = 0;
+        viewOffsetY = 0;
+        canvas.setViewOffset(0, 0);
+    }
+
+    /** 缩放到刚好能看全整条产线 */
+    private void fitLine() {
+        if (mapScrollPane == null) {
+            return;
+        }
+        java.awt.Dimension viewport = mapScrollPane.getViewport().getExtentSize();
+        int lineWidth = NetworkConfig.MAP_COLS * NetworkConfig.TILE_SIZE;
+        int lineHeight = NetworkConfig.MAP_ROWS * NetworkConfig.TILE_SIZE;
+        double sx = viewport.width / (double) lineWidth;
+        double sy = viewport.height / (double) lineHeight;
+        double target = Math.min(sx, sy);
+        canvasScale = Math.max(NetworkConfig.MIN_SCALE, Math.min(NetworkConfig.MAX_SCALE, target));
+        canvas.setScale(canvasScale);
+        scrollToStart();
     }
 
     private void setupCanvasMouseListeners(JScrollPane scrollPane) {
@@ -345,7 +375,7 @@ public class MainFrame extends JFrame implements GameEngine.GameCallback {
             String existing = mapManager.getBuildingLayout()[row][col];
             if (!existing.equals("NONE") && !existing.equals("PC_FACTORY") &&
                     !existing.equals("RX_ST") && !existing.equals("DHCP_SERVER") &&
-                    !mapManager.isGatewayBoundary(col)) {
+                    !mapManager.isGatewayBoundary(row, col)) {
                 int refund = existing.startsWith("MINER") ? NetworkConfig.PRICE_MINER / 2 : NetworkConfig.PRICE_MACHINE / 2;
                 engine.addFunds(refund);
                 mapManager.removeBuilding(row, col);
@@ -386,6 +416,12 @@ public class MainFrame extends JFrame implements GameEngine.GameCallback {
 
         JButton resetButton = new JButton("🔄 重置会话");
         resetButton.addActionListener(e -> engine.resetSession());
+
+        JButton fitButton = new JButton("🔍 适应产线");
+        fitButton.addActionListener(e -> fitLine());
+
+        JButton startButton = new JButton("⏮ 回到起点");
+        startButton.addActionListener(e -> scrollToStart());
 
         JButton clearArpButton = new JButton("🗑️ 清空 ARP 缓存");
         clearArpButton.addActionListener(e -> {
@@ -441,6 +477,8 @@ public class MainFrame extends JFrame implements GameEngine.GameCallback {
         cbTls.setEnabled(false);
 
         btnPanel.add(resetButton);
+        btnPanel.add(fitButton);
+        btnPanel.add(startButton);
         btnPanel.add(clearArpButton);
         btnPanel.add(clearDnsButton);
         btnPanel.add(clearConsoleButton);
@@ -487,6 +525,7 @@ public class MainFrame extends JFrame implements GameEngine.GameCallback {
         // 更新UI
         updateDashboard();
         canvas.updateServerBuffer(engine.getServerBufferCount());
+        canvas.updateEffects();
         canvas.repaint();
     }
 
@@ -496,6 +535,8 @@ public class MainFrame extends JFrame implements GameEngine.GameCallback {
             // 数据包抵达目标 → 交给协议状态机处理（DHCP/DNS/TCP 的下一步）
             if (packet.isArrived() && !packet.isArrivalNotified()) {
                 packet.setArrivalNotified(true);
+                // 让对应的组装机亮灯、机械臂动作
+                canvas.markWorking(packet.getCurrentTag());
                 engine.handlePacketArrival(packet);
             }
         }
@@ -598,6 +639,16 @@ public class MainFrame extends JFrame implements GameEngine.GameCallback {
     @Override
     public Point findBuildingCoords(String tag) {
         return mapManager.findBuildingCoords(tag);
+    }
+
+    @Override
+    public List<Point> getBeltPath(String fromTag, String toTag) {
+        return mapManager.getProductionLine().route(fromTag, toTag);
+    }
+
+    @Override
+    public String findTagAt(Point point) {
+        return mapManager.findTagAt(point);
     }
 
     private void logToConsole(String text) {

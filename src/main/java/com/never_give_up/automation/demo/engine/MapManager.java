@@ -2,201 +2,138 @@ package com.never_give_up.automation.demo.engine;
 
 import com.never_give_up.automation.demo.config.NetworkConfig;
 import com.never_give_up.automation.demo.ui.BuildingZone;
+import com.never_give_up.automation.demo.winModel.DataPacket;
 import lombok.Getter;
 
 import java.awt.Point;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 @Getter
 public class MapManager {
+    /** 主干传送带覆盖的阶段区间 */
+    private static final int MAIN_LAST_STAGE = 45;
+    /** 扩展工厂支线覆盖的阶段区间 */
+    private static final int EXT_LAST_STAGE = 75;
+
     private final int[][] mapLayout = new int[NetworkConfig.MAP_ROWS][NetworkConfig.MAP_COLS];
     private final String[][] buildingLayout = new String[NetworkConfig.MAP_ROWS][NetworkConfig.MAP_COLS];
     private final Map<String, BuildingZone> buildingZoneMap = new HashMap<>();
+    /** 工位标签 → 坐标 */
+    private final Map<String, Point> positions = new LinkedHashMap<>();
+    /** 传送带产线模型 */
+    private ProductionLine productionLine;
     private Point pcFactory;
     private Point serverPos;
     private Point dhcpServerPos;
 
-    // 在 MapManager 中添加调试方法
-    public void printDhcpCoords() {
-        System.out.println("DHCP_DISC: " + findBuildingCoords("DHCP_DISC"));
-        System.out.println("DHCP_SERVER: " + findBuildingCoords("DHCP_SERVER"));
-        System.out.println("DHCP_OFFER: " + findBuildingCoords("DHCP_OFFER"));
-        System.out.println("DHCP_REQ: " + findBuildingCoords("DHCP_REQ"));
-        System.out.println("DHCP_ACK: " + findBuildingCoords("DHCP_ACK"));
-        System.out.println("PC_FACTORY: " + findBuildingCoords("PC_FACTORY"));
-    }
-
     public MapManager() {
         initMap();
         initZoneMapping();
+        collectPositions();
+        this.productionLine = new ProductionLine(positions);
+    }
+
+    /** 扫描布局表，收集所有工位的坐标 */
+    private void collectPositions() {
+        for (int r = 0; r < NetworkConfig.MAP_ROWS; r++) {
+            for (int c = 0; c < NetworkConfig.MAP_COLS; c++) {
+                String tag = buildingLayout[r][c];
+                if (!"NONE".equals(tag)) {
+                    positions.put(tag, new Point(c * NetworkConfig.TILE_SIZE + NetworkConfig.TILE_SIZE / 2,
+                            r * NetworkConfig.TILE_SIZE + NetworkConfig.TILE_SIZE / 2));
+                }
+            }
+        }
     }
 
     private void initMap() {
-        // 初始化矿石资源点
-        mapLayout[2][1] = 1;
-        mapLayout[3][1] = 1;
-        mapLayout[12][1] = 2;
-        mapLayout[13][1] = 2;
-
-        // 初始化地图布局和边界
+        // 初始化地图布局
         for (int r = 0; r < NetworkConfig.MAP_ROWS; r++) {
             for (int c = 0; c < NetworkConfig.MAP_COLS; c++) {
                 buildingLayout[r][c] = "NONE";
-                if (c == 20 || c == 33) mapLayout[r][c] = 9;
             }
         }
 
-        // 源PC和服务器
-        buildingLayout[NetworkConfig.MAP_ROWS / 2][3] = "PC_FACTORY";
-        pcFactory = new Point(3 * NetworkConfig.TILE_SIZE + NetworkConfig.TILE_SIZE / 2,
-                (NetworkConfig.MAP_ROWS / 2) * NetworkConfig.TILE_SIZE + NetworkConfig.TILE_SIZE / 2);
-        buildingLayout[NetworkConfig.MAP_ROWS / 2][NetworkConfig.MAP_COLS - 3] = "RX_ST";
+        // ===================== 主干传送带 =====================
+        // 协议节点按阶段顺序排成三行蛇形传送带，每行 15 个工位，
+        // 相邻工位之间留出两个格子的距离，让传送带和机械臂有地方展开。
+        int[] spineRows = {3, 7, 11};
+        for (int i = 0; i < MAIN_LAST_STAGE; i++) {
+            int rowIdx = i / 15;
+            int slot = i % 15;
+            int row = spineRows[rowIdx];
+            // 第二行反向（蛇形），使换行处正好落在同一列上，传送带垂直折返
+            int col = (rowIdx % 2 == 1) ? 30 - slot * 2 : 2 + slot * 2;
+            buildingLayout[row][col] = DataPacket.getTagForStage(i + 1);
+        }
+
+        // 源 PC：产线起点
+        buildingLayout[spineRows[0]][0] = "PC_FACTORY";
+        pcFactory = findBuildingCoords("PC_FACTORY");
+
+        // 接收服务器：产线终点
+        buildingLayout[spineRows[2]][32] = "RX_ST";
         serverPos = findBuildingCoords("RX_ST");
 
-        // DHCP服务器位置
-        int dhcpRow = NetworkConfig.MAP_ROWS / 2 - 4;
-        buildingLayout[dhcpRow][5] = "DHCP_SERVER";
+        // ===================== 扩展工厂支线 =====================
+        // 46 阶段之后的工厂挂在接收端应用层旁边，独立成两条支线
+        for (int i = MAIN_LAST_STAGE; i < EXT_LAST_STAGE; i++) {
+            int k = i - MAIN_LAST_STAGE;
+            int row;
+            int col;
+            if (k < 16) {
+                row = 15;
+                col = 30 - k * 2;
+            } else {
+                row = 17;
+                col = (k - 16) * 2;
+            }
+            buildingLayout[row][col] = DataPacket.getTagForStage(i + 1);
+        }
+
+        // ===================== DHCP 支线 =====================
+        // PC → Request → Discover → Server → Offer → ACK
+        buildingLayout[5][2] = "DHCP_REQ";
+        buildingLayout[5][4] = "DHCP_DISC";
+        buildingLayout[5][6] = "DHCP_SERVER";
+        buildingLayout[5][8] = "DHCP_OFFER";
+        buildingLayout[5][10] = "DHCP_ACK";
         dhcpServerPos = findBuildingCoords("DHCP_SERVER");
 
-        // 采矿机
-        buildingLayout[2][1] = "MINER_H";
-        buildingLayout[3][1] = "MINER_H";
-        buildingLayout[12][1] = "MINER_S";
-        buildingLayout[13][1] = "MINER_S";
+        // ===================== 独立设备区 =====================
+        // 不在主干传送带上的网络设备，单独摆在厂区一角
+        buildingLayout[0][32] = "SWITCH";
+        buildingLayout[0][34] = "HUB";
+        buildingLayout[0][36] = "BRIDGE";
+        buildingLayout[0][38] = "SUBNET_A";
+        buildingLayout[0][40] = "SUBNET_B";
+        buildingLayout[1][32] = "LINK_UP";
+        buildingLayout[1][34] = "LINK_DOWN";
+        buildingLayout[1][36] = "IDS";
+        buildingLayout[1][38] = "CC_SLOW";
+        buildingLayout[1][40] = "CC_AVOID";
+        buildingLayout[2][40] = "CC_FAST";
 
-        int startRow = NetworkConfig.MAP_ROWS / 2 - 3;
+        // ===================== 矿区 =====================
+        // 可放置矿机的资源点
+        mapLayout[18][32] = 1;
+        mapLayout[19][32] = 1;
+        mapLayout[18][34] = 2;
+        mapLayout[19][34] = 2;
+        buildingLayout[18][32] = "MINER_H";
+        buildingLayout[19][32] = "MINER_H";
+        buildingLayout[18][34] = "MINER_S";
+        buildingLayout[19][34] = "MINER_S";
 
-        // 应用层及传输层封装路径
-        buildingLayout[startRow][4] = "DNS_CLIENT";
-        buildingLayout[startRow][5] = "DNS_LOCAL";
-        buildingLayout[startRow][6] = "DNS_ROOT";
-        buildingLayout[startRow][7] = "DNS_AUTH";
-        buildingLayout[startRow][8] = "TX_APP";
-        buildingLayout[startRow][9] = "T_SP";
-        buildingLayout[startRow][10] = "T_DP";
-        buildingLayout[startRow][11] = "T_SEQ";
-        buildingLayout[startRow][12] = "T_ACK";
-        buildingLayout[startRow][13] = "T_CTL";
-        buildingLayout[startRow][14] = "T_WIN";
-        buildingLayout[startRow][15] = "T_CHK";
-        buildingLayout[startRow][16] = "T_CORE";
-
-        // 网络层封装路径
-        buildingLayout[startRow][17] = "TX_IPH";
-        buildingLayout[startRow][18] = "TX_IP_FRAG";
-
-        // 链路层封装路径
-        buildingLayout[startRow][19] = "TX_ARP";
-        buildingLayout[startRow][20] = "ETH_DST";
-        buildingLayout[startRow][21] = "ETH_SRC";
-        buildingLayout[startRow][22] = "ETH_TYPE";
-        buildingLayout[startRow][23] = "TX_LLC";
-        buildingLayout[startRow][24] = "TX_FCS";
-
-        // DHCP路径
-        buildingLayout[dhcpRow][4] = "DHCP_DISC";
-        buildingLayout[dhcpRow][6] = "DHCP_OFFER";
-        buildingLayout[dhcpRow][7] = "DHCP_REQ";
-        buildingLayout[dhcpRow][8] = "DHCP_ACK";
-
-        // 边界网关
-        int gatewayRow = NetworkConfig.MAP_ROWS / 2;
-        buildingLayout[gatewayRow][20] = "R_LAN";
-        buildingLayout[gatewayRow][22] = "R_TAB";
-        buildingLayout[gatewayRow][24] = "R_NAT";
-        buildingLayout[gatewayRow][26] = "R_WAN";
-
-        // 公网路由器
-        buildingLayout[gatewayRow][28] = "ROUTER1";
-        buildingLayout[gatewayRow][30] = "ROUTER2";
-        buildingLayout[gatewayRow][32] = "ROUTER3";
-
-        // 接收端解封装路径
-        int receiveRow = NetworkConfig.MAP_ROWS / 2 - 2;
-        buildingLayout[receiveRow][36] = "RX_LLC";
-        buildingLayout[receiveRow][38] = "RX_IP";
-        buildingLayout[receiveRow][40] = "RX_TCP";
-        buildingLayout[receiveRow][42] = "RX_APP";
-
-        // 更多接收端工厂
-        buildingLayout[receiveRow][34] = "RX_ETH";
-        buildingLayout[receiveRow][35] = "RX_ARP";
-        buildingLayout[receiveRow][37] = "RX_FCS";
-        buildingLayout[receiveRow][39] = "RX_FRAG";
-        buildingLayout[receiveRow][41] = "RX_PORT";
-
-        // 防火墙和安全设备
-        int securityRow = NetworkConfig.MAP_ROWS / 2 - 5;
-        buildingLayout[securityRow][20] = "FW_IN";
-        buildingLayout[securityRow][21] = "FW_OUT";
-        buildingLayout[securityRow][22] = "IDS";
-
-        // 队列和缓冲区
-        int queueRow = NetworkConfig.MAP_ROWS / 2 - 1;
-        buildingLayout[queueRow][22] = "Q_IN";
-        buildingLayout[queueRow][23] = "Q_OUT";
-        buildingLayout[queueRow][24] = "Q_DROP";
-
-        // 拥塞控制设备
-        int congestionRow = NetworkConfig.MAP_ROWS / 2 + 1;
-        buildingLayout[congestionRow][14] = "CC_SLOW";
-        buildingLayout[congestionRow][15] = "CC_AVOID";
-        buildingLayout[congestionRow][16] = "CC_FAST";
-
-        // 五元组和会话
-        buildingLayout[startRow][25] = "FIVETUPLE";
-        buildingLayout[startRow][26] = "SESSION";
-
-        // 带宽控制
-        buildingLayout[gatewayRow][25] = "BW_CTRL";
-
-        // 网络设备
-        buildingLayout[2][15] = "SWITCH";
-        buildingLayout[3][16] = "HUB";
-        buildingLayout[4][17] = "BRIDGE";
-
-        // 子网和链路
-        buildingLayout[1][18] = "SUBNET_A";
-        buildingLayout[2][19] = "SUBNET_B";
-        buildingLayout[5][20] = "LINK_UP";
-        buildingLayout[6][21] = "LINK_DOWN";
-
-        // Stage 46-61 建筑
-        int newRow = NetworkConfig.MAP_ROWS / 2 - 9;
-        buildingLayout[newRow][5] = "TCP_OPTION";
-        buildingLayout[newRow][6] = "IP_OPTION";
-        buildingLayout[newRow][7] = "ETH_PADDING";
-        buildingLayout[newRow][8] = "UDP_CHECKSUM";
-        buildingLayout[newRow][9] = "ICMP_ERROR";
-        buildingLayout[newRow][10] = "IP_FORWARD";
-        buildingLayout[newRow][11] = "TCP_WINDOW";
-        buildingLayout[newRow][12] = "TCP_TIMER";
-        buildingLayout[newRow][13] = "VLAN_TAG";
-        buildingLayout[newRow][14] = "TUNNEL_GRE";
-        buildingLayout[newRow][15] = "IGMP_MCAST";
-        buildingLayout[newRow][16] = "NDP_DISC";
-        buildingLayout[newRow][17] = "DNS_RECURSIVE";
-        buildingLayout[newRow][18] = "DHCP_FULL";
-        buildingLayout[newRow][19] = "TLS_HANDSHAKE";
-        buildingLayout[newRow][20] = "SERIALIZE";
-
-        // Stage 62-75 建筑
-        int newRow2 = NetworkConfig.MAP_ROWS / 2 - 10;
-        buildingLayout[newRow2][2] = "BIT_STREAM";
-        buildingLayout[newRow2][3] = "PHY_CHANNEL";
-        buildingLayout[newRow2][4] = "PPPOE";
-        buildingLayout[newRow2][5] = "MACSEC";
-        buildingLayout[newRow2][6] = "OSPF";
-        buildingLayout[newRow2][7] = "BGP";
-        buildingLayout[newRow2][8] = "QOS";
-        buildingLayout[newRow2][9] = "NAT64";
-        buildingLayout[newRow2][10] = "TCP_REASSEMBLY";
-        buildingLayout[newRow2][11] = "ATTACK";
-        buildingLayout[newRow2][12] = "NTP";
-        buildingLayout[newRow2][13] = "SNMP";
-        buildingLayout[newRow2][14] = "HTTP23";
-        buildingLayout[newRow2][15] = "IPSEC";
+        // ===================== 公网边界 =====================
+        // 路由器所在的区域不允许放置其它设备
+        for (int r : new int[]{7, 11}) {
+            for (int c = 0; c <= 8; c++) {
+                mapLayout[r][c] = 9;
+            }
+        }
     }
 
     private void initZoneMapping() {
@@ -269,12 +206,30 @@ public class MapManager {
     }
 
     public Point findBuildingCoords(String tag) {
+        Point cached = positions.get(tag);
+        if (cached != null) {
+            return cached;
+        }
+        // 玩家后放置的工厂不在初始坐标表里，退回扫描布局表
         for (int r = 0; r < NetworkConfig.MAP_ROWS; r++) {
             for (int c = 0; c < NetworkConfig.MAP_COLS; c++) {
                 if (buildingLayout[r][c].equals(tag)) {
                     return new Point(c * NetworkConfig.TILE_SIZE + NetworkConfig.TILE_SIZE / 2,
                             r * NetworkConfig.TILE_SIZE + NetworkConfig.TILE_SIZE / 2);
                 }
+            }
+        }
+        return null;
+    }
+
+    /** 根据坐标反查工位标签（用于判断报文是从哪台组装机出发的） */
+    public String findTagAt(Point p) {
+        if (p == null) {
+            return null;
+        }
+        for (Map.Entry<String, Point> entry : positions.entrySet()) {
+            if (entry.getValue().equals(p)) {
+                return entry.getKey();
             }
         }
         return null;
@@ -307,7 +262,8 @@ public class MapManager {
         }
     }
 
-    public boolean isGatewayBoundary(int col) {
-        return col == 20 || col == 33;
+    /** 公网边界：路由器所在的工位不允许被拆除 */
+    public boolean isGatewayBoundary(int row, int col) {
+        return (row == 7 || row == 11) && col >= 0 && col <= 8;
     }
 }

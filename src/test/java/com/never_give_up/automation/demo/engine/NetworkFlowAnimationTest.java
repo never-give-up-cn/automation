@@ -64,6 +64,16 @@ class NetworkFlowAnimationTest {
             return mapManager.findBuildingCoords(tag);
         }
 
+        @Override
+        public List<Point> getBeltPath(String fromTag, String toTag) {
+            return mapManager.getProductionLine().route(fromTag, toTag);
+        }
+
+        @Override
+        public String findTagAt(Point point) {
+            return mapManager.findTagAt(point);
+        }
+
         void recordArrival(DataPacket packet) {
             arrivedTypes.add(packet.getCartType());
             arrivedPackets.add(packet);
@@ -89,8 +99,21 @@ class NetworkFlowAnimationTest {
 
     /** 模拟 UI 的 30ms 定时器：推进所有报文，直到指定 tick 数用完 */
     private void run(int maxTicks) {
+        run(maxTicks, true);
+    }
+
+    /**
+     * @param drainServer 是否让服务器按帧消费缓冲区。
+     *                    UI 里是按真实时间节流解包的，无界面测试里改成按帧解包，
+     *                    否则接收缓冲区会一直满着，滑动窗口被关闭后流程就停了。
+     */
+    private void run(int maxTicks, boolean drainServer) {
         for (int i = 0; i < maxTicks; i++) {
             engine.tick();
+
+            if (drainServer && i % 10 == 0 && engine.getServerBufferCount() > 0) {
+                engine.consumeServerBuffer();
+            }
 
             if (!callback.pending.isEmpty()) {
                 active.addAll(callback.pending);
@@ -178,7 +201,7 @@ class NetworkFlowAnimationTest {
         assertTrue(callback.distinctArrived.contains("DATA"), "数据报文没有抵达接收端");
 
         assertEquals(TcpState.ESTABLISHED, engine.getCurrentTcpState(), "TCP 应该已经建立连接");
-        assertTrue(engine.getServerBufferCount() > 0, "接收端缓冲区应该已经收到数据");
+        assertTrue(engine.getServerReceivedCount() > 0, "接收端应该已经处理过数据报文");
         assertTrue(engine.getUnackedCount() >= 0);
         assertTrue(callback.sawLog("三次握手完成"), "缺少三次握手完成日志");
     }
@@ -209,7 +232,8 @@ class NetworkFlowAnimationTest {
     @Test
     @DisplayName("服务器消费缓冲区后计入已交付数量")
     void serverConsumesBufferedPackets() {
-        run(6000);
+        // 不消费缓冲区：让报文先在接收端排队，才能稳定地检查消费逻辑
+        run(3000, false);
         assertTrue(engine.getServerBufferCount() > 0, "接收端缓冲区应该已经收到数据");
 
         int receivedBefore = engine.getServerReceivedCount();
@@ -217,5 +241,57 @@ class NetworkFlowAnimationTest {
         engine.consumeServerBuffer();
         assertEquals(receivedBefore + 1, engine.getServerReceivedCount());
         assertEquals(bufferBefore - 1, engine.getServerBufferCount(), "消费一个包后缓冲区应减少");
+    }
+
+    @Test
+    @DisplayName("报文沿传送带走线行进，不会脱离传送带直线穿场")
+    void packetsFollowTheConveyorBelt() {
+        Point pc = callback.getPcFactory();
+        // DHCP 的发现报文会依次经过 DHCP_DISC → DHCP_SERVER，取整段路径
+        List<Point> belt = callback.mapManager.getProductionLine().route("PC_FACTORY", "DHCP_SERVER");
+        assertTrue(belt != null && !belt.isEmpty(), "PC 到 DHCP_SERVER 应该有传送带路径");
+
+        DataPacket discover = engine.createDataPacket(pc.x, pc.y, "DHCP_DISCOVER", 0);
+        discover.setStage(1);
+        callback.addPendingPacket(discover);
+        active.add(discover);
+
+        double maxDeviation = 0;
+        int steps = 0;
+        boolean passedDisc = false;
+        for (int i = 0; i < 600 && !discover.isArrived(); i++) {
+            discover.update();
+            steps++;
+            passedDisc |= "DHCP_DISC".equals(discover.getCurrentTag());
+            maxDeviation = Math.max(maxDeviation,
+                    distanceToPath(discover.getX(), discover.getY(), pc, belt));
+        }
+
+        assertTrue(steps > 5, "报文应该分多帧沿传送带行进");
+        assertTrue(passedDisc, "报文应该先经过 DHCP_DISCOVER 再去 DHCP 服务器");
+        assertTrue(discover.isArrived(), "报文应该能沿传送带抵达 DHCP_SERVER");
+        assertTrue(maxDeviation <= 40,
+                "报文偏离传送带 " + String.format("%.1f", maxDeviation) + "px，不应该直线穿场");
+    }
+
+    /** 计算点到折线路径的最短距离（用于校验报文是否走在传送带上） */
+    private double distanceToPath(double px, double py, Point start, List<Point> path) {
+        double best = Double.MAX_VALUE;
+        Point prev = start;
+        for (Point p : path) {
+            best = Math.min(best, distanceToSegment(px, py, prev.x, prev.y, p.x, p.y));
+            prev = p;
+        }
+        return best;
+    }
+
+    private double distanceToSegment(double px, double py, double x1, double y1, double x2, double y2) {
+        double dx = x2 - x1, dy = y2 - y1;
+        double len2 = dx * dx + dy * dy;
+        if (len2 == 0) {
+            return Math.hypot(px - x1, py - y1);
+        }
+        double t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / len2));
+        return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
     }
 }

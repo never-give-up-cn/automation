@@ -93,7 +93,7 @@ public class DataPacket {
     /** DHCP 每个阶段之间的停留帧数 */
     private static final int DHCP_STAGE_PAUSE = 5;
     /** DNS 递归查询的移动速度（比公网快，不排队） */
-    private static final double DNS_SPEED = 14.0;
+    private static final double DNS_SPEED = 55.0;
 
     // ===================== 所有工厂引用 =====================
     private transient SocketFactory socketFactory;
@@ -234,7 +234,9 @@ public class DataPacket {
     private boolean moreFragments;
     private byte[] fragmentData, serverCertificate, encryptedData;
     private double x, y;
-    private double speed = 20.0;
+    /** 沿传送带行进的速度（像素/帧，1 帧 ≈ 30ms） */
+    /** 传送带速度（像素/帧）：整条产线约 9000px，一趟约 2.5 秒 */
+    private double speed = 110.0;
     private int stage, timer = 0;
     private boolean arrived = false, dropped = false, returnTrip = false, retransmission = false;
     private String cartType, currentLayerStatus = "";
@@ -304,6 +306,20 @@ public class DataPacket {
      * 早期版本这里硬编码返回 pcFactory，导致所有数据包都"原地瞬移到达"，动画无法播放。
      */
     private transient java.util.function.Function<String, Point> coordsLookup;
+
+    /**
+     * 传送带寻路函数：(出发工位, 目标工位) → 沿途折点。
+     * 由 GameEngine 注入，委托给 MapManager 持有的 ProductionLine。
+     */
+    private transient java.util.function.BiFunction<String, String, java.util.List<Point>> beltRouter;
+
+    /** 当前所在的工位标签（报文从哪台组装机出发） */
+    private String currentTag = null;
+
+    /** 正在沿传送带行进的路径点 */
+    private transient java.util.List<Point> beltPath = null;
+    private transient int beltIdx = 0;
+    private transient String beltTargetTag = null;
 
     /** 到达事件是否已经派发过，避免同一帧内重复触发协议状态机 */
     private boolean arrivalNotified = false;
@@ -608,15 +624,40 @@ public class DataPacket {
         return coordsLookup;
     }
 
+    /**
+     * 注入传送带寻路函数，报文就会沿传送带逐段行进，而不是直线瞬移。
+     */
+    public void setBeltRouter(java.util.function.BiFunction<String, String, java.util.List<Point>> beltRouter) {
+        this.beltRouter = beltRouter;
+    }
+
+    /** 设置报文当前所在的工位 */
+    public void setCurrentTag(String currentTag) {
+        this.currentTag = currentTag;
+        this.beltPath = null;
+        this.beltTargetTag = null;
+    }
+
+    public String getCurrentTag() {
+        return currentTag;
+    }
+
     // 在 DataPacket.java 中，替换 findTargetMachine 方法
 
-    private Point findTargetMachine(int s, String type) {
+    /**
+     * 求当前阶段的目标工位标签。
+     * <p>
+     * 传送带寻路需要知道「下一个组装机是谁」，因此这里先解析标签，
+     * 再由 {@link #findTargetMachine(int, String)} 换算成坐标。
+     * </p>
+     */
+    private String findTargetTag(int s, String type) {
         if (pcFactory == null) return null;
 
         // ACK_PC 处理
         if (type.equals("ACK_PC")) {
-            if (s == 2) return findBuildingCoords("T_CORE");
-            else if (s >= 3) return findBuildingCoords("RX_ST");
+            if (s == 2) return "T_CORE";
+            else if (s >= 3) return "RX_ST";
             return null;
         }
 
@@ -624,61 +665,61 @@ public class DataPacket {
         if (type.equals("DNS_QUERY")) {
             switch (s) {
                 case 1:
-                    return findBuildingCoords("DNS_CLIENT");
+                    return "DNS_CLIENT";
                 case 2:
-                    return findBuildingCoords("DNS_LOCAL");
+                    return "DNS_LOCAL";
                 case 3:
-                    return findBuildingCoords("DNS_ROOT");
+                    return "DNS_ROOT";
                 case 4:
-                    return findBuildingCoords("DNS_AUTH");
+                    return "DNS_AUTH";
                 default:
                     return null;
             }
         }
         if (type.equals("DNS_RESPONSE")) {
-            return findBuildingCoords("PC_FACTORY");
+            return "PC_FACTORY";
         }
         if (type.equals("DNS_RECURSION_ROOT") || type.equals("DNS_RECURSION_AUTH")) {
-            return findBuildingCoords("DNS_ROOT");
+            return "DNS_ROOT";
         }
         if (type.equals("DNS_ROOT_TO_LOCAL") || type.equals("DNS_AUTH_TO_LOCAL")) {
-            return findBuildingCoords("DNS_LOCAL");
+            return "DNS_LOCAL";
         }
         if (type.equals("DNS_LOCAL_TO_AUTH")) {
-            return findBuildingCoords("DNS_AUTH");
+            return "DNS_AUTH";
         }
         if (type.equals("DNS_RECURSION_ROOT_RESP") || type.equals("DNS_RECURSION_AUTH_RESP")) {
-            return findBuildingCoords("DNS_LOCAL");
+            return "DNS_LOCAL";
         }
 
         // DHCP 处理 - 完全重写
         if (type.startsWith("DHCP")) {
             if (type.equals("DHCP_DISCOVER")) {
                 if (s == 1) {
-                    return findBuildingCoords("DHCP_DISC");
+                    return "DHCP_DISC";
                 } else if (s == 2) {
-                    return findBuildingCoords("DHCP_SERVER");
+                    return "DHCP_SERVER";
                 }
             }
             else if (type.equals("DHCP_OFFER")) {
                 if (s == 1) {
-                    return findBuildingCoords("DHCP_OFFER");
+                    return "DHCP_OFFER";
                 } else if (s == 2) {
-                    return findBuildingCoords("PC_FACTORY");
+                    return "PC_FACTORY";
                 }
             }
             else if (type.equals("DHCP_REQUEST")) {
                 if (s == 1) {
-                    return findBuildingCoords("DHCP_REQ");
+                    return "DHCP_REQ";
                 } else if (s == 2) {
-                    return findBuildingCoords("DHCP_SERVER");
+                    return "DHCP_SERVER";
                 }
             }
             else if (type.equals("DHCP_ACK")) {
                 if (s == 1) {
-                    return findBuildingCoords("DHCP_ACK");
+                    return "DHCP_ACK";
                 } else if (s == 2) {
-                    return findBuildingCoords("PC_FACTORY");
+                    return "PC_FACTORY";
                 }
             }
             return null;
@@ -687,27 +728,39 @@ public class DataPacket {
         // TLS 和 HTTP 处理
         if (type.equals("TLS_CLIENT_HELLO") || type.equals("HTTP_GET") ||
                 type.equals("TLS_CLIENT_KEY_EXCHANGE") || type.equals("TLS_CLIENT_FINISHED")) {
-            if (s == 5) return findBuildingCoords("TX_APP");
+            if (s == 5) return "TX_APP";
             return null;
         }
         if (type.equals("TLS_SERVER_HELLO_CERT") || type.equals("HTTP_200_OK") ||
                 type.equals("TLS_SERVER_FINISHED")) {
-            if (s == -1) return findBuildingCoords("PC_FACTORY");
+            if (s == -1) return "PC_FACTORY";
             return null;
         }
 
         // 普通数据包 - 使用 getTagForStage 获取目标建筑
         String tag = getTagForStage(s);
         if (tag != null && !tag.equals("NONE")) {
-            Point coords = findBuildingCoords(tag);
-            if (coords != null) return coords;
+            if (findBuildingCoords(tag) != null) return tag;
         }
 
         // 默认返回 PC_FACTORY
-        return findBuildingCoords("PC_FACTORY");
+        return "PC_FACTORY";
     }
 
-    private String getTagForStage(int s) {
+    private Point findTargetMachine(int s, String type) {
+        String tag = findTargetTag(s, type);
+        if (tag == null) {
+            return null;
+        }
+        Point coords = findBuildingCoords(tag);
+        return coords != null ? coords : pcFactory;
+    }
+
+    /**
+     * 阶段号 → 工位标签。整条产线（ProductionLine）也依赖这张表来排布传送带，
+     * 所以必须是公开的静态方法。
+     */
+    public static String getTagForStage(int s) {
         switch (s) {
             case 1:
                 return "DNS_CLIENT";
@@ -1028,6 +1081,73 @@ public class DataPacket {
 
     // ===================== 核心移动方法 =====================
 
+    /**
+     * 沿传送带朝目标工位行进。
+     * <p>
+     * 优先使用传送带折线（由 ProductionLine 计算），只有在拿不到路径时
+     * 才退化成直线移动，从而保证报文始终「骑在传送带上」经过每一个组装机。
+     * </p>
+     *
+     * @return true 表示已经抵达目标工位
+     */
+    private boolean advanceToward(String targetTag, double step) {
+        if (targetTag == null) {
+            return false;
+        }
+
+        if (beltRouter != null && currentTag != null) {
+            if (beltPath == null || !targetTag.equals(beltTargetTag)) {
+                java.util.List<Point> path = beltRouter.apply(currentTag, targetTag);
+                if (path != null && !path.isEmpty()) {
+                    beltPath = path;
+                    beltIdx = 0;
+                    beltTargetTag = targetTag;
+                }
+            }
+        }
+
+        if (beltPath == null) {
+            // 没有传送带信息（例如玩家自己放置的工厂），直线兜底
+            Point target = findBuildingCoords(targetTag);
+            if (target == null) {
+                return false;
+            }
+            double dx = target.x - x;
+            double dy = target.y - y;
+            double dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist <= step) {
+                x = target.x;
+                y = target.y;
+                currentTag = targetTag;
+                return true;
+            }
+            x += (dx / dist) * step;
+            y += (dy / dist) * step;
+            return false;
+        }
+
+        Point waypoint = beltPath.get(beltIdx);
+        double dx = waypoint.x - x;
+        double dy = waypoint.y - y;
+        double dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist <= step) {
+            x = waypoint.x;
+            y = waypoint.y;
+            beltIdx++;
+            if (beltIdx >= beltPath.size()) {
+                // 抵达目标工位
+                currentTag = targetTag;
+                beltPath = null;
+                beltTargetTag = null;
+                return true;
+            }
+        } else {
+            x += (dx / dist) * step;
+            y += (dy / dist) * step;
+        }
+        return false;
+    }
+
     // 在 DataPacket.java 中，替换整个 update() 方法
 
     public void update() {
@@ -1045,20 +1165,11 @@ public class DataPacket {
         // 四步流程：DISCOVER → OFFER → REQUEST → ACK
         // DISCOVER/REQUEST 走 PC → DHCP_SERVER；OFFER/ACK 走 DHCP_SERVER → PC
         if (cartType != null && cartType.startsWith("DHCP")) {
-            Point target = findTargetMachine(stage, cartType);
-            if (target == null) {
-                target = pcFactory;
+            String targetTag = findTargetTag(stage, cartType);
+            if (targetTag == null) {
+                targetTag = "PC_FACTORY";
             }
-            if (target == null) {
-                arrived = true;
-                return;
-            }
-            double dx = target.x - x;
-            double dy = target.y - y;
-            double dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist <= speed) {
-                x = target.x;
-                y = target.y;
+            if (advanceToward(targetTag, speed)) {
                 processStageCraft();
                 if (stage < 2) {
                     stage++;
@@ -1066,9 +1177,6 @@ public class DataPacket {
                 } else {
                     arrived = true;
                 }
-            } else {
-                x += (dx / dist) * speed;
-                y += (dy / dist) * speed;
             }
             return;
         }
@@ -1076,14 +1184,9 @@ public class DataPacket {
         // ===================== DNS 快速路径 =====================
         // 递归查询不进入公网队列，走 DNS_CLIENT → LOCAL → ROOT → AUTH
         if (cartType != null && cartType.startsWith("DNS_") && !returnTrip) {
-            Point target = findTargetMachine(stage, cartType);
-            if (target != null) {
-                double dx = target.x - x;
-                double dy = target.y - y;
-                double dist = Math.sqrt(dx * dx + dy * dy);
-                if (dist <= DNS_SPEED) {
-                    x = target.x;
-                    y = target.y;
+            String targetTag = findTargetTag(stage, cartType);
+            if (targetTag != null) {
+                if (advanceToward(targetTag, DNS_SPEED)) {
                     processStageCraft();
                     if (cartType.equals("DNS_QUERY")) {
                         if (stage < 4) {
@@ -1100,54 +1203,33 @@ public class DataPacket {
                             arrived = true;
                         }
                     }
-                } else {
-                    x += (dx / dist) * DNS_SPEED;
-                    y += (dy / dist) * DNS_SPEED;
                 }
                 return;
             }
         }
 
-        // ACK_PC 特殊处理：三次握手的第三个报文直达接收端
+        // ACK_PC 特殊处理：三次握手的第三个报文沿产线直达接收端
         if (cartType.equals("ACK_PC") && !returnTrip && stage == 2) {
-            Point target = findBuildingCoords("RX_ST");
-            if (target != null) {
-                double dx = target.x - x;
-                double dy = target.y - y;
-                double dist = Math.sqrt(dx * dx + dy * dy);
-                if (dist <= speed) {
-                    x = target.x;
-                    y = target.y;
-                    arrived = true;
-                } else {
-                    x += (dx / dist) * speed;
-                    y += (dy / dist) * speed;
-                }
-                return;
+            if (advanceToward("RX_ST", speed)) {
+                arrived = true;
             }
+            return;
         }
 
         // ===================== 正常数据包移动逻辑 =====================
-        Point target;
+        String targetTag;
         if (stage == -1) {
-            target = pcFactory;
+            targetTag = "PC_FACTORY";
+        } else if (returnTrip) {
+            targetTag = "PC_FACTORY";
         } else {
-            target = returnTrip ? pcFactory : findTargetMachine(stage, cartType);
+            targetTag = findTargetTag(stage, cartType);
+        }
+        if (targetTag == null) {
+            targetTag = "PC_FACTORY";
         }
 
-        if (target == null) {
-            target = pcFactory;
-        }
-        if (target == null) return;
-
-        double dx = target.x - x;
-        double dy = target.y - y;
-        double dist = Math.sqrt(dx * dx + dy * dy);
-
-        if (dist <= speed) {
-            x = target.x;
-            y = target.y;
-
+        if (advanceToward(targetTag, speed)) {
             // IP 分片处理：DATA 包在 TX_IP_FRAG (stage 15) 处被拆成两个分片
             if (stage == 15 && !returnTrip && !isControlFrame(cartType) && cartType.equals("DATA")) {
                 final int MTU = 500;
@@ -1163,6 +1245,8 @@ public class DataPacket {
                         fragment.stage = 16;
                         fragment.ttl = this.ttl;
                         fragment.setCoordsLookup(coordsLookup);
+                        fragment.setBeltRouter(beltRouter);
+                        fragment.setCurrentTag(currentTag);
                         addPendingPacket(fragment);
                     }
                     ipIdentifierCounter++;
@@ -1195,8 +1279,9 @@ public class DataPacket {
                 } else {
                     maxStage = 2;
                 }
-            } else if (isControlFrame(cartType)) {
-                // 控制帧（SYN/ACK/FIN 等）只走到接收端应用层
+            } else if (isControlFrame(cartType) || cartType.equals("DATA") || cartType.equals("UDP_DATA")) {
+                // 控制帧（SYN/ACK/FIN 等）和数据报文只走到接收端应用层，
+                // 交付之后就该结束了，不能继续在扩展工厂里空转
                 maxStage = 45;
             }
 
@@ -1206,9 +1291,6 @@ public class DataPacket {
             } else {
                 arrived = true;
             }
-        } else {
-            x += (dx / dist) * speed;
-            y += (dy / dist) * speed;
         }
     }
 

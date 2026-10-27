@@ -88,6 +88,12 @@ public class GameEngine {
         void addPendingPacket(DataPacket packet);
         Point getPcFactory();           // 添加这个方法
         Point findBuildingCoords(String tag);  // 添加这个方法
+
+        /** 传送带寻路：返回 from → to 沿途的折点 */
+        List<Point> getBeltPath(String fromTag, String toTag);
+
+        /** 根据坐标反查工位标签 */
+        String findTagAt(Point point);
     }
 
     public GameEngine(FactoryManager factoryManager) {
@@ -148,6 +154,12 @@ public class GameEngine {
 
             // 注入建筑坐标查找器：DataPacket → GameCallback → MapManager
             packet.setCoordsLookup(callback::findBuildingCoords);
+
+            // 注入传送带寻路器：报文沿传送带逐段行进
+            packet.setBeltRouter(callback::getBeltPath);
+
+            // 记录报文是从哪台组装机出发的，作为传送带寻路的起点
+            packet.setCurrentTag(callback.findTagAt(new Point((int) x, (int) y)));
         }
 
         return packet;
