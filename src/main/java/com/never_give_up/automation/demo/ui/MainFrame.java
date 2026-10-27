@@ -5,7 +5,9 @@ import com.never_give_up.automation.demo.config.NetworkConfig;
 import com.never_give_up.automation.demo.engine.GameEngine;
 import com.never_give_up.automation.demo.engine.MapManager;
 import com.never_give_up.automation.demo.model.*;
+import com.never_give_up.automation.demo.winModel.ArpEntry;
 import com.never_give_up.automation.demo.winModel.DataPacket;
+import com.never_give_up.automation.demo.winModel.DnsEntry;
 import com.never_give_up.automation.demo.winModel.OreCart;
 import com.never_give_up.automation.demo.winModel.TcpState;
 
@@ -100,18 +102,23 @@ public class MainFrame extends JFrame implements GameEngine.GameCallback {
         txtDnsDisplay.setEditable(false);
         txtDnsDisplay.setBackground(new Color(20, 25, 35));
         txtDnsDisplay.setForeground(new Color(150, 255, 150));
-        mapManager.printDhcpCoords();
     }
 
     private void initArpCache() {
         factoryManager.getArpCache().addEntry("192.168.1.1", "00:1A:2B:3C:4D:5E");
         factoryManager.getArpCache().addEntry("192.168.1.100", "00:1A:2B:3C:4D:5F");
         factoryManager.getArpCache().addEntry("10.0.0.1", "00:1A:2B:3C:4D:60");
+
+        // 同步到引擎缓存，ARP 缓存面板才能显示内容
+        engine.getArpCache().put("192.168.1.1", new ArpEntry("192.168.1.1", "00:1A:2B:3C:4D:5E"));
+        engine.getArpCache().put("192.168.1.100", new ArpEntry("192.168.1.100", "00:1A:2B:3C:4D:5F"));
+        engine.getArpCache().put("10.0.0.1", new ArpEntry("10.0.0.1", "00:1A:2B:3C:4D:60"));
     }
 
     private void initDnsCache() {
-        factoryManager.getDnsCache().addEntry("www.demo.com", "10.0.0.1", 3600000);
         factoryManager.getDnsCache().addEntry("google.com", "8.8.8.8", 3600000);
+        engine.getDnsCache().put("google.com", new DnsEntry("google.com", "8.8.8.8", 3600000));
+        // 注意：www.demo.com 故意不预置，让演示可以完整播放 DNS 递归查询动画
     }
 
     private void layoutComponents() {
@@ -455,39 +462,21 @@ public class MainFrame extends JFrame implements GameEngine.GameCallback {
             updateNatDisplay();
             updateTcpConnTable();
             updateDashboard();
-
-            // 添加这行 - 启动 DHCP
-            if (!engine.isPcIpAssigned() && !engine.isDhcpInProgress()) {
-                engine.startDhcpIfNeeded(getPcFactory());
-            }
-
-            if (!pendingDataPackets.isEmpty()) {
-                System.out.println("Moving " + pendingDataPackets.size() + " packets from pending to active");
-                dataPackets.addAll(pendingDataPackets);
-                pendingDataPackets.clear();
-            }
         }).start();
     }
 
     private void gameTick() {
-        long now = System.currentTimeMillis();
-        int tickCount = 0;
-        if (tickCount++ % 30 == 0) {  // 每30帧打印一次
-            System.out.println("Game tick - DataPackets size: " + dataPackets.size() +
-                    ", Pending size: " + pendingDataPackets.size());
-        }
-        // 服务器处理逻辑
-        if (engine.getServerBufferCount() > 0 &&
-                now - engine.getLastServerConsumeTime() >= engine.getServerDecodeDelay()) {
-            engine.decrementServerBuffer();
-            engine.incrementServerReceived();
-            canvas.updateServerBuffer(engine.getServerBufferCount());
-            logToConsole(String.format("【📥 服务器处理】: 已处理 %d/%d 个数据包",
-                    engine.getServerReceivedCount(), NetworkConfig.TOTAL_DATA_TO_TRANSMIT));
-        }
+        // 驱动协议流程：DHCP → DNS → TCP 握手 → 数据发送
+        engine.tick();
 
         // 检查重传超时 - 不要传递参数
         engine.checkRetransmissionTimeout();
+
+        // 新产生的报文进入动画队列
+        if (!pendingDataPackets.isEmpty()) {
+            dataPackets.addAll(pendingDataPackets);
+            pendingDataPackets.clear();
+        }
 
         // 更新数据包位置
         updateDataPackets();
@@ -504,6 +493,11 @@ public class MainFrame extends JFrame implements GameEngine.GameCallback {
     private void updateDataPackets() {
         for (DataPacket packet : dataPackets) {
             packet.update();
+            // 数据包抵达目标 → 交给协议状态机处理（DHCP/DNS/TCP 的下一步）
+            if (packet.isArrived() && !packet.isArrivalNotified()) {
+                packet.setArrivalNotified(true);
+                engine.handlePacketArrival(packet);
+            }
         }
         dataPackets.removeIf(packet -> packet.isDropped() || packet.isArrived());
     }
@@ -593,8 +587,6 @@ public class MainFrame extends JFrame implements GameEngine.GameCallback {
 
     @Override
     public void addPendingPacket(DataPacket packet) {
-        System.out.println("Adding pending packet: " + packet.getCartType() +
-                " at (" + packet.getX() + "," + packet.getY() + ")");
         pendingDataPackets.add(packet);
     }
 

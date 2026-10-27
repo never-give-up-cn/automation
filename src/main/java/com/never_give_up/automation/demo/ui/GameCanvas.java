@@ -225,14 +225,9 @@ public class GameCanvas extends JPanel {
     // 修改这里：使用 DataPacket 替代 DataCart
     private void drawDataPackets(Graphics2D g2) {
         if (dataPackets.isEmpty()) {
-            // 每60帧打印一次
-            if (System.currentTimeMillis() % 6000 < 100) {
-                System.out.println("No data packets to draw");
-            }
             return;
         }
 
-        System.out.println("Drawing " + dataPackets.size() + " packets");
         for (DataPacket packet : dataPackets) {  // 改为 DataPacket
             int cx = (int) packet.getX();
             int cy = (int) packet.getY();

@@ -1,6 +1,5 @@
 package com.never_give_up.automation.demo.winModel;
 
-import com.never_give_up.automation.demo.DataCartFactoryGame;
 import com.never_give_up.automation.demo.adapter.FactoryManager;
 import com.never_give_up.automation.demo.core.ProtocolConst;
 import com.never_give_up.automation.demo.factory.application.Http23PacketFactory;
@@ -88,6 +87,13 @@ import java.util.function.Consumer;
 public class DataPacket {
     private static final AtomicInteger cartIdGenerator = new AtomicInteger(0);
     public final int cartId = cartIdGenerator.getAndIncrement();
+
+    /** 普通协议阶段之间的停留帧数（1 帧 ≈ 30ms） */
+    private static final int STAGE_PAUSE = 1;
+    /** DHCP 每个阶段之间的停留帧数 */
+    private static final int DHCP_STAGE_PAUSE = 5;
+    /** DNS 递归查询的移动速度（比公网快，不排队） */
+    private static final double DNS_SPEED = 14.0;
 
     // ===================== 所有工厂引用 =====================
     private transient SocketFactory socketFactory;
@@ -228,7 +234,7 @@ public class DataPacket {
     private boolean moreFragments;
     private byte[] fragmentData, serverCertificate, encryptedData;
     private double x, y;
-    private double speed = 12.0;
+    private double speed = 20.0;
     private int stage, timer = 0;
     private boolean arrived = false, dropped = false, returnTrip = false, retransmission = false;
     private String cartType, currentLayerStatus = "";
@@ -293,12 +299,23 @@ public class DataPacket {
     private transient int WAN_BOTTLE_NECK_MAX;
     private transient java.util.function.BiFunction<DataPacket, Boolean, Boolean> isForemostInWan;
 
+    /**
+     * 建筑标签 → 坐标 的查找函数（由 GameEngine 注入，委托给 MapManager）。
+     * 早期版本这里硬编码返回 pcFactory，导致所有数据包都"原地瞬移到达"，动画无法播放。
+     */
+    private transient java.util.function.Function<String, Point> coordsLookup;
+
+    /** 到达事件是否已经派发过，避免同一帧内重复触发协议状态机 */
+    private boolean arrivalNotified = false;
+
     public DataPacket(double sx, double sy, String type, int seq, FactoryManager factoryManager) {
         this.x = sx;
         this.y = sy;
         this.cartType = type;
         this.sequenceNumber = seq;
         this.factoryManager = factoryManager;
+        // 立即初始化工厂，避免直接 new 出来的报文（例如 IP 分片）缺少工厂引用
+        initFactories();
         if (type.startsWith("DHCP")) {
             if (type.equals("DHCP_DISCOVER")) {
                 this.stage = 1;  // 从1开始，先移动到 DHCP_DISC
@@ -511,6 +528,7 @@ public class DataPacket {
         return type.equals("SYN") || type.equals("SYN_ACK") || type.equals("ACK_PC") ||
                 type.equals("FIN_PC") || type.equals("FIN_ACK_SRV") || type.equals("FIN_SRV") ||
                 type.equals("DATA_ACK") || type.equals("LAST_ACK_PC") || type.equals("ZWP") ||
+                type.equals("IP_FRAGMENT") ||
                 type.startsWith("DHCP");
     }
 
@@ -566,16 +584,33 @@ public class DataPacket {
     }
 
     private Point findBuildingCoords(String tag) {
-        if (pcFactory == null) return new Point(0, 0);
-        return pcFactory;
+        if (coordsLookup != null) {
+            Point coords = coordsLookup.apply(tag);
+            if (coords != null) {
+                return coords;
+            }
+        }
+        // 兜底：PC 工厂的位置始终可用
+        if ("PC_FACTORY".equals(tag)) {
+            return pcFactory;
+        }
+        return null;
+    }
+
+    /**
+     * 注入建筑坐标查找器（GameEngine → GameCallback.findBuildingCoords → MapManager）
+     */
+    public void setCoordsLookup(java.util.function.Function<String, Point> coordsLookup) {
+        this.coordsLookup = coordsLookup;
+    }
+
+    public java.util.function.Function<String, Point> getCoordsLookup() {
+        return coordsLookup;
     }
 
     // 在 DataPacket.java 中，替换 findTargetMachine 方法
 
     private Point findTargetMachine(int s, String type) {
-        if (type.startsWith("DHCP")) {
-            System.out.println("findTargetMachine called for " + type + ", stage=" + s);
-        }
         if (pcFactory == null) return null;
 
         // ACK_PC 处理
@@ -618,50 +653,32 @@ public class DataPacket {
 
         // DHCP 处理 - 完全重写
         if (type.startsWith("DHCP")) {
-            System.out.println("Processing DHCP: " + type + ", stage=" + s);
-
             if (type.equals("DHCP_DISCOVER")) {
                 if (s == 1) {
-                    Point p = findBuildingCoords("DHCP_DISC");
-                    System.out.println("DHCP_DISCOVER stage 1 -> DHCP_DISC: " + p);
-                    if (p != null) return p;
+                    return findBuildingCoords("DHCP_DISC");
                 } else if (s == 2) {
-                    Point p = findBuildingCoords("DHCP_SERVER");
-                    System.out.println("DHCP_DISCOVER stage 2 -> DHCP_SERVER: " + p);
-                    if (p != null) return p;
+                    return findBuildingCoords("DHCP_SERVER");
                 }
             }
             else if (type.equals("DHCP_OFFER")) {
                 if (s == 1) {
-                    Point p = findBuildingCoords("DHCP_OFFER");
-                    System.out.println("DHCP_OFFER stage 1 -> DHCP_OFFER: " + p);
-                    if (p != null) return p;
+                    return findBuildingCoords("DHCP_OFFER");
                 } else if (s == 2) {
-                    Point p = findBuildingCoords("PC_FACTORY");
-                    System.out.println("DHCP_OFFER stage 2 -> PC_FACTORY: " + p);
-                    if (p != null) return p;
+                    return findBuildingCoords("PC_FACTORY");
                 }
             }
             else if (type.equals("DHCP_REQUEST")) {
                 if (s == 1) {
-                    Point p = findBuildingCoords("DHCP_REQ");
-                    System.out.println("DHCP_REQUEST stage 1 -> DHCP_REQ: " + p);
-                    if (p != null) return p;
+                    return findBuildingCoords("DHCP_REQ");
                 } else if (s == 2) {
-                    Point p = findBuildingCoords("DHCP_SERVER");
-                    System.out.println("DHCP_REQUEST stage 2 -> DHCP_SERVER: " + p);
-                    if (p != null) return p;
+                    return findBuildingCoords("DHCP_SERVER");
                 }
             }
             else if (type.equals("DHCP_ACK")) {
                 if (s == 1) {
-                    Point p = findBuildingCoords("DHCP_ACK");
-                    System.out.println("DHCP_ACK stage 1 -> DHCP_ACK: " + p);
-                    if (p != null) return p;
+                    return findBuildingCoords("DHCP_ACK");
                 } else if (s == 2) {
-                    Point p = findBuildingCoords("PC_FACTORY");
-                    System.out.println("DHCP_ACK stage 2 -> PC_FACTORY: " + p);
-                    if (p != null) return p;
+                    return findBuildingCoords("PC_FACTORY");
                 }
             }
             return null;
@@ -1014,129 +1031,84 @@ public class DataPacket {
     // 在 DataPacket.java 中，替换整个 update() 方法
 
     public void update() {
-        // 在 update() 方法开头添加
-        // 调试：打印目标位置
-        // 在 update() 方法的 DHCP 处理部分
-        if (cartType.startsWith("DHCP") && !arrived && !dropped) {
-            System.out.println("Updating " + cartType + " - pos: (" + x + "," + y +
-                    "), stage: " + stage + ", timer: " + timer);
+        if (arrived || dropped) {
+            return;
         }
 
-        if (cartType.startsWith("DHCP")) {
-            Point target = findTargetMachine(stage, cartType);
-            if (target != null) {
-                double dx = target.x - x;
-                double dy = target.y - y;
-                double dist = Math.sqrt(dx * dx + dy * dy);
-                if (dist <= speed) {
-                    x = target.x;
-                    y = target.y;
-                    processStageCraft();
+        // 统一的阶段停留计时：每个协议阶段短暂停顿，便于肉眼观察流转顺序
+        if (timer > 0) {
+            timer--;
+            return;
+        }
 
-                    // 阶段推进逻辑
-                    if (cartType.equals("DHCP_DISCOVER")) {
-                        if (stage == 1) {
-                            stage = 2;  // 下一站：DHCP_SERVER
-                            timer = 5;
-                        } else if (stage == 2) {
-                            arrived = true;
-                            System.out.println("DHCP_DISCOVER 到达服务器");
-                        }
-                    } else if (cartType.equals("DHCP_OFFER")) {
-                        if (stage == 1) {
-                            stage = 2;  // 下一站：PC_FACTORY
-                            timer = 5;
-                        } else if (stage == 2) {
-                            arrived = true;
-                            System.out.println("DHCP_OFFER 到达 PC");
-                        }
-                    } else if (cartType.equals("DHCP_REQUEST")) {
-                        if (stage == 1) {
-                            stage = 2;  // 下一站：DHCP_SERVER
-                            timer = 5;
-                        } else if (stage == 2) {
-                            arrived = true;
-                        }
-                    } else if (cartType.equals("DHCP_ACK")) {
-                        if (stage == 1) {
-                            stage = 2;  // 下一站：PC_FACTORY
-                            timer = 5;
-                        } else if (stage == 2) {
-                            arrived = true;
-                            // DHCP 完成，标记 IP 已分配
-//                            if (pcIpAssigned != null) {
-//                                // 可以通过回调通知 GameEngine
-//                            }
-                        }
-                    }
-                    return;
-                } else {
-                    x += (dx / dist) * speed;
-                    y += (dy / dist) * speed;
-                    return;
-                }
-            } else {
-                System.out.println("ERROR: Target is NULL for " + cartType + " stage=" + stage);
+        // ===================== DHCP 专用路径 =====================
+        // 四步流程：DISCOVER → OFFER → REQUEST → ACK
+        // DISCOVER/REQUEST 走 PC → DHCP_SERVER；OFFER/ACK 走 DHCP_SERVER → PC
+        if (cartType != null && cartType.startsWith("DHCP")) {
+            Point target = findTargetMachine(stage, cartType);
+            if (target == null) {
+                target = pcFactory;
+            }
+            if (target == null) {
                 arrived = true;
                 return;
             }
+            double dx = target.x - x;
+            double dy = target.y - y;
+            double dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist <= speed) {
+                x = target.x;
+                y = target.y;
+                processStageCraft();
+                if (stage < 2) {
+                    stage++;
+                    timer = DHCP_STAGE_PAUSE;
+                } else {
+                    arrived = true;
+                }
+            } else {
+                x += (dx / dist) * speed;
+                y += (dy / dist) * speed;
+            }
+            return;
         }
-        // 特殊处理：DNS 包
-        if (cartType != null && (cartType.startsWith("DNS_") || cartType.startsWith("DHCP"))) {
+
+        // ===================== DNS 快速路径 =====================
+        // 递归查询不进入公网队列，走 DNS_CLIENT → LOCAL → ROOT → AUTH
+        if (cartType != null && cartType.startsWith("DNS_") && !returnTrip) {
             Point target = findTargetMachine(stage, cartType);
             if (target != null) {
                 double dx = target.x - x;
                 double dy = target.y - y;
                 double dist = Math.sqrt(dx * dx + dy * dy);
-                if (dist <= speed) {
+                if (dist <= DNS_SPEED) {
                     x = target.x;
                     y = target.y;
                     processStageCraft();
-                    // 根据包类型决定是否前进到下一阶段
                     if (cartType.equals("DNS_QUERY")) {
                         if (stage < 4) {
                             stage++;
-                            timer = 2;  // 增加等待时间，让用户能看到
-                        } else {
-                            arrived = true;
-                        }
-                    } else if (cartType.equals("DNS_RESPONSE") ||
-                            cartType.equals("DNS_RECURSION_ROOT_RESP") ||
-                            cartType.equals("DNS_RECURSION_AUTH_RESP")) {
-                        arrived = true;
-                    } else if (cartType.startsWith("DHCP")) {
-                        // DHCP 包处理
-                        int maxStage = 1;
-                        if (cartType.equals("DHCP_DISCOVER")) maxStage = 1;
-                        else if (cartType.equals("DHCP_OFFER")) maxStage = 2;
-                        else if (cartType.equals("DHCP_REQUEST")) maxStage = 1;
-                        else if (cartType.equals("DHCP_ACK")) maxStage = 2;
-
-                        if (stage < maxStage) {
-                            stage++;
-                            timer = 2;
+                            timer = 0;
                         } else {
                             arrived = true;
                         }
                     } else {
                         if (stage < 2) {
                             stage++;
-                            timer = 2;
+                            timer = 0;
                         } else {
                             arrived = true;
                         }
                     }
-                    return;
                 } else {
-                    x += (dx / dist) * speed;
-                    y += (dy / dist) * speed;
-                    return;
+                    x += (dx / dist) * DNS_SPEED;
+                    y += (dy / dist) * DNS_SPEED;
                 }
+                return;
             }
-            return;
         }
 
-        // ACK_PC 特殊处理
+        // ACK_PC 特殊处理：三次握手的第三个报文直达接收端
         if (cartType.equals("ACK_PC") && !returnTrip && stage == 2) {
             Point target = findBuildingCoords("RX_ST");
             if (target != null) {
@@ -1147,21 +1119,15 @@ public class DataPacket {
                     x = target.x;
                     y = target.y;
                     arrived = true;
-                    return;
                 } else {
                     x += (dx / dist) * speed;
                     y += (dy / dist) * speed;
-                    return;
                 }
+                return;
             }
         }
 
-        // 正常数据包移动逻辑
-        if (timer > 0) {
-            timer--;
-            return;
-        }
-
+        // ===================== 正常数据包移动逻辑 =====================
         Point target;
         if (stage == -1) {
             target = pcFactory;
@@ -1182,7 +1148,7 @@ public class DataPacket {
             x = target.x;
             y = target.y;
 
-            // IP 分片处理
+            // IP 分片处理：DATA 包在 TX_IP_FRAG (stage 15) 处被拆成两个分片
             if (stage == 15 && !returnTrip && !isControlFrame(cartType) && cartType.equals("DATA")) {
                 final int MTU = 500;
                 int packetSize = 1000;
@@ -1196,6 +1162,7 @@ public class DataPacket {
                         fragment.fragmentData = new byte[Math.min(MTU, packetSize - i * MTU)];
                         fragment.stage = 16;
                         fragment.ttl = this.ttl;
+                        fragment.setCoordsLookup(coordsLookup);
                         addPendingPacket(fragment);
                     }
                     ipIdentifierCounter++;
@@ -1206,24 +1173,38 @@ public class DataPacket {
 
             processStageCraft();
 
-            // 阶段推进
-            if (!isDnsOrDhcp()) {
-                // 根据包类型决定最大阶段
-                int maxStage = 160;
-                if (cartType.equals("SYN") || cartType.equals("SYN_ACK") ||
-                        cartType.equals("ACK_PC") || cartType.equals("FIN_PC") ||
-                        cartType.equals("FIN_SRV") || cartType.equals("FIN_ACK_SRV") ||
-                        cartType.equals("LAST_ACK_PC") || cartType.equals("DATA_ACK")) {
-                    // 控制帧，阶段较少
-                    maxStage = 45;  // 到接收端应用层为止
-                }
+            // 回程包（响应/ACK）抵达 PC 端即结束，不再继续推进阶段
+            if (returnTrip && !isDnsOrDhcp()) {
+                arrived = true;
+                return;
+            }
 
-                if (stage < maxStage) {
-                    stage++;
-                    timer = 2;  // 短暂停留，让用户能看到
+            // DNS 响应抵达客户端即结束
+            if (cartType.equals("DNS_RESPONSE")) {
+                arrived = true;
+                return;
+            }
+
+            // 阶段推进
+            int maxStage = 160;
+            if (isDnsOrDhcp()) {
+                if (cartType.equals("DNS_QUERY")) {
+                    maxStage = 4;
+                } else if (cartType.startsWith("DNS_RECURSION")) {
+                    maxStage = 2;
                 } else {
-                    arrived = true;
+                    maxStage = 2;
                 }
+            } else if (isControlFrame(cartType)) {
+                // 控制帧（SYN/ACK/FIN 等）只走到接收端应用层
+                maxStage = 45;
+            }
+
+            if (stage < maxStage) {
+                stage++;
+                timer = STAGE_PAUSE;
+            } else {
+                arrived = true;
             }
         } else {
             x += (dx / dist) * speed;
@@ -1279,7 +1260,11 @@ public class DataPacket {
             case 8: // SEQ
                 if (!c_SEQ) {
                     c_SEQ = true;
-                    sequenceNumber = tcpFactory.getNextSeq();
+                    // 已经在引擎侧分配过序列号的报文（SYN/DATA/DATA_ACK）保持原值，
+                    // 否则会被 TCP 工厂重新分配，导致序号重复、ACK 对不上
+                    if (sequenceNumber <= 0) {
+                        sequenceNumber = tcpFactory.getNextSeq();
+                    }
                     appendToConsole("【🔢 序列号】: SEQ=" + sequenceNumber);
                 }
                 break;

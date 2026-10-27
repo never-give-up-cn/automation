@@ -16,6 +16,9 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class GameEngine {
+    /** UDP 模式下两个数据报之间的发送间隔 */
+    private static final long UDP_SEND_INTERVAL_MS = 200;
+
     // 游戏状态
     @Getter private int funds = 3000;
     @Getter private int helloStock = 0;
@@ -70,6 +73,7 @@ public class GameEngine {
     private long lastServerConsumeTime = 0;
     private int serverDecodeDelay = 600;
     private boolean demoCompleted = false;
+    @Getter @Setter private String targetDomain = "www.demo.com";
 
     // 工厂管理器
     private FactoryManager factoryManager;
@@ -88,6 +92,11 @@ public class GameEngine {
 
     public GameEngine(FactoryManager factoryManager) {
         this.factoryManager = factoryManager;
+        // 预置的 ARP 表项同步到引擎缓存，保证 ARP 缓存面板一开始就有内容
+        if (factoryManager != null && factoryManager.getArpCache() != null) {
+            factoryManager.getArpCache().getCache().forEach((ip, entry) ->
+                    this.arpCache.put(ip, new ArpEntry(ip, entry.getMacAddress())));
+        }
     }
 
     public void setCallback(GameCallback callback) {
@@ -132,10 +141,13 @@ public class GameEngine {
                     (s) -> { if (callback != null) callback.onUpdate(); },  // updateDnsDisplay
                     (s) -> { if (callback != null) callback.onUpdate(); },  // updateTopLabel
                     null, null, null,
-                    null,
+                    this::handlePacketArrival,
                     NetworkConfig.WAN_BOTTLE_NECK_MAX,
                     null
             );
+
+            // 注入建筑坐标查找器：DataPacket → GameCallback → MapManager
+            packet.setCoordsLookup(callback::findBuildingCoords);
         }
 
         return packet;
@@ -144,6 +156,421 @@ public class GameEngine {
     // 添加辅助方法
     private void addPendingPacketToCallback(DataPacket packet) {
         if (callback != null) callback.addPendingPacket(packet);
+    }
+
+    /** 把新产生的协议报文放进待发队列 */
+    private void enqueue(DataPacket packet) {
+        if (callback != null) callback.addPendingPacket(packet);
+    }
+
+    // ======================== 协议状态机 ========================
+
+    /**
+     * 数据包到达后的协议状态机。
+     * <p>对应旧版 {@code DataCartFactoryGame.handleCartArrival}，驱动
+     * DHCP → DNS → TCP 三次握手 → 数据传输 → 四次挥手 的完整流程。
+     * </p>
+     */
+    public void handlePacketArrival(DataPacket packet) {
+        if (packet == null || packet.getCartType() == null) return;
+
+        Point pc = callback != null ? callback.getPcFactory() : null;
+        Point server = callback != null ? callback.findBuildingCoords("RX_ST") : null;
+        Point dhcpServer = callback != null ? callback.findBuildingCoords("DHCP_SERVER") : null;
+        if (pc == null || server == null) return;
+
+        String type = packet.getCartType();
+
+        switch (type) {
+            // ---------------- DHCP 四步 ----------------
+            case "DHCP_DISCOVER":
+                if (!packet.isReturnTrip() && packet.getStage() == 2) {
+                    log("【🔎 DHCP】: Discover 到达 DHCP 服务器");
+                    if (dhcpServer != null) {
+                        DataPacket offer = createDataPacket(dhcpServer.x, dhcpServer.y, "DHCP_OFFER", 0);
+                        offer.setReturnTrip(true);
+                        offer.setStage(1);
+                        enqueue(offer);
+                    }
+                    log("【📥 DHCP】: 服务器回复 Offer (192.168.1.100)");
+                }
+                break;
+
+            case "DHCP_OFFER":
+                if (packet.isReturnTrip()) {
+                    log("【📥 DHCP】: Offer 到达客户端");
+                    DataPacket request = createDataPacket(pc.x, pc.y, "DHCP_REQUEST", 0);
+                    request.setStage(1);
+                    enqueue(request);
+                    log("【📤 DHCP】: 发送 Request");
+                }
+                break;
+
+            case "DHCP_REQUEST":
+                if (!packet.isReturnTrip() && packet.getStage() == 2) {
+                    log("【📤 DHCP】: Request 到达 DHCP 服务器");
+                    if (dhcpServer != null) {
+                        DataPacket ack = createDataPacket(dhcpServer.x, dhcpServer.y, "DHCP_ACK", 0);
+                        ack.setReturnTrip(true);
+                        ack.setStage(1);
+                        enqueue(ack);
+                    }
+                    log("【✅ DHCP】: 服务器回复 ACK，分配 IP 192.168.1.100");
+                }
+                break;
+
+            case "DHCP_ACK":
+                if (packet.isReturnTrip()) {
+                    log("【✅ DHCP】: ACK 到达客户端，IP 分配成功");
+                    pcIpAssigned = true;
+                    pcIpAddress = "192.168.1.100";
+                    dhcpInProgress = false;
+                    funds += 200;
+                    log("【🌐 网络就绪】: PC IP = " + pcIpAddress);
+                    if (callback != null) callback.onUpdate();
+                }
+                break;
+
+            // ---------------- DNS 递归查询 ----------------
+            case "DNS_QUERY":
+                if (!packet.isReturnTrip() && packet.getStage() >= 2) {
+                    log("【📥 本地 DNS】: 无缓存，向根 DNS 发起递归查询");
+                    DataPacket toRoot = createDataPacket(packet.getX(), packet.getY(), "DNS_RECURSION_ROOT", 0);
+                    toRoot.setDomain(packet.getDomain());
+                    toRoot.setReturnTrip(false);
+                    enqueue(toRoot);
+                }
+                break;
+
+            case "DNS_RECURSION_ROOT":
+                if (!packet.isReturnTrip() && packet.isArrived()) {
+                    log("【🌐 根 DNS】: 返回顶级域权威 DNS 地址 10.1.1.1");
+                    DataPacket rootToLocal = createDataPacket(packet.getX(), packet.getY(), "DNS_ROOT_TO_LOCAL", 0);
+                    rootToLocal.setDomain(packet.getDomain());
+                    rootToLocal.setResolvedIp("10.1.1.1");
+                    enqueue(rootToLocal);
+                }
+                break;
+
+            case "DNS_ROOT_TO_LOCAL":
+                if (!packet.isReturnTrip() && packet.isArrived()) {
+                    log("【📡 本地 DNS】: 向权威 DNS 查询 " + packet.getDomain());
+                    DataPacket toAuth = createDataPacket(packet.getX(), packet.getY(), "DNS_LOCAL_TO_AUTH", 0);
+                    toAuth.setDomain(packet.getDomain());
+                    enqueue(toAuth);
+                }
+                break;
+
+            case "DNS_LOCAL_TO_AUTH":
+                if (!packet.isReturnTrip() && packet.isArrived()) {
+                    log("【🏢 权威 DNS】: " + packet.getDomain() + " → 10.0.0.1");
+                    DataPacket authToLocal = createDataPacket(packet.getX(), packet.getY(), "DNS_AUTH_TO_LOCAL", 0);
+                    authToLocal.setDomain(packet.getDomain());
+                    authToLocal.setResolvedIp("10.0.0.1");
+                    enqueue(authToLocal);
+                }
+                break;
+
+            case "DNS_AUTH_TO_LOCAL":
+                if (!packet.isReturnTrip() && packet.isArrived()) {
+                    log("【📡 本地 DNS】: 缓存结果 " + packet.getDomain() + " → " + packet.getResolvedIp());
+                    DataPacket finalResp = createDataPacket(packet.getX(), packet.getY(), "DNS_RESPONSE", 0);
+                    finalResp.setDomain(packet.getDomain());
+                    finalResp.setResolvedIp(packet.getResolvedIp());
+                    finalResp.setReturnTrip(true);
+                    finalResp.setStage(-1);
+                    enqueue(finalResp);
+                }
+                break;
+
+            case "DNS_RESPONSE":
+                if (packet.isReturnTrip() && packet.isArrived()) {
+                    onDnsResponse(packet.getDomain(), packet.getResolvedIp());
+                    log("【✅ DNS 解析成功】: " + packet.getDomain() + " → " + packet.getResolvedIp());
+                    performArpResolution(packet.getResolvedIp());
+                    if (!useUdp && currentTcpState == TcpState.CLOSED) {
+                        startTcpHandshake(pc, resolvedServerIp);
+                    } else if (useUdp && !udpActive) {
+                        startUdpTransmission();
+                    }
+                }
+                break;
+
+            // ---------------- TCP 三次握手 ----------------
+            case "SYN":
+                if (!packet.isReturnTrip() && packet.isArrived()) {
+                    log("【🤝 三次握手】: 收到 SYN，回复 SYN-ACK (seq=200)");
+                    DataPacket synAck = createDataPacket(server.x, server.y, "SYN_ACK", 0);
+                    synAck.setReturnTrip(true);
+                    synAck.setAckNumber(packet.getSequenceNumber() + 1);
+                    synAck.setSequenceNumber(200);
+                    enqueue(synAck);
+                    stateTimerWatchdog = System.currentTimeMillis();
+                }
+                break;
+
+            case "SYN_ACK":
+                if (packet.isArrived()) {
+                    currentTcpState = TcpState.ESTABLISHED;
+                    stateTimerWatchdog = System.currentTimeMillis();
+                    cwnd = 1;
+                    ssthresh = 12;
+                    packetsAckedSinceLastIncrease = 0;
+                    log("【✅ 三次握手完成】: 收到 SYN-ACK，发送 ACK，连接建立！cwnd=1, ssthresh=12");
+
+                    DataPacket finalAck = createDataPacket(pc.x, pc.y, "ACK_PC", 0);
+                    finalAck.setAckNumber(packet.getSequenceNumber() + 1);
+                    finalAck.setReturnTrip(false);
+                    finalAck.setStage(2);
+                    enqueue(finalAck);
+
+                    if (httpDemoEnabled && !httpSent) {
+                        if (tlsEnabled && tlsState == TlsState.IDLE) {
+                            sendTlsClientHello(pc);
+                        } else if (!tlsEnabled) {
+                            sendHttpGet(pc);
+                        }
+                    }
+                    if (callback != null) callback.onUpdate();
+                }
+                break;
+
+            case "ACK_PC":
+                // 三次握手的第三个报文，到达接收端即结束
+                break;
+
+            // ---------------- 数据传输 ----------------
+            case "DATA":
+                if (!packet.isReturnTrip() && packet.isArrived()) {
+                    if (serverBufferCount < NetworkConfig.SERVER_BUFFER_MAX) {
+                        serverBufferCount++;
+                        if (serverBufferCount == 1) {
+                            lastServerConsumeTime = System.currentTimeMillis();
+                        }
+                        rwnd = NetworkConfig.SERVER_BUFFER_MAX - serverBufferCount;
+
+                        int receivedSeq = packet.getSequenceNumber();
+                        if (receivedSeq > 0 && !ackedSeq.contains(receivedSeq)) {
+                            ackedSeq.add(receivedSeq);
+                            DataPacket dataAck = createDataPacket(server.x, server.y, "DATA_ACK", receivedSeq);
+                            dataAck.setAdvertisedWindow(rwnd);
+                            dataAck.setReturnTrip(true);
+                            enqueue(dataAck);
+                            funds += 500;
+                            log(String.format("【📦 数据交付】: SEQ=%d 已接收，回复 ACK (rwnd=%d)", receivedSeq, rwnd));
+                        } else {
+                            log(String.format("【⚠️ 重复包】: SEQ=%d 已处理过", receivedSeq));
+                        }
+                    } else {
+                        log(String.format("【💥 缓冲区溢出】: SEQ=%d 丢失", packet.getSequenceNumber()));
+                    }
+                    if (callback != null) callback.onUpdate();
+                }
+                break;
+
+            case "UDP_DATA":
+                if (!packet.isReturnTrip() && packet.isArrived()) {
+                    if (serverBufferCount < NetworkConfig.SERVER_BUFFER_MAX) {
+                        serverBufferCount++;
+                        if (serverBufferCount == 1) {
+                            lastServerConsumeTime = System.currentTimeMillis();
+                        }
+                        rwnd = NetworkConfig.SERVER_BUFFER_MAX - serverBufferCount;
+                        log(String.format("【📦 UDP 交付】: 缓冲区 %d/%d", serverBufferCount, NetworkConfig.SERVER_BUFFER_MAX));
+                    }
+                }
+                break;
+
+            case "DATA_ACK":
+                if (packet.isReturnTrip() && packet.isArrived()) {
+                    rwnd = packet.getAdvertisedWindow();
+                    if (packet.getSequenceNumber() > 0) {
+                        ackRetransmissionTask(packet.getSequenceNumber());
+                        if (cwnd < ssthresh) {
+                            cwnd++;
+                            log(String.format("【📈 慢启动】: cwnd=%d, ssthresh=%d", cwnd, ssthresh));
+                        } else {
+                            packetsAckedSinceLastIncrease++;
+                            if (packetsAckedSinceLastIncrease >= cwnd) {
+                                cwnd++;
+                                packetsAckedSinceLastIncrease = 0;
+                                log(String.format("【🐌 拥塞避免】: cwnd=%d", cwnd));
+                            }
+                        }
+                    }
+                    if (callback != null) callback.onUpdate();
+                }
+                break;
+
+            // ---------------- HTTP 演示 ----------------
+            case "HTTP_GET":
+                if (packet.isArrived()) {
+                    log("【📡 HTTP】: 服务器收到 GET，回复 200 OK");
+                    DataPacket httpOk = createDataPacket(server.x, server.y, "HTTP_200_OK", 0);
+                    httpOk.setReturnTrip(true);
+                    httpOk.setStage(-1);
+                    httpOk.setHttpBody("Hello World");
+                    enqueue(httpOk);
+                }
+                break;
+
+            case "HTTP_200_OK":
+                if (packet.isReturnTrip() && packet.isArrived()) {
+                    httpResponseContent = packet.getHttpBody();
+                    log("【📡 HTTP】: 收到 200 OK, 内容: " + httpResponseContent);
+                    currentTcpState = TcpState.FIN_WAIT_1;
+                    stateTimerWatchdog = System.currentTimeMillis();
+                    DataPacket fin = createDataPacket(pc.x, pc.y, "FIN_PC", 0);
+                    fin.setTtl(64);
+                    enqueue(fin);
+                    log("【🏁 HTTP 完成】: 发送 FIN，开始四次挥手");
+                }
+                break;
+
+            // ---------------- TCP 四次挥手 ----------------
+            case "FIN_PC":
+                if (!packet.isReturnTrip() && packet.isArrived()) {
+                    currentTcpState = TcpState.FIN_WAIT_1;
+                    log("【👋 四次挥手】: 收到 FIN，回复 FIN-ACK，发送 FIN");
+                    DataPacket finAck = createDataPacket(server.x, server.y, "FIN_ACK_SRV", 0);
+                    finAck.setReturnTrip(true);
+                    enqueue(finAck);
+                    DataPacket srvFin = createDataPacket(server.x, server.y, "FIN_SRV", 0);
+                    srvFin.setReturnTrip(true);
+                    enqueue(srvFin);
+                    stateTimerWatchdog = System.currentTimeMillis();
+                }
+                break;
+
+            case "FIN_ACK_SRV":
+                if (currentTcpState == TcpState.FIN_WAIT_1) {
+                    currentTcpState = TcpState.FIN_WAIT_2;
+                    log("【👋 四次挥手】: 收到 FIN-ACK，进入 FIN-WAIT-2");
+                    stateTimerWatchdog = System.currentTimeMillis();
+                }
+                break;
+
+            case "FIN_SRV":
+                if (currentTcpState == TcpState.FIN_WAIT_2 || currentTcpState == TcpState.FIN_WAIT_1) {
+                    currentTcpState = TcpState.TIME_WAIT;
+                    DataPacket lastAck = createDataPacket(pc.x, pc.y, "LAST_ACK_PC", 0);
+                    lastAck.setReturnTrip(false);
+                    enqueue(lastAck);
+                    log("【✅ 四次挥手完成】: 连接进入 TIME-WAIT");
+                }
+                break;
+
+            case "LAST_ACK_PC":
+                demoCompleted = true;
+                log("🎉 数据传输完成！共交付 " + serverReceivedCount + "/" + NetworkConfig.TOTAL_DATA_TO_TRANSMIT + " 个数据包");
+                if (callback != null) callback.onUpdate();
+                break;
+
+            // ---------------- ICMP ----------------
+            case "ICMP_ECHO_REQ":
+                if (!packet.isReturnTrip() && packet.isArrived()) {
+                    log("【📥 ICMP】: 服务器收到 Echo Request，回复 Echo Reply");
+                    DataPacket echoReply = createDataPacket(server.x, server.y, "ICMP_ECHO_REPLY", 0);
+                    echoReply.setReturnTrip(true);
+                    echoReply.setEchoSendTimestamp(packet.getEchoSendTimestamp());
+                    echoReply.setTtl(64);
+                    echoReply.setStage(-1);
+                    enqueue(echoReply);
+                }
+                break;
+
+            default:
+                break;
+        }
+    }
+
+    /**
+     * 服务器按真实时间节流地从接收缓冲区里取出一个已解包的数据包。
+     */
+    public void processServerBuffer(long now) {
+        if (serverBufferCount > 0 && now - lastServerConsumeTime >= serverDecodeDelay) {
+            consumeServerBuffer();
+        }
+    }
+
+    /**
+     * 服务器解包并处理一个数据包（与真实时间解耦，便于无界面测试）。
+     */
+    public void consumeServerBuffer() {
+        if (serverBufferCount <= 0) return;
+        decrementServerBuffer();
+        incrementServerReceived();
+        log(String.format("【📥 服务器处理】: 已处理 %d/%d 个数据包",
+                serverReceivedCount, NetworkConfig.TOTAL_DATA_TO_TRANSMIT));
+    }
+
+    /**
+     * 流程驱动：由 UI 的定时器周期调用，按协议顺序推进整个会话。
+     * <p>DHCP → DNS → TCP 握手 → 数据发送</p>
+     */
+    public void tick() {
+        if (callback == null) return;
+        Point pc = callback.getPcFactory();
+        if (pc == null) return;
+
+        // 0) 服务器解包缓冲区
+        processServerBuffer(System.currentTimeMillis());
+
+        // 1) 还没有 IP → 发起 DHCP
+        if (!pcIpAssigned) {
+            if (!dhcpInProgress) {
+                startDhcpIfNeeded(pc);
+            }
+            return;
+        }
+
+        // 2) IP 就绪 → 发起 DNS 解析（解析完成前不进入 TCP 阶段）
+        if (!dnsResolved) {
+            if (!dnsResolving) {
+                startDnsResolution(targetDomain);
+            }
+            return;
+        }
+
+        // 3) UDP 模式：跳过握手，直接发数据
+        if (useUdp) {
+            if (!udpActive) {
+                startUdpTransmission();
+                return;
+            }
+            long now = System.currentTimeMillis();
+            if (now - lastUdpSendTime >= UDP_SEND_INTERVAL_MS
+                    && canSendData()
+                    && serverBufferCount < NetworkConfig.SERVER_BUFFER_MAX) {
+                lastUdpSendTime = now;
+                DataPacket udp = createDataPacket(pc.x, pc.y, "UDP_DATA", nextSeqNum++);
+                udp.setTtl(64);
+                udp.setAdvertisedWindow(rwnd);
+                enqueue(udp);
+                sentSeq.add(udp.getSequenceNumber());
+                log(String.format("【📤 UDP 发送】: SEQ=%d", udp.getSequenceNumber()));
+            }
+            return;
+        }
+
+        if (demoCompleted) {
+            return;
+        }
+
+        // 4) TCP 模式：发起三次握手
+        if (currentTcpState == TcpState.CLOSED) {
+            startTcpHandshake(pc, resolvedServerIp);
+            return;
+        }
+
+        // 5) 连接已建立 → 按滑动窗口发送数据
+        if (currentTcpState == TcpState.ESTABLISHED && canSendData()) {
+            int window = Math.min(cwnd, rwnd);
+            int unacked = sentSeq.size() - ackedSeq.size();
+            if (window - unacked > 0) {
+                sendDataPackets(pc);
+            }
+        }
     }
 
 
@@ -191,18 +618,38 @@ public class GameEngine {
     public void startDnsResolution(String targetDomain) {
         if (dnsResolved || dnsResolving) return;
 
+        if (!pcIpAssigned) {
+            log("【⛔ DNS 阻断】: PC 尚未获取 IP 地址，等待 DHCP 完成");
+            return;
+        }
+        Point pc = callback != null ? callback.getPcFactory() : null;
+        if (pc == null) return;
+
         dnsResolving = true;
+        lastDnsQueryTime = System.currentTimeMillis();
+
         DnsEntry cached = dnsCache.get(targetDomain);
         if (cached != null && !cached.isExpired()) {
             resolvedServerIp = cached.getIpAddress();
             dnsResolved = true;
             dnsResolving = false;
             log("【📚 DNS缓存命中】: " + targetDomain + " → " + resolvedServerIp);
+            performArpResolution(resolvedServerIp);
+            if (!useUdp && currentTcpState == TcpState.CLOSED) {
+                startTcpHandshake(pc, resolvedServerIp);
+            } else if (useUdp && !udpActive) {
+                startUdpTransmission();
+            }
             if (callback != null) callback.onUpdate();
             return;
         }
 
         log("【🌐 DNS解析开始】: 查询域名 " + targetDomain);
+        DataPacket query = createDataPacket(pc.x, pc.y, "DNS_QUERY", 0);
+        query.setDomain(targetDomain);
+        enqueue(query);
+        log("【📤 DNS 查询】: 发送请求到本地 DNS 服务器");
+        if (callback != null) callback.onUpdate();
     }
 
     public void onDnsResponse(String domain, String ip) {
@@ -293,10 +740,11 @@ public class GameEngine {
                 if (callback != null) {
                     Point pcFactory = callback.getPcFactory();
                     if (pcFactory != null) {
-                        DataPacket retransmit = new DataPacket(pcFactory.x, pcFactory.y, "DATA", task.getSeqNum(), factoryManager);
+                        DataPacket retransmit = createDataPacket(pcFactory.x, pcFactory.y, "DATA", task.getSeqNum());
                         retransmit.setRetransmission(true);
                         retransmit.setTtl(64);
-                        callback.addPendingPacket(retransmit);
+                        retransmit.setAdvertisedWindow(rwnd);
+                        enqueue(retransmit);
                     }
                 }
 
@@ -333,7 +781,11 @@ public class GameEngine {
         dnsResolving = false;
         resolvedServerIp = null;
         demoCompleted = false;
+        udpActive = false;
+        httpSent = false;
+        tlsState = TlsState.IDLE;
 
+        // 注意：DHCP 租约（pcIpAssigned）保留，重置会话不会重新分配地址
         if (callback != null) callback.onUpdate();
     }
 
@@ -489,12 +941,19 @@ public class GameEngine {
     }
 
     public void sendDataPackets(Point pcFactory) {
-        int packetsToSend = Math.min(cwnd, NetworkConfig.TOTAL_DATA_TO_TRANSMIT - serverReceivedCount);
+        int window = Math.min(cwnd, rwnd);
+        int unacked = sentSeq.size() - ackedSeq.size();
+        int canSend = window - unacked;
+        if (canSend <= 0) {
+            log("【⏸️ 窗口已满】: cwnd=" + cwnd + ", rwnd=" + rwnd + ", unacked=" + unacked);
+            return;
+        }
+        int packetsToSend = Math.min(canSend, NetworkConfig.TOTAL_DATA_TO_TRANSMIT - serverReceivedCount);
         for (int i = 0; i < packetsToSend; i++) {
             DataPacket data = createDataPacket(pcFactory.x, pcFactory.y, "DATA", nextSeqNum++);
             data.setTtl(64);
             data.setAdvertisedWindow(rwnd);
-            if (callback != null) callback.addPendingPacket(data);
+            enqueue(data);
             sentSeq.add(data.getSequenceNumber());
 
             RetransmissionTask task = new RetransmissionTask(data.getSequenceNumber(), System.currentTimeMillis());
