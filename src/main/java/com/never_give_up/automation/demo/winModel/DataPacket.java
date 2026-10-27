@@ -90,6 +90,17 @@ public class DataPacket {
 
     /** 普通协议阶段之间的停留帧数（1 帧 ≈ 30ms） */
     private static final int STAGE_PAUSE = 1;
+
+    /**
+     * 头部工位（机械臂封装 / 拆包）的停留帧数。
+     * <p>工件要停在工位上等机械臂把 TCP / IP / ETH 头装上或拆下来，
+     * 停留时间约等于机械臂一个取放周期（480ms / 30ms ≈ 16 帧）。</p>
+     */
+    private static final int HEADER_STAGE_PAUSE = 16;
+
+    /** 需要停留等待机械臂的阶段：13=T_CORE(TCP)、14=TX_IPH(IP)、19=ETH_TYPE(ETH)，
+     *  37=RX_ETH、42=RX_IP、44=RX_TCP（解封装） */
+    private static final int[] HEADER_STAGES = {13, 14, 19, 37, 42, 44};
     /** DHCP 每个阶段之间的停留帧数 */
     private static final int DHCP_STAGE_PAUSE = 5;
     /** DNS 递归查询的移动速度（比公网快，不排队） */
@@ -1244,6 +1255,9 @@ public class DataPacket {
                         fragment.fragmentData = new byte[Math.min(MTU, packetSize - i * MTU)];
                         fragment.stage = 16;
                         fragment.ttl = this.ttl;
+                        // 分片继承父报文的 TCP / IP 头，产线上的工件才能一路带着协议头走到接收端再被拆掉
+                        fragment.hasTcp = this.hasTcp;
+                        fragment.hasIp = this.hasIp;
                         fragment.setCoordsLookup(coordsLookup);
                         fragment.setBeltRouter(beltRouter);
                         fragment.setCurrentTag(currentTag);
@@ -1286,12 +1300,23 @@ public class DataPacket {
             }
 
             if (stage < maxStage) {
+                // 头部工位要停久一点，等机械臂把协议头装上 / 拆下来
+                timer = isHeaderStage(stage) ? HEADER_STAGE_PAUSE : STAGE_PAUSE;
                 stage++;
-                timer = STAGE_PAUSE;
             } else {
                 arrived = true;
             }
         }
+    }
+
+    /** 该阶段是否是封装 / 解封装协议头的工位 */
+    private static boolean isHeaderStage(int s) {
+        for (int h : HEADER_STAGES) {
+            if (h == s) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // ===================== processStageCraft 核心处理 =====================

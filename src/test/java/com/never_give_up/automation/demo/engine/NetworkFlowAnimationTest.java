@@ -15,6 +15,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -193,7 +194,7 @@ class NetworkFlowAnimationTest {
     @Test
     @DisplayName("TCP 三次握手成功后数据能够交付到接收端")
     void tcpHandshakeAndDataDelivery() {
-        run(6000);
+        run(12000);
 
         assertTrue(callback.distinctArrived.contains("SYN"), "缺少 SYN");
         assertTrue(callback.distinctArrived.contains("SYN_ACK"), "缺少 SYN-ACK");
@@ -209,7 +210,7 @@ class NetworkFlowAnimationTest {
     @Test
     @DisplayName("交付的数据报文序号必须唯一，不能被 TCP 工厂覆盖")
     void deliveredDataSequenceNumbersAreUnique() {
-        run(6000);
+        run(12000);
 
         List<Integer> dataSeqs = new ArrayList<>();
         for (DataPacket packet : callback.arrivedPackets) {
@@ -272,6 +273,31 @@ class NetworkFlowAnimationTest {
         assertTrue(discover.isArrived(), "报文应该能沿传送带抵达 DHCP_SERVER");
         assertTrue(maxDeviation <= 40,
                 "报文偏离传送带 " + String.format("%.1f", maxDeviation) + "px，不应该直线穿场");
+    }
+
+    @Test
+    @DisplayName("IP 分片继承父报文的 TCP/IP 头，协议头能一路带到接收端再被拆掉")
+    void ipFragmentsKeepProtocolHeaders() {
+        Point pc = callback.getPcFactory();
+        DataPacket data = engine.createDataPacket(pc.x, pc.y, "DATA", 0);
+        data.setStage(1);
+        callback.addPendingPacket(data);
+        active.add(data);
+
+        DataPacket fragment = null;
+        for (int i = 0; i < 3000 && fragment == null; i++) {
+            data.update();
+            for (DataPacket p : callback.pending) {
+                if ("IP_FRAGMENT".equals(p.getCartType())) {
+                    fragment = p;
+                }
+            }
+            callback.pending.clear();
+        }
+
+        assertNotNull(fragment, "DATA 报文应该被拆成 IP 分片");
+        assertTrue(fragment.isHasTcp(), "分片应该继承 TCP 头，否则产线上工件到不了接收端就没有头可拆");
+        assertTrue(fragment.isHasIp(), "分片应该继承 IP 头");
     }
 
     /** 计算点到折线路径的最短距离（用于校验报文是否走在传送带上） */

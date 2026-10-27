@@ -536,7 +536,7 @@ public class MainFrame extends JFrame implements GameEngine.GameCallback {
             if (packet.isArrived() && !packet.isArrivalNotified()) {
                 packet.setArrivalNotified(true);
                 // 让对应的组装机亮灯、机械臂动作
-                canvas.markWorking(packet.getCurrentTag());
+                canvas.markWorking(packet.getCurrentTag(), packet);
                 engine.handlePacketArrival(packet);
             }
         }
