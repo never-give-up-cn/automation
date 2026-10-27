@@ -3,14 +3,18 @@ package com.never_give_up.automation.demo.ui;
 import com.never_give_up.automation.demo.config.NetworkConfig;
 import com.never_give_up.automation.demo.engine.GameEngine;
 import com.never_give_up.automation.demo.engine.MapManager;
+import com.never_give_up.automation.demo.engine.Material;
 import com.never_give_up.automation.demo.engine.ProductionLine;
 import com.never_give_up.automation.demo.winModel.DataPacket;
 import com.never_give_up.automation.demo.winModel.OreCart;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
@@ -103,6 +107,8 @@ public class GameCanvas extends JPanel {
     private static final long ARM_CYCLE_MS = 720;
     /** 通用工位机械臂一个完整周期（毫秒）：每个节点都要过一遍，节奏要快 */
     private static final long PROCESS_CYCLE_MS = 300;
+    /** 又取料又加工的工位（需求是协议头原料的普通节点）一个周期（毫秒） */
+    private static final long MIX_CYCLE_MS = 560;
     /** 生成机出料间隔（毫秒）：比机械臂一个周期短，供给带上就会排队 */
     private static final long GEN_INTERVAL = 320;
     /** 供给带上允许同时排队的料块数 */
@@ -126,6 +132,15 @@ public class GameCanvas extends JPanel {
     private static final int KIND_HEADER = 0;
     /** 工位类型：通用加工工位（每个节点都有，机械臂抓工件进机加工） */
     private static final int KIND_PROCESS = 1;
+
+    /** 取料方式：机械臂去专属供给带取原料块，加工完钉到工件上 */
+    private static final int MODE_SEAL = 0;
+    /** 取料方式：机械臂从工件身上把原料块拆下来，丢进回收箱 */
+    private static final int MODE_STRIP = 1;
+    /** 取料方式：工件本身就是原料，机械臂把工件抓进机器加工再放回传送带 */
+    private static final int MODE_PROCESS = 2;
+    /** 取料方式：普通节点也要协议头原料——先去供给带取料送进机器，再把工件抓进机器加工 */
+    private static final int MODE_MIX = 3;
 
     /**
      * 头部产线定义：工位标签、协议层、是否为拆包工位。
@@ -183,6 +198,22 @@ public class GameCanvas extends JPanel {
     }
 
     /**
+     * 供给传送带上的一个料块。
+     * <p>一条带子只运输一种物料，料块自带物料属性，机械臂按筛选器取料。</p>
+     */
+    private static class SupplyItem {
+        /** 物料种类 */
+        final String material;
+        /** 在供给带上的 y 坐标 */
+        double y;
+
+        SupplyItem(String material, double y) {
+            this.material = material;
+            this.y = y;
+        }
+    }
+
+    /**
      * 一个工位：组装机 + 通用机械臂。
      * <p>协议头工位额外有一条专属供给带（生成机）或一个回收箱。</p>
      */
@@ -197,6 +228,13 @@ public class GameCanvas extends JPanel {
         boolean strip;
         Color color;
         Color dark;
+
+        /** 设备需求：机器要消耗的原料物料（机械臂按需求去对应传送带上取料） */
+        String demand = Material.PAYLOAD;
+        /** 机械臂筛选器 · 白名单（留空 = 全部放行） */
+        final Set<String> whitelist = new LinkedHashSet<>();
+        /** 机械臂筛选器 · 黑名单 */
+        final Set<String> blacklist = new LinkedHashSet<>();
 
         /** 工位（主干上）坐标 */
         Point trunk;
@@ -219,8 +257,8 @@ public class GameCanvas extends JPanel {
         /** 收纳箱中心（拆包工位） */
         Point bin;
 
-        /** 供给带上排队的料块（y 坐标，最前面的一块在最下） */
-        final List<Double> queue = new ArrayList<>();
+        /** 供给带上排队的料块（最前面的一块在最下） */
+        final List<SupplyItem> supplyItems = new ArrayList<>();
         /** 上次出料时间 */
         long genAt;
         /** 等待机械臂处理的工件（队首 = 下一个被加工的） */
@@ -241,8 +279,16 @@ public class GameCanvas extends JPanel {
         /** 机械臂当前姿态（每帧由 updateEffects 计算，绘制时直接用） */
         double poseX;
         double poseY;
+        /** 夹爪里夹着东西（原料块或工件） */
         boolean poseGrip;
-        boolean poseHidden;
+        /** 夹爪里夹着原料块 */
+        boolean poseBlock;
+        /** 原料块已经送进机器里，看不见 */
+        boolean poseBlockHidden;
+        /** 夹爪里夹着工件 */
+        boolean poseWork;
+        /** 工件已经送进机器里，看不见 */
+        boolean poseWorkHidden;
 
         /** 排队方向：工件从工位往这个方向往回退 */
         double qx = -1;
@@ -262,12 +308,28 @@ public class GameCanvas extends JPanel {
                 (int) (NetworkConfig.MAP_COLS * NetworkConfig.TILE_SIZE * scale),
                 (int) (NetworkConfig.MAP_ROWS * NetworkConfig.TILE_SIZE * scale)
         ));
+        // 右键工位 → 弹出机械臂筛选器设置框
+        addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                if (!SwingUtilities.isRightMouseButton(e)) {
+                    return;
+                }
+                String tag = stationAtScreen(e.getX(), e.getY());
+                if (tag != null && filterListener != null) {
+                    filterListener.onFilterRequested(tag);
+                }
+            }
+        });
     }
 
     /**
      * 建立产线上的所有工位。
      * <p>协议头工位带专属供给带 / 回收箱，其余节点一律配一台通用机械臂：
      * 数据经过这个节点时，机械臂把工件抓进机器加工，再放回传送带。</p>
+     * <p>每个工位都声明自己的<b>需求</b>（要消耗哪种原料）：
+     * 封装工位要 TCP / IP / ETH 头（原料来自自己的供给带 C1），
+     * 拆包工位要把工件身上的头拆下来，普通节点直接消耗工件本体。</p>
      */
     private void buildStations() {
         // 1. 协议头工位（封装 / 拆包）
@@ -286,6 +348,7 @@ public class GameCanvas extends JPanel {
             st.kind = KIND_HEADER;
             st.layer = layer;
             st.strip = strip;
+            st.demand = layer;
             st.color = colorOfLayer(layer);
             st.dark = darkOfLayer(layer);
             setupGeometry(st, trunk);
@@ -296,10 +359,7 @@ public class GameCanvas extends JPanel {
                 st.bin = new Point(trunk.x, st.machine.y - GEN_SIZE - 6);
             } else {
                 // 封装工位：组装机上方是专属供给传送带 C1，供给带顶端是生成机
-                st.supplyBottom = new Point(trunk.x, st.machine.y - MACHINE_H / 2 - 4);
-                st.supplyTop = new Point(trunk.x, st.supplyBottom.y - SUPPLY_BELT_LEN);
-                st.generator = new Point(trunk.x, st.supplyTop.y - GEN_SIZE / 2 - 2);
-                st.pickY = st.supplyBottom.y - 16;
+                ensureSupplyBelt(st);
             }
             stations.add(st);
         }
@@ -322,12 +382,24 @@ public class GameCanvas extends JPanel {
             st.kind = KIND_PROCESS;
             st.layer = "";
             st.strip = false;
+            st.demand = Material.PAYLOAD;
             st.color = MACHINE_STROKE;
             st.dark = MACHINE_STROKE;
             setupGeometry(st, trunk);
             stationAtPos.put(posKey(trunk.x, trunk.y), st.tag);
             stations.add(st);
         }
+    }
+
+    /** 给工位装一条专属供给带 C1（一条带子只运一种物料） */
+    private void ensureSupplyBelt(Station st) {
+        if (st.supplyBottom != null) {
+            return;
+        }
+        st.supplyBottom = new Point(st.trunk.x, st.machine.y - MACHINE_H / 2 - 4);
+        st.supplyTop = new Point(st.trunk.x, st.supplyBottom.y - SUPPLY_BELT_LEN);
+        st.generator = new Point(st.trunk.x, st.supplyTop.y - GEN_SIZE / 2 - 2);
+        st.pickY = st.supplyBottom.y - 16;
     }
 
     /** 工位坐标索引的 key */
@@ -380,6 +452,168 @@ public class GameCanvas extends JPanel {
         this.serverBufferCount = bufferCount;
     }
 
+    // ===================== 设备需求 + 机械臂筛选器 =====================
+
+    /** 右键点到某个工位时的回调（用来弹出机械臂筛选器设置框） */
+    public interface StationFilterListener {
+        /**
+         * @param tag 被右键的工位标签
+         */
+        void onFilterRequested(String tag);
+    }
+
+    /** 机械臂筛选器设置框的回调 */
+    private StationFilterListener filterListener;
+
+    /** 设置右键回调 */
+    public void setStationFilterListener(StationFilterListener listener) {
+        this.filterListener = listener;
+    }
+
+    /**
+     * 屏幕坐标找工位（右键设置机械臂筛选器用）。
+     *
+     * @param sx 画布内的屏幕 x
+     * @param sy 画布内的屏幕 y
+     * @return 命中的工位标签；没命中返回 null
+     */
+    public String stationAtScreen(int sx, int sy) {
+        double mx = (sx - viewOffsetX) / scale;
+        double my = (sy - viewOffsetY) / scale;
+        String best = null;
+        double bestDist = 46 * 46;
+        for (Station st : stations) {
+            double dx = st.trunk.x - mx;
+            double dy = st.trunk.y - my;
+            double d = dx * dx + dy * dy;
+            if (d < bestDist) {
+                bestDist = d;
+                best = st.tag;
+            }
+        }
+        return best;
+    }
+
+    /** 产线上全部工位标签 */
+    public List<String> getStationTags() {
+        List<String> tags = new ArrayList<>();
+        for (Station st : stations) {
+            tags.add(st.tag);
+        }
+        return tags;
+    }
+
+    /** 某个工位声明的原料需求 */
+    public String getStationDemand(String tag) {
+        Station st = stationFor(tag);
+        return st == null ? null : st.demand;
+    }
+
+    /**
+     * 改一个工位的原料需求。
+     * <p>改成协议头原料时，机械臂会去这条工位专属的供给带 C1 上取料，
+     * 供给带上只运输这一种物料；改回工件本体则回到「抓工件进机加工」。</p>
+     */
+    public void setStationDemand(String tag, String material) {
+        Station st = stationFor(tag);
+        if (st == null || material == null) {
+            return;
+        }
+        // 协议头工位只消耗协议头原料
+        if (st.kind == KIND_HEADER && !Material.isHeader(material)) {
+            return;
+        }
+        if (material.equals(st.demand)) {
+            return;
+        }
+        st.demand = material;
+        if (Material.isHeader(material)) {
+            // 料块跟着需求走：这条带子上只运输这一种物料
+            st.layer = material;
+            st.color = colorOfLayer(material);
+            st.dark = darkOfLayer(material);
+            ensureSupplyBelt(st);
+        } else {
+            st.layer = "";
+            if (st.kind == KIND_PROCESS) {
+                st.color = MACHINE_STROKE;
+                st.dark = MACHINE_STROKE;
+            }
+        }
+        // 需求变了，带上原有的料块就不合用了，清掉重新生产
+        st.supplyItems.clear();
+        st.genAt = 0;
+    }
+
+    /** 机械臂筛选器 · 白名单（留空 = 全部放行） */
+    public Set<String> getStationWhitelist(String tag) {
+        Station st = stationFor(tag);
+        return st == null ? new LinkedHashSet<>() : new LinkedHashSet<>(st.whitelist);
+    }
+
+    /** 机械臂筛选器 · 黑名单 */
+    public Set<String> getStationBlacklist(String tag) {
+        Station st = stationFor(tag);
+        return st == null ? new LinkedHashSet<>() : new LinkedHashSet<>(st.blacklist);
+    }
+
+    /**
+     * 给机械臂设置筛选器。
+     *
+     * @param whitelist 白名单（只有名单里的物料才取，空 = 全部放行）
+     * @param blacklist 黑名单（名单里的物料一律不取）
+     */
+    public void setStationFilter(String tag, Collection<String> whitelist, Collection<String> blacklist) {
+        Station st = stationFor(tag);
+        if (st == null) {
+            return;
+        }
+        st.whitelist.clear();
+        st.blacklist.clear();
+        if (whitelist != null) {
+            st.whitelist.addAll(whitelist);
+        }
+        if (blacklist != null) {
+            st.blacklist.addAll(blacklist);
+        }
+    }
+
+    /** 清掉筛选器，恢复成「来什么取什么」 */
+    public void resetStationFilter(String tag) {
+        setStationFilter(tag, null, null);
+    }
+
+    /**
+     * 机械臂的筛选规则：白名单优先，黑名单兜底。
+     *
+     * @return true 表示这条机械臂愿意取这种物料
+     */
+    public boolean acceptsMaterial(String tag, String material) {
+        Station st = stationFor(tag);
+        if (st == null) {
+            return false;
+        }
+        return accepts(st, material);
+    }
+
+    /**
+     * 某工位的供给带上堆了多少料块（机械臂取不过来就积压在带上）。
+     */
+    public int getSupplyBacklog(String tag) {
+        Station st = stationFor(tag);
+        return st == null ? 0 : st.supplyItems.size();
+    }
+
+    private static boolean accepts(Station st, String material) {
+        if (material == null) {
+            return false;
+        }
+        if (!st.whitelist.isEmpty() && !st.whitelist.contains(material)) {
+            return false;
+        }
+        return !st.blacklist.contains(material);
+    }
+
     /**
      * 报文抵达某台组装机：机器亮灯、炉火闪烁。
      * <p>每个节点都有机械臂，工件先排进机械臂的等候队列，
@@ -420,6 +654,10 @@ public class GameCanvas extends JPanel {
             return;
         }
         visited.add(tag);
+        // 筛选器把这种物料挡掉了：这台设备不收，工件直接过站
+        if (!accepts(st, st.demand)) {
+            return;
+        }
         // 已经排过队就不重复入队
         for (DataPacket q : st.waiting) {
             if (q.getCartId() == packet.getCartId()) {
@@ -521,7 +759,7 @@ public class GameCanvas extends JPanel {
         // 每个工位：供给带出料 + 机械臂开工 + 排队工件就位
         carriedPos.clear();
         for (Station st : stations) {
-            if (st.kind == KIND_HEADER && !st.strip) {
+            if (st.supplyBottom != null) {
                 advanceSupply(st, now);
             }
             updateCycle(st, now);
@@ -530,9 +768,9 @@ public class GameCanvas extends JPanel {
             tryStartCycle(st, now);
             computePose(st, stationProgress(st, now));
             // 通用工位：工件被机械臂夹着走，位置跟着夹爪走（computePose 已经同步过坐标）
-            if (st.kind == KIND_PROCESS && st.packet != null && st.cycleStart > 0 && st.poseGrip) {
+            if (st.poseWork && st.packet != null && st.cycleStart > 0) {
                 carriedPos.put(st.packet.getCartId(),
-                        new double[]{st.poseX, st.poseY, st.poseHidden ? 1 : 0});
+                        new double[]{st.poseX, st.poseY, st.poseWorkHidden ? 1 : 0});
             }
         }
 
@@ -562,29 +800,35 @@ public class GameCanvas extends JPanel {
 
     /**
      * 供给传送带：生成机不断出料，料块顺着带子往下走。
-     * <p>机械臂来不及取时，料块就在带上排队（越积越多）。</p>
+     * <p>一条带子只运输一种物料，生成机只生产这条带子对应的原料；
+     * 机械臂来不及取（或者被筛选器挡掉）时，料块就在带上排队。</p>
      */
     private void advanceSupply(Station f, long now) {
+        if (f.supplyBottom == null) {
+            return;
+        }
         if (f.genAt == 0) {
             f.genAt = now;
         }
         // 生成机出料
         while (now - f.genAt >= GEN_INTERVAL) {
             f.genAt += GEN_INTERVAL;
-            double last = f.queue.isEmpty() ? Double.MAX_VALUE : f.queue.get(f.queue.size() - 1);
-            if (f.queue.size() < MAX_QUEUE && last > f.supplyTop.y + 46) {
-                f.queue.add(f.supplyTop.y + 18.0);
+            double last = f.supplyItems.isEmpty() ? Double.MAX_VALUE
+                    : f.supplyItems.get(f.supplyItems.size() - 1).y;
+            if (f.supplyItems.size() < MAX_QUEUE && last > f.supplyTop.y + 46) {
+                f.supplyItems.add(new SupplyItem(f.demand, f.supplyTop.y + 18.0));
             }
         }
         // 传送带把料块往下送：最前面的一块停在取件点，后面的依次排在他后面
         double step = 0.32 * 33;
-        for (int i = 0; i < f.queue.size(); i++) {
-            double limit = (i == 0) ? f.pickY : f.queue.get(i - 1) - QUEUE_GAP;
-            double y = f.queue.get(i);
+        for (int i = 0; i < f.supplyItems.size(); i++) {
+            SupplyItem item = f.supplyItems.get(i);
+            double limit = (i == 0) ? f.pickY : f.supplyItems.get(i - 1).y - QUEUE_GAP;
+            double y = item.y;
             if (y < limit) {
                 y = Math.min(limit, y + step);
             }
-            f.queue.set(i, y);
+            item.y = y;
         }
     }
 
@@ -597,24 +841,37 @@ public class GameCanvas extends JPanel {
             return;
         }
         double u = (now - st.cycleStart) / (double) cycleMs(st);
-        if (st.kind == KIND_HEADER) {
-            if (st.strip) {
-                // 拆包：机械臂先从工件上把头部抓走，再把头丢进回收箱，最后放行工件
-                if (u >= 0.14 && !st.grabbed) {
-                    st.grabbed = true;
-                    applyGrab(st);
+        int mode = modeOf(st);
+        if (mode == MODE_STRIP) {
+            // 拆包：机械臂先从工件上把头部抓走，再把头丢进回收箱，最后放行工件
+            if (u >= 0.14 && !st.grabbed) {
+                st.grabbed = true;
+                applyGrab(st);
+            }
+            if (u >= 0.80 && !st.released) {
+                st.released = true;
+                if (st.packet != null) {
+                    st.packet.releaseFromArm();
                 }
-                if (u >= 0.80 && !st.released) {
-                    st.released = true;
-                    if (st.packet != null) {
-                        st.packet.releaseFromArm();
-                    }
-                }
-            } else {
-                // 封装：机械臂把头部钉到工件尾部之后才放行
-                if (u >= 0.80 && !st.released) {
-                    st.released = true;
-                    applyRelease(st);
+            }
+        } else if (mode == MODE_SEAL) {
+            // 封装：机械臂把原料块钉到工件尾部之后才放行
+            if (u >= 0.80 && !st.released) {
+                st.released = true;
+                applyRelease(st);
+            }
+        } else if (mode == MODE_MIX) {
+            // 又要原料又要加工：先把原料块送进机器，再把工件抓进机器加工，最后放行
+            if (u >= 0.27 && !st.grabbed) {
+                st.grabbed = true;
+                stampLayer(st);
+            }
+            if (u >= 0.75 && !st.released) {
+                st.released = true;
+                if (st.packet != null) {
+                    st.packet.setX(st.outPoint.x);
+                    st.packet.setY(st.outPoint.y);
+                    st.packet.releaseFromArm();
                 }
             }
         } else {
@@ -683,19 +940,20 @@ public class GameCanvas extends JPanel {
         if (distanceTo(packet.getX(), packet.getY(), st.trunk.x, st.trunk.y) > 3) {
             return;
         }
-        if (st.kind == KIND_HEADER) {
-            if (st.strip) {
-                // 拆包：料块就在工件身上，直接抓
-                if (!layersOf(packet).contains(st.layer)) {
-                    st.waiting.poll();
-                    return;
-                }
-            } else {
-                // 封装：得等供给带把料送到取件点
-                if (st.queue.isEmpty() || st.queue.get(0) < st.pickY - 0.5) {
-                    return;
-                }
-                st.queue.remove(0);
+        int mode = modeOf(st);
+        // 机械臂要取的原料块（供给带上按筛选器挑）
+        SupplyItem picked = null;
+        if (mode == MODE_STRIP) {
+            // 拆包：料块就在工件身上，直接抓
+            if (!layersOf(packet).contains(st.layer)) {
+                st.waiting.poll();
+                return;
+            }
+        } else if (mode == MODE_SEAL || mode == MODE_MIX) {
+            // 封装 / 取料：得等供给带把料送到取件点，且要过筛选器
+            picked = pickSupplyItem(st);
+            if (picked == null) {
+                return;
             }
         }
         st.waiting.poll();
@@ -705,23 +963,49 @@ public class GameCanvas extends JPanel {
         st.grabbed = false;
         st.released = false;
 
-        if (st.kind == KIND_HEADER) {
-            if (st.strip) {
-                // 从工件身上抓走头部块
-                st.pickPoint = new Point((int) Math.round(packet.getX() + layerOffset(packet, st.layer)),
-                        (int) Math.round(packet.getY()));
-                st.outPoint = new Point(st.bin.x, st.bin.y);
-            } else {
-                // 从供给带上抓起料块，加工完钉到主干上的工件尾部
-                st.pickPoint = new Point(st.trunk.x, (int) Math.round(st.pickY));
-                st.outPoint = new Point((int) Math.round(packet.getX() + layerOffset(packet, st.layer)),
-                        (int) Math.round(packet.getY()));
-            }
+        if (mode == MODE_STRIP) {
+            // 从工件身上抓走头部块
+            st.pickPoint = new Point((int) Math.round(packet.getX() + layerOffset(packet, st.layer)),
+                    (int) Math.round(packet.getY()));
+            st.outPoint = new Point(st.bin.x, st.bin.y);
+        } else if (mode == MODE_SEAL) {
+            // 从供给带上抓起料块，加工完钉到主干上的工件尾部
+            st.pickPoint = new Point(st.trunk.x, (int) Math.round(picked.y));
+            st.outPoint = new Point((int) Math.round(packet.getX() + layerOffset(packet, st.layer)),
+                    (int) Math.round(packet.getY()));
+        } else if (mode == MODE_MIX) {
+            // 先去供给带取原料块，再把工件抓进机器加工
+            st.pickPoint = new Point(st.trunk.x, (int) Math.round(picked.y));
+            st.outPoint = new Point(st.trunk.x, st.trunk.y);
         } else {
             // 通用工位：把工件从传送带上抓起来，送进机器加工，再放回传送带
             st.pickPoint = new Point(st.trunk.x, st.trunk.y);
             st.outPoint = new Point(st.trunk.x, st.trunk.y);
         }
+    }
+
+    /**
+     * 从供给带上挑一个机械臂愿意取的料块。
+     * <p>机械臂按工位需求 + 筛选器（白名单 / 黑名单）过滤，
+     * 被挡掉的料块留在带上排队。</p>
+     *
+     * @return 挑中的料块；没有合适的就返回 null
+     */
+    private SupplyItem pickSupplyItem(Station st) {
+        if (st.supplyBottom == null) {
+            return null;
+        }
+        for (int i = 0; i < st.supplyItems.size(); i++) {
+            SupplyItem item = st.supplyItems.get(i);
+            if (!accepts(st, item.material)) {
+                continue;
+            }
+            if (item.y >= st.pickY - 0.5) {
+                st.supplyItems.remove(i);
+                return item;
+            }
+        }
+        return null;
     }
 
     /**
@@ -766,25 +1050,106 @@ public class GameCanvas extends JPanel {
     /**
      * 计算机械臂当前姿态。
      * <pre>
-     * 通用工位：
+     * 通用工位（工件本身就是原料）：
      *   0.00-0.14  待机位 → 传送带上抓取工件
      *   0.14-0.30  把工件送进组装机
      *   0.30-0.58  机器加工（工件在机器里面，看不见）
      *   0.58-0.74  把工件放回传送带
      *   0.74-1.00  空载复位
+     * 取料工位（原料在供给带上）：
+     *   0.00-0.14  待机位 → 供给带上抓原料块
+     *   0.14-0.28  把原料块送进组装机
+     *   0.28-0.52  机器加工（原料块在机器里面，看不见）
+     *   0.52-0.68  把加工结果送到工件上
+     *   0.68-0.80  停一下
+     *   0.80-1.00  空载复位
+     * 又取料又加工（普通节点也要协议头原料）：
+     *   0.00-0.15  待机位 → 供给带上抓原料块
+     *   0.15-0.27  把原料块送进组装机
+     *   0.27-0.35  空手回到工件旁边
+     *   0.35-0.47  把工件抓进组装机
+     *   0.47-0.63  机器加工（工件在机器里面，看不见）
+     *   0.63-0.75  把工件放回传送带
+     *   0.75-1.00  空载复位
      * </pre>
      */
     private void computePose(Station st, double u) {
         double x;
         double y;
-        boolean grip;
-        boolean hidden;
+        boolean grip = false;
+        boolean block = false;
+        boolean blockHidden = false;
+        boolean work = false;
+        boolean workHidden = false;
+        int mode = modeOf(st);
         if (u <= 0) {
             x = st.home.x;
             y = st.home.y;
-            grip = false;
-            hidden = false;
-        } else if (st.kind == KIND_HEADER) {
+        } else if (mode == MODE_PROCESS) {
+            Point pick = st.pickPoint;
+            Point mouth = st.mouth;
+            Point out = st.outPoint;
+            if (u < 0.14) {
+                double t = easeInOut(u / 0.14);
+                x = lerp(st.home.x, pick.x, t);
+                y = lerp(st.home.y, pick.y, t);
+            } else if (u < 0.30) {
+                double t = easeInOut((u - 0.14) / 0.16);
+                x = lerp(pick.x, mouth.x, t);
+                y = lerp(pick.y, mouth.y, t);
+            } else if (u < 0.58) {
+                x = mouth.x;
+                y = mouth.y;
+            } else if (u < 0.74) {
+                double t = easeInOut((u - 0.58) / 0.16);
+                x = lerp(mouth.x, out.x, t);
+                y = lerp(mouth.y, out.y, t);
+            } else {
+                double t = easeInOut((u - 0.74) / 0.26);
+                x = lerp(out.x, st.home.x, t);
+                y = lerp(out.y, st.home.y, t);
+            }
+            grip = u >= 0.14 && u < 0.74;
+            work = grip;
+            workHidden = u >= 0.30 && u < 0.58;
+        } else if (mode == MODE_MIX) {
+            Point supply = st.pickPoint;
+            Point mouth = st.mouth;
+            Point trunk = new Point(st.trunk.x, st.trunk.y);
+            if (u < 0.15) {
+                double t = easeInOut(u / 0.15);
+                x = lerp(st.home.x, supply.x, t);
+                y = lerp(st.home.y, supply.y, t);
+            } else if (u < 0.27) {
+                double t = easeInOut((u - 0.15) / 0.12);
+                x = lerp(supply.x, mouth.x, t);
+                y = lerp(supply.y, mouth.y, t);
+            } else if (u < 0.35) {
+                double t = easeInOut((u - 0.27) / 0.08);
+                x = lerp(mouth.x, trunk.x, t);
+                y = lerp(mouth.y, trunk.y, t);
+            } else if (u < 0.47) {
+                double t = easeInOut((u - 0.35) / 0.12);
+                x = lerp(trunk.x, mouth.x, t);
+                y = lerp(trunk.y, mouth.y, t);
+            } else if (u < 0.63) {
+                x = mouth.x;
+                y = mouth.y;
+            } else if (u < 0.75) {
+                double t = easeInOut((u - 0.63) / 0.12);
+                x = lerp(mouth.x, trunk.x, t);
+                y = lerp(mouth.y, trunk.y, t);
+            } else {
+                double t = easeInOut((u - 0.75) / 0.25);
+                x = lerp(trunk.x, st.home.x, t);
+                y = lerp(trunk.y, st.home.y, t);
+            }
+            block = u >= 0.15 && u < 0.27;
+            blockHidden = u >= 0.27 && u < 0.35;
+            work = u >= 0.35 && u < 0.75;
+            workHidden = u >= 0.47 && u < 0.63;
+            grip = block || work;
+        } else {
             Point pick = st.pickPoint;
             Point mouth = st.mouth;
             Point out = st.outPoint;
@@ -812,41 +1177,19 @@ public class GameCanvas extends JPanel {
                 y = lerp(out.y, st.home.y, t);
             }
             grip = u >= 0.14 && u < 0.80;
-            hidden = u >= 0.28 && u < 0.52;
-        } else {
-            Point pick = st.pickPoint;
-            Point mouth = st.mouth;
-            Point out = st.outPoint;
-            if (u < 0.14) {
-                double t = easeInOut(u / 0.14);
-                x = lerp(st.home.x, pick.x, t);
-                y = lerp(st.home.y, pick.y, t);
-            } else if (u < 0.30) {
-                double t = easeInOut((u - 0.14) / 0.16);
-                x = lerp(pick.x, mouth.x, t);
-                y = lerp(pick.y, mouth.y, t);
-            } else if (u < 0.58) {
-                x = mouth.x;
-                y = mouth.y;
-            } else if (u < 0.74) {
-                double t = easeInOut((u - 0.58) / 0.16);
-                x = lerp(mouth.x, out.x, t);
-                y = lerp(mouth.y, out.y, t);
-            } else {
-                double t = easeInOut((u - 0.74) / 0.26);
-                x = lerp(out.x, st.home.x, t);
-                y = lerp(out.y, st.home.y, t);
-            }
-            grip = u >= 0.14 && u < 0.74;
-            hidden = u >= 0.30 && u < 0.58;
+            block = grip;
+            blockHidden = u >= 0.28 && u < 0.52;
         }
         st.poseX = x;
         st.poseY = y;
         st.poseGrip = grip;
-        st.poseHidden = hidden;
+        st.poseBlock = block;
+        st.poseBlockHidden = blockHidden;
+        st.poseWork = work;
+        st.poseWorkHidden = workHidden;
 
-        // 通用工位：工件被机械臂夹着走，位置跟着夹爪走
-        if (st.kind == KIND_PROCESS && st.packet != null && st.cycleStart > 0 && grip) {
+        // 工件被机械臂夹着走，位置跟着夹爪走
+        if (work && st.packet != null && st.cycleStart > 0) {
             st.packet.setX(x);
             st.packet.setY(y);
         }
@@ -960,6 +1303,32 @@ public class GameCanvas extends JPanel {
                 }
             }
         }
+        drawTrunkBeltLabel(g2, line);
+    }
+
+    /**
+     * 主干传送带 C2 的物料标签：这条带子只运输工件本体，
+     * 协议头块是各工位自己的供给带 C1 送上来的。
+     */
+    private void drawTrunkBeltLabel(Graphics2D g2, ProductionLine line) {
+        for (ProductionLine.Belt belt : line.getBelts()) {
+            if (!"PC_FACTORY".equals(belt.getFromTag())) {
+                continue;
+            }
+            List<Point> pts = belt.getPoints();
+            if (pts.size() < 2) {
+                return;
+            }
+            Point a = pts.get(0);
+            Point b = pts.get(1);
+            double cx = (a.x + b.x) / 2.0;
+            double cy = (a.y + b.y) / 2.0;
+            g2.setFont(new Font("微软雅黑", Font.BOLD, 10));
+            g2.setColor(new Color(0x2C, 0x3E, 0x50));
+            g2.drawString("主干带 C2 · " + Material.displayName(belt.getMaterial()),
+                    (int) cx + 8, (int) cy - BELT_HALF_WIDTH - 6);
+            return;
+        }
     }
 
     private void drawHorizontalBelt(Graphics2D g2, Point a, Point b) {
@@ -1039,10 +1408,10 @@ public class GameCanvas extends JPanel {
 
     // ===================== 供给传送带 C1 =====================
 
-    /** 每种头部块一条专属供给带，把料从生成机送到组装机旁待取 */
+    /** 每种物料一条专属供给带，把料从生成机送到组装机旁待取 */
     private void drawSupplyBelts(Graphics2D g2) {
         for (Station f : stations) {
-            if (f.kind != KIND_HEADER || f.strip) {
+            if (f.supplyBottom == null) {
                 continue;
             }
             int x = f.supplyTop.x;
@@ -1075,10 +1444,10 @@ public class GameCanvas extends JPanel {
             arrow.addPoint(x + 7, bottom - 18);
             g2.fillPolygon(arrow);
 
-            // 供给带编号
+            // 供给带编号：一条带子只运输一种物料
             g2.setFont(new Font("微软雅黑", Font.BOLD, 9));
             g2.setColor(f.dark);
-            String label = f.layer + " 供给带";
+            String label = Material.displayName(f.demand) + " 供给带";
             g2.drawString(label, x + SUPPLY_BELT_W / 2 + 6, top + 14);
         }
     }
@@ -1142,7 +1511,7 @@ public class GameCanvas extends JPanel {
         if (station != null) {
             double u = stationProgress(station, now);
             // 料在机器里面加工的那一段
-            crafting = u > 0 && station.poseHidden;
+            crafting = u > 0 && (station.poseWorkHidden || station.poseBlockHidden);
             if (u > 0 && u < 1) {
                 busy = true;
                 phase = u;
@@ -1202,6 +1571,11 @@ public class GameCanvas extends JPanel {
             g2.drawString(label, (int) mx - fm.stringWidth(label) / 2, (int) my + h / 2 + 14);
         }
 
+        // 需求牌：这台设备要消耗哪种原料（机械臂按需求去对应的传送带上取料）
+        if (station != null) {
+            drawDemandChip(g2, station, x + 6, y + 12);
+        }
+
         // 接收端服务器的缓冲区格子
         if ("RX_ST".equals(tag)) {
             g2.setColor(BUSY_RED);
@@ -1219,6 +1593,33 @@ public class GameCanvas extends JPanel {
             String q = "等" + station.waiting.size();
             FontMetrics qfm = g2.getFontMetrics();
             g2.drawString(q, x + w - 26 + 12 - qfm.stringWidth(q) / 2, y - 5);
+        }
+    }
+
+    /**
+     * 机器上的需求牌：显示这台设备要消耗的原料，
+     * 以及机械臂筛选器的状态（设了白名单 / 黑名单就挂个「筛」牌）。
+     */
+    private void drawDemandChip(Graphics2D g2, Station st, int x, int y) {
+        String demand = st.demand;
+        Color bg = Material.isHeader(demand) ? colorOfLayer(demand) : MACHINE_STROKE;
+        Color fg = Color.WHITE;
+        String text = Material.PAYLOAD.equals(demand) ? "件" : demand;
+        g2.setFont(new Font("微软雅黑", Font.BOLD, 9));
+        FontMetrics fm = g2.getFontMetrics();
+        int cw = fm.stringWidth(text) + 8;
+        g2.setColor(bg);
+        g2.fillRoundRect(x, y, cw, 13, 4, 4);
+        g2.setColor(fg);
+        g2.drawString(text, x + 4, y + 10);
+
+        // 筛选器状态
+        if (!st.whitelist.isEmpty() || !st.blacklist.isEmpty()) {
+            int fx = x + cw + 3;
+            g2.setColor(BUSY_ORANGE);
+            g2.fillRoundRect(fx, y, 15, 13, 4, 4);
+            g2.setColor(Color.WHITE);
+            g2.drawString("筛", fx + 3, y + 10);
         }
     }
 
@@ -1243,7 +1644,24 @@ public class GameCanvas extends JPanel {
 
     /** 一个动作周期的时长 */
     private long cycleMs(Station st) {
-        return st.kind == KIND_HEADER ? ARM_CYCLE_MS : PROCESS_CYCLE_MS;
+        int mode = modeOf(st);
+        if (mode == MODE_PROCESS) {
+            return PROCESS_CYCLE_MS;
+        }
+        return mode == MODE_MIX ? MIX_CYCLE_MS : ARM_CYCLE_MS;
+    }
+
+    /**
+     * 这个工位的机械臂怎么取料。
+     * <p>协议头工位：封装工位从自己的供给带取原料块，拆包工位从工件上拆；
+     * 普通节点默认消耗工件本体，用户把需求改成协议头原料后，
+     * 它就先去供给带取料送进机器，再把工件抓进机器加工。</p>
+     */
+    private static int modeOf(Station st) {
+        if (st.kind == KIND_HEADER) {
+            return st.strip ? MODE_STRIP : MODE_SEAL;
+        }
+        return Material.isHeader(st.demand) ? MODE_MIX : MODE_PROCESS;
     }
 
     // ===================== 生成机 / 收纳箱 / 排队料块 =====================
@@ -1251,17 +1669,16 @@ public class GameCanvas extends JPanel {
     private void drawStations(Graphics2D g2) {
         long now = System.currentTimeMillis();
         for (Station f : stations) {
-            if (f.kind != KIND_HEADER) {
+            if (f.bin != null) {
+                drawBin(g2, f);
+            }
+            if (f.supplyBottom == null) {
                 continue;
             }
-            if (f.strip) {
-                drawBin(g2, f);
-            } else {
-                drawGenerator(g2, f, now);
-                // 供给带上排队的料块
-                for (double y : f.queue) {
-                    drawHeaderBlock(g2, f.supplyTop.x, y, f);
-                }
+            drawGenerator(g2, f, now);
+            // 供给带上排队的料块
+            for (SupplyItem item : f.supplyItems) {
+                drawHeaderBlock(g2, f.supplyTop.x, item.y, f);
             }
         }
     }
@@ -1311,7 +1728,7 @@ public class GameCanvas extends JPanel {
         g2.drawRoundRect(x, y, GEN_SIZE, GEN_SIZE, 6, 6);
 
         // 内部脉动块：空闲时呼吸，供给带上排队越多越亮
-        boolean working = f.queue.size() >= 2;
+        boolean working = f.supplyItems.size() >= 2;
         double pulse = working ? 0.85 : 0.35 + 0.35 * Math.sin(animTime / 420.0 + f.trunk.x);
         g2.setColor(new Color(f.color.getRed(), f.color.getGreen(), f.color.getBlue(),
                 (int) (255 * Math.min(1, pulse))));
@@ -1342,8 +1759,8 @@ public class GameCanvas extends JPanel {
             }
             double grip = f.poseGrip ? 1 : 0;
             drawArmLink(g2, f.armBase.x, f.armBase.y, f.poseX, f.poseY, ARM_L1, ARM_L2, grip);
-            // 协议头工位：料块在机器内部时不可见
-            if (f.kind == KIND_HEADER && f.poseGrip && !f.poseHidden) {
+            // 取料工位：夹爪里夹着原料块，料块在机器内部时不可见
+            if (f.poseBlock && !f.poseBlockHidden) {
                 drawHeaderBlock(g2, f.poseX, f.poseY, f);
             }
         }
@@ -1405,6 +1822,25 @@ public class GameCanvas extends JPanel {
         }
         // 头已经装上了，工件可以继续往前走
         packet.releaseFromArm();
+    }
+
+    /**
+     * 只把这一层协议头记到工件上，不放行工件。
+     * <p>「又取料又加工」的工位：原料块先被送进机器（这时工件还得留在机器边上
+     * 等着被抓进去加工），所以这里不能顺手把工件放掉。</p>
+     */
+    private void stampLayer(Station f) {
+        DataPacket packet = f.packet;
+        if (packet == null) {
+            return;
+        }
+        Set<String> layers = packetLayers.computeIfAbsent(packet.getCartId(),
+                id -> new LinkedHashSet<>());
+        if (f.strip) {
+            layers.remove(f.layer);
+        } else {
+            layers.add(f.layer);
+        }
     }
 
     /** 头部块 */
@@ -1657,6 +2093,9 @@ public class GameCanvas extends JPanel {
         g2.drawString("每种料一条供给带 C1，机械臂抓料进组装机", bx, by);
         g2.drawString("加工完成后再由机械臂送上主干 C2，抓不过来就在带上排队", bx, by + 16);
         g2.drawString("通用机械臂：数据过每个节点都要被抓进机器加工一遍", bx, by + 32);
+        g2.drawString("机器上的牌子 = 这台设备需要的原料（工件 / TCP / IP / ETH）", bx, by + 48);
+        g2.setColor(BUSY_ORANGE);
+        g2.drawString("右键工位可给机械臂设置筛选器（白名单 / 黑名单）", bx, by + 64);
     }
 
     private void drawLegendItem(Graphics2D g2, int x, int y, Color color, String text) {

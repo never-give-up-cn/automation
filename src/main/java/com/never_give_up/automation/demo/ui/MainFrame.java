@@ -74,6 +74,8 @@ public class MainFrame extends JFrame implements GameEngine.GameCallback {
         initDnsCache();
 
         canvas = new GameCanvas(engine, mapManager, dataPackets, oreCarts);
+        // 右键工位 → 打开机械臂筛选器设置框
+        canvas.setStationFilterListener(tag -> showArmFilterDialog(tag));
 
         lblDashboard = new JLabel("", JLabel.CENTER);
         lblDashboard.setFont(new Font("微软雅黑", Font.BOLD, 14));
@@ -361,6 +363,10 @@ public class MainFrame extends JFrame implements GameEngine.GameCallback {
     }
 
     private void handleBuildingRemoval(MouseEvent e, JScrollPane scrollPane) {
+        // 右键点到产线工位上时是「设置机械臂筛选器」，不拆房子
+        if (canvas.stationAtScreen(e.getX(), e.getY()) != null) {
+            return;
+        }
         int scrollX = scrollPane.getHorizontalScrollBar().getValue();
         int scrollY = scrollPane.getVerticalScrollBar().getValue();
         int logicalX = canvas.getLogicalX(e.getX(), scrollX);
@@ -381,6 +387,22 @@ public class MainFrame extends JFrame implements GameEngine.GameCallback {
                 mapManager.removeBuilding(row, col);
                 logToConsole(String.format("【🗑️ 拆除】: 移除 %s，返还 %d 资金", existing, refund));
             }
+        }
+    }
+
+    /**
+     * 打开机械臂筛选器设置框：设置这台设备需要的原料、白名单、黑名单。
+     */
+    private void showArmFilterDialog(String tag) {
+        ArmFilterDialog dialog = new ArmFilterDialog(this, canvas, tag);
+        dialog.setVisible(true);
+        if (dialog.isConfirmed()) {
+            dialog.applyToCanvas();
+            logToConsole(String.format("【🦾 机械臂筛选器】: %s 需求=%s 白名单=%s 黑名单=%s",
+                    tag,
+                    canvas.getStationDemand(tag),
+                    canvas.getStationWhitelist(tag),
+                    canvas.getStationBlacklist(tag)));
         }
     }
 

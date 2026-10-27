@@ -30,12 +30,15 @@ public class ProductionLine {
         private final String fromTag;
         private final String toTag;
         private final boolean forward;
+        /** 这条带子上运的物料：一条带子只运一种物料 */
+        private final String material;
 
-        Belt(List<Point> points, String fromTag, String toTag, boolean forward) {
+        Belt(List<Point> points, String fromTag, String toTag, boolean forward, String material) {
             this.points = points;
             this.fromTag = fromTag;
             this.toTag = toTag;
             this.forward = forward;
+            this.material = material;
         }
 
         public List<Point> getPoints() {
@@ -48,6 +51,11 @@ public class ProductionLine {
 
         public String getToTag() {
             return toTag;
+        }
+
+        /** 这条传送带运输的物料 */
+        public String getMaterial() {
+            return material;
         }
 
         /** 是否是正向（去程）传送带，回程走同一条带子但方向相反 */
@@ -141,7 +149,7 @@ public class ProductionLine {
                 if (a == null || b == null) {
                     continue;
                 }
-                belts.add(new Belt(segment(a, b), fromTag, toTag, true));
+                belts.add(new Belt(segment(a, b), fromTag, toTag, true, Material.PAYLOAD));
             }
         }
     }
