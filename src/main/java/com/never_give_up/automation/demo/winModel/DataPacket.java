@@ -93,10 +93,10 @@ public class DataPacket {
 
     /**
      * 头部工位（机械臂封装 / 拆包）的停留帧数。
-     * <p>工件要停在工位上等机械臂把 TCP / IP / ETH 头装上或拆下来，
-     * 停留时间约等于机械臂一个取放周期（480ms / 30ms ≈ 16 帧）。</p>
+     * <p>机械臂真正干活时工件会停在工位上等（由 waitingForArm 控制），
+     * 这里只留一点缓冲时间，让「停下 → 机械臂抓料」这个过程看得清楚。</p>
      */
-    private static final int HEADER_STAGE_PAUSE = 16;
+    private static final int HEADER_STAGE_PAUSE = 4;
 
     /** 需要停留等待机械臂的阶段：13=T_CORE(TCP)、14=TX_IPH(IP)、19=ETH_TYPE(ETH)，
      *  37=RX_ETH、42=RX_IP、44=RX_TCP（解封装） */
@@ -259,6 +259,10 @@ public class DataPacket {
     private Point droppedAtPosition = null;
     private boolean hasPayload = true;
     private boolean hasApp = false, hasTcp = false, hasIp = false, hasEther = false, hasLlc = false, hasFcs = false;
+    /** 工件是否正在头部工位上等机械臂（机械臂把料装/拆完之前不许离开工位） */
+    private boolean waitingForArm = false;
+    /** 等机械臂的最长帧数，超时强制放行，避免整条产线卡死 */
+    private int armWaitLimit = 0;
     private boolean c_Payload = false, c_SP = false, c_DP = false, c_SEQ = false, c_ACK = false, c_CTL = false, c_WIN = false, c_CHK = false;
     private boolean isFragmented = false, isNatted = false;
     private String natPublicIp = null;
@@ -651,6 +655,27 @@ public class DataPacket {
 
     public String getCurrentTag() {
         return currentTag;
+    }
+
+    /**
+     * 工件在头部工位上等机械臂：机械臂把协议头装上 / 拆下来之前，工件不许离开工位。
+     *
+     * @param limitFrames 最长等待帧数，超时后强制放行，避免产线卡死
+     */
+    public void waitForArm(int limitFrames) {
+        this.waitingForArm = true;
+        this.armWaitLimit = limitFrames;
+    }
+
+    /** 机械臂干完了，工件可以继续往前走 */
+    public void releaseFromArm() {
+        this.waitingForArm = false;
+        this.armWaitLimit = 0;
+    }
+
+    /** 工件是否正在等机械臂 */
+    public boolean isWaitingForArm() {
+        return waitingForArm;
     }
 
     // 在 DataPacket.java 中，替换 findTargetMachine 方法
@@ -1163,6 +1188,17 @@ public class DataPacket {
 
     public void update() {
         if (arrived || dropped) {
+            return;
+        }
+
+        // 头部工位等机械臂：机械臂还没把协议头装上/拆下来，工件就停在工位上排队
+        if (waitingForArm) {
+            if (armWaitLimit > 0) {
+                armWaitLimit--;
+                if (armWaitLimit == 0) {
+                    waitingForArm = false;
+                }
+            }
             return;
         }
 

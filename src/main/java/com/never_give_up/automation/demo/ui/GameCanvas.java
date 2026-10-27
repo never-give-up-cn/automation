@@ -9,7 +9,10 @@ import com.never_give_up.automation.demo.winModel.OreCart;
 
 import javax.swing.*;
 import java.awt.*;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -19,18 +22,18 @@ import java.util.Set;
 /**
  * 厂区画布（俯视图）：把协议栈画成一条自动化产线。
  * <p>
- * 参照「TCP/IP 数据包组装产线 · 俯视图动画」：
+ * 产线结构（每种东西一条自己的传送带）：
  * </p>
  * <ol>
- *   <li><b>主干传送带</b>：协议栈的工位依次排布在传送带上，工件（数据包）
- *       骑在传送带上向下一站流去；</li>
- *   <li><b>分支产线</b>：TCP / IP / ETH 三个封装层各有一条支线，支线顶端是
- *       「生成机」，支线传送带把定长头部块（蓝色 TCP、绿色 IP、紫色 ETH）
- *       源源不断地送到主干旁待命；</li>
- *   <li><b>机械臂</b>：工件抵达对应工位时，机械臂俯身从支线上抓起头部块，
- *       摆到主干上「钉」在工件尾部，工件因此越走越厚；</li>
- *   <li><b>拆包工位</b>：接收端把 TCP / IP / ETH 头部拆下来，机械臂把头部块
- *       拎回收纳箱，工件随之变薄，回到应用层时只剩净荷。</li>
+ *   <li><b>主干传送带 C2</b>：工件（数据包）骑在传送带上向下一站流去，
+ *       所有工位（节点）都摆在传送带<b>外侧</b>，不再骑在带上；</li>
+ *   <li><b>供给传送带 C1</b>：TCP / IP / ETH 每种头部块各有一条专属供给带，
+ *       顶端是「生成机」，源源不断地把料块送到取件点；
+ *       机械臂来不及取时，料块就在供给带上<b>排队</b>；</li>
+ *   <li><b>组装机</b>：封装工位旁边就是组装机，机械臂把料块从供给带抓进机器，
+ *       机器加工完成后，机械臂再把成品抓出来钉到主干上的工件尾部；</li>
+ *   <li><b>拆包工位</b>：接收端把 TCP / IP / ETH 头部拆下来，机械臂从工件上
+ *       抓走头部块，送进拆包机，再丢进收纳箱，工件随之变薄。</li>
  * </ol>
  */
 public class GameCanvas extends JPanel {
@@ -78,17 +81,32 @@ public class GameCanvas extends JPanel {
     /** 传送带纹理滚动速度（像素/毫秒），约 15 像素/帧 */
     private static final double TEX_SPEED = 0.45;
 
-    /** 支线传送带宽度 */
-    private static final int FEEDER_BELT_W = 40;
-    /** 支线传送带长度 */
-    private static final int FEEDER_BELT_LEN = 112;
+    /** 供给传送带宽度 */
+    private static final int SUPPLY_BELT_W = 40;
+    /** 供给传送带长度 */
+    private static final int SUPPLY_BELT_LEN = 104;
     /** 生成机 / 收纳箱尺寸 */
     private static final int GEN_SIZE = 76;
+    /** 组装机尺寸 */
+    private static final int MACHINE_W = 76;
+    private static final int MACHINE_H = 56;
+    /** 组装机相对主干传送带的纵向偏移：机器摆在传送带外侧（上方） */
+    private static final int MACHINE_OFFSET = -76;
+    /** 组装机进料口相对主干中心的纵向距离（机器在传送带上方，进料口也在上方） */
+    private static final int MACHINE_MOUTH_DY = MACHINE_OFFSET + MACHINE_H / 2 - 8;
     /** 机械臂两节长度 */
     private static final double ARM_L1 = 78;
     private static final double ARM_L2 = 78;
     /** 机械臂一个完整取放周期（毫秒） */
-    private static final long ARM_CYCLE_MS = 480;
+    private static final long ARM_CYCLE_MS = 720;
+    /** 生成机出料间隔（毫秒）：比机械臂一个周期短，供给带上就会排队 */
+    private static final long GEN_INTERVAL = 320;
+    /** 供给带上允许同时排队的料块数 */
+    private static final int MAX_QUEUE = 4;
+    /** 工件在工位上等机械臂的最长帧数（超时强制放行，避免产线卡死） */
+    private static final int ARM_WAIT_LIMIT = 60;
+    /** 供给带上料块之间的间距 */
+    private static final double QUEUE_GAP = 30;
     /** 工件的净荷宽度 */
     private static final int PAYLOAD_W = 40;
     /** 工件上一个协议头块的宽度 */
@@ -142,7 +160,7 @@ public class GameCanvas extends JPanel {
     }
 
     /**
-     * 一条头部产线：支线传送带 + 生成机（或收纳箱）+ 机械臂。
+     * 一条头部产线：专属供给传送带 C1 + 生成机 + 组装机 + 机械臂。
      */
     private static class Feeder {
         /** 服务的工位标签 */
@@ -156,20 +174,39 @@ public class GameCanvas extends JPanel {
 
         /** 工位（主干上）坐标 */
         Point trunk;
-        /** 生成机 / 收纳箱中心 */
+        /** 组装机中心（主干外侧） */
         Point machine;
         /** 机械臂底座 */
         Point armBase;
-        /** 支线传送带下沿 */
-        int beltBottom;
-        /** 支线传送带上沿 */
-        int beltTop;
+        /** 机械臂待机位 */
+        Point home;
+        /** 供给传送带上沿 / 下沿（封装工位） */
+        Point supplyTop;
+        Point supplyBottom;
+        /** 供给带上的取件点 y */
+        double pickY;
+        /** 生成机中心（封装工位） */
+        Point generator;
+        /** 收纳箱中心（拆包工位） */
+        Point bin;
+
+        /** 供给带上排队的料块（y 坐标，最前面的一块在最下） */
+        final List<Double> queue = new ArrayList<>();
+        /** 上次出料时间 */
+        long genAt;
+        /** 等待机械臂处理的工件 */
+        final Deque<DataPacket> waiting = new ArrayDeque<>();
 
         /** 当前动作周期开始时间，-1 表示空闲 */
         long cycleStart = -1;
         /** 本轮动作对应的工件 */
         DataPacket packet;
-        /** 是否已经完成放件 */
+        /** 本轮动作的取件点 / 出料点（动作开始时锁定，避免工件走动导致手臂乱晃） */
+        Point pickPoint;
+        Point outPoint;
+        /** 是否已经把头部从工件上取走（拆包） */
+        boolean grabbed;
+        /** 是否已经把头部装到工件上（封装） */
         boolean released;
     }
 
@@ -207,12 +244,23 @@ public class GameCanvas extends JPanel {
             f.color = colorOfLayer(layer);
             f.dark = darkOfLayer(layer);
             f.trunk = trunk;
-            // 支线：主干 → 向上 112px → 生成机
-            f.beltBottom = trunk.y - 44;
-            f.beltTop = f.beltBottom - FEEDER_BELT_LEN;
-            f.machine = new Point(trunk.x, f.beltTop - GEN_SIZE / 2 - 2);
-            // 机械臂底座：支线右侧、主干上方
-            f.armBase = new Point(trunk.x + 112, trunk.y - 84);
+
+            // 组装机摆在主干传送带的外侧（上方），传送带从机器下方经过
+            f.machine = new Point(trunk.x, trunk.y + MACHINE_OFFSET);
+            // 机械臂底座：组装机右侧
+            f.armBase = new Point(trunk.x + 92, f.machine.y - 24);
+            f.home = new Point(trunk.x + 58, f.machine.y - 74);
+
+            if (strip) {
+                // 拆包工位：组装机上方是收纳箱（回收下来的头部块丢这里）
+                f.bin = new Point(trunk.x, f.machine.y - GEN_SIZE - 6);
+            } else {
+                // 封装工位：组装机上方是专属供给传送带 C1，供给带顶端是生成机
+                f.supplyBottom = new Point(trunk.x, f.machine.y - MACHINE_H / 2 - 4);
+                f.supplyTop = new Point(trunk.x, f.supplyBottom.y - SUPPLY_BELT_LEN);
+                f.generator = new Point(trunk.x, f.supplyTop.y - GEN_SIZE / 2 - 2);
+                f.pickY = f.supplyBottom.y - 16;
+            }
             feeders.add(f);
         }
     }
@@ -245,7 +293,8 @@ public class GameCanvas extends JPanel {
 
     /**
      * 报文抵达某台组装机：机器亮灯、炉火闪烁。
-     * <p>如果该工位挂着头部产线，同时启动机械臂的取放动作。</p>
+     * <p>如果该工位挂着头部产线，工件先排进机械臂的等候队列，
+     * 等机械臂把上一件活干完再轮到它（抓不过来就排队）。</p>
      */
     public void markWorking(String tag, DataPacket packet) {
         if (tag == null) {
@@ -257,10 +306,12 @@ public class GameCanvas extends JPanel {
 
         Point pos = mapManager.findBuildingCoords(tag);
         if (pos != null) {
+            // 火花在传送带外侧的机器上飞
+            Point machinePos = isOnLine(tag) ? new Point(pos.x, pos.y + MACHINE_OFFSET) : pos;
             for (int i = 0; i < 6; i++) {
                 Spark s = new Spark();
-                s.x = pos.x + (Math.random() - 0.5) * 30;
-                s.y = pos.y + (Math.random() - 0.5) * 16;
+                s.x = machinePos.x + (Math.random() - 0.5) * 30;
+                s.y = machinePos.y + (Math.random() - 0.5) * 16;
                 s.vx = (Math.random() - 0.5) * 150;
                 s.vy = -Math.random() * 150 - 40;
                 s.max = 0.25 + Math.random() * 0.35;
@@ -269,24 +320,32 @@ public class GameCanvas extends JPanel {
             }
         }
 
-        // 启动对应头部产线的机械臂
+        // 工位挂着头部产线 → 工件排到机械臂的等候队列
         for (Feeder f : feeders) {
-            if (!f.station.equals(tag)) {
+            if (!f.station.equals(tag) || packet == null) {
                 continue;
             }
-            if (f.cycleStart > 0 && now - f.cycleStart < ARM_CYCLE_MS) {
-                continue;
-            }
-            // 封装工位看协议栈是否真的加上了这一层；拆包工位看工件身上是否还带着这一层
+            Set<String> layers = layersOf(packet);
             boolean applicable = f.strip
-                    ? (packet != null && layersOf(packet).contains(f.layer))
-                    : hasLayer(packet, f.layer);
+                    // 拆包：工件身上确实带着这一层才需要拆
+                    ? layers.contains(f.layer)
+                    // 封装：协议栈里有这一层、但工件上还没装上
+                    : (hasLayer(packet, f.layer) && !layers.contains(f.layer));
             if (!applicable) {
                 continue;
             }
-            f.cycleStart = now;
-            f.packet = packet;
-            f.released = false;
+            boolean queued = false;
+            for (DataPacket q : f.waiting) {
+                if (q.getCartId() == packet.getCartId()) {
+                    queued = true;
+                    break;
+                }
+            }
+            if (!queued) {
+                f.waiting.add(packet);
+                // 工件停在工位上等机械臂（抓不过来就排队，最多等 ARM_WAIT_LIMIT 帧）
+                packet.waitForArm(ARM_WAIT_LIMIT);
+            }
         }
     }
 
@@ -304,12 +363,18 @@ public class GameCanvas extends JPanel {
         }
     }
 
+    /** 该工位是否在主干传送带上（决定机器是否摆在传送带外侧） */
+    private boolean isOnLine(String tag) {
+        ProductionLine line = mapManager.getProductionLine();
+        return line != null && line.isOnLine(tag);
+    }
+
     /** 推进特效（由主循环每帧调用） */
     public void updateEffects() {
         animTime += 33;
         long now = System.currentTimeMillis();
 
-        // 侦测工件抵达新工位 → 点亮对应的组装机 / 启动机械臂
+        // 侦测工件抵达新工位 → 点亮对应的组装机 / 排进机械臂队列
         Set<Integer> alive = new LinkedHashSet<>();
         for (DataPacket p : dataPackets) {
             alive.add(p.getCartId());
@@ -323,6 +388,13 @@ public class GameCanvas extends JPanel {
             }
         }
         lastStation.keySet().removeIf(id -> !alive.contains(id));
+
+        // 供给带出料 + 机械臂开工
+        for (Feeder f : feeders) {
+            advanceSupply(f, now);
+            updateCycle(f, now);
+            tryStartCycle(f, now);
+        }
 
         for (int i = sparks.size() - 1; i >= 0; i--) {
             Spark s = sparks.get(i);
@@ -340,6 +412,127 @@ public class GameCanvas extends JPanel {
         machineBusyUntil.entrySet().removeIf(e -> e.getValue() < now - 500);
         // 清理已经消失的报文记录
         packetLayers.keySet().removeIf(id -> !alive.contains(id));
+    }
+
+    /**
+     * 供给传送带：生成机不断出料，料块顺着带子往下走。
+     * <p>机械臂来不及取时，料块就在带上排队（越积越多）。</p>
+     */
+    private void advanceSupply(Feeder f, long now) {
+        if (f.strip) {
+            return;
+        }
+        if (f.genAt == 0) {
+            f.genAt = now;
+        }
+        // 生成机出料
+        while (now - f.genAt >= GEN_INTERVAL) {
+            f.genAt += GEN_INTERVAL;
+            double last = f.queue.isEmpty() ? Double.MAX_VALUE : f.queue.get(f.queue.size() - 1);
+            if (f.queue.size() < MAX_QUEUE && last > f.supplyTop.y + 46) {
+                f.queue.add(f.supplyTop.y + 18.0);
+            }
+        }
+        // 传送带把料块往下送：最前面的一块停在取件点，后面的依次排在他后面
+        double step = 0.32 * 33;
+        for (int i = 0; i < f.queue.size(); i++) {
+            double limit = (i == 0) ? f.pickY : f.queue.get(i - 1) - QUEUE_GAP;
+            double y = f.queue.get(i);
+            if (y < limit) {
+                y = Math.min(limit, y + step);
+            }
+            f.queue.set(i, y);
+        }
+    }
+
+    /**
+     * 机械臂一轮动作的关键节点推进（与帧率无关）。
+     * <p>抓取、钉头这些动作即使某一帧掉帧越过关键点，也一定会执行到。</p>
+     */
+    private void updateCycle(Feeder f, long now) {
+        if (f.cycleStart <= 0) {
+            return;
+        }
+        double u = (now - f.cycleStart) / (double) ARM_CYCLE_MS;
+        if (f.strip) {
+            if (u >= 0.14 && !f.grabbed) {
+                f.grabbed = true;
+                applyGrab(f);
+            }
+            if (u >= 0.80 && !f.released) {
+                f.released = true;
+            }
+        } else {
+            if (u >= 0.80 && !f.released) {
+                f.released = true;
+                applyRelease(f);
+            }
+        }
+        if (u >= 1.0) {
+            // 这一轮干完了，机械臂可以接下一件
+            if (f.packet != null) {
+                // 兜底：万一关键动作被跳过，也别让工件一直堵在工位上
+                f.packet.releaseFromArm();
+            }
+            f.cycleStart = -1;
+            f.packet = null;
+            f.pickPoint = null;
+            f.outPoint = null;
+        }
+    }
+
+    /**
+     * 机械臂开工条件：供给带上有料、等候队列里有工件，机械臂闲着。
+     * <p>两个条件缺一不可 —— 缺料就等生成机，缺活就等工件，两边都不耽误。</p>
+     */
+    private void tryStartCycle(Feeder f, long now) {
+        if (f.cycleStart > 0 || f.waiting.isEmpty()) {
+            return;
+        }
+        DataPacket packet = f.waiting.peek();
+        if (packet == null) {
+            f.waiting.poll();
+            return;
+        }
+        // 工件已经离开工位（等太久被放行了）：机械臂来不及，这一层协议头直接补上/拆掉，
+        // 保证工件身上的头始终是对的
+        if (!f.station.equals(packet.getCurrentTag())) {
+            f.waiting.poll();
+            serveStale(f, packet);
+            return;
+        }
+        if (f.strip) {
+            // 拆包：料块就在工件身上，直接抓
+            if (!layersOf(packet).contains(f.layer)) {
+                f.waiting.poll();
+                return;
+            }
+            f.waiting.poll();
+        } else {
+            // 封装：得等供给带把料送到取件点
+            if (f.queue.isEmpty() || f.queue.get(0) < f.pickY - 0.5) {
+                return;
+            }
+            f.queue.remove(0);
+            f.waiting.poll();
+        }
+
+        f.cycleStart = now;
+        f.packet = packet;
+        f.grabbed = false;
+        f.released = false;
+
+        if (f.strip) {
+            // 从工件身上抓走头部块
+            f.pickPoint = new Point((int) Math.round(packet.getX() + layerOffset(packet, f.layer)),
+                    (int) Math.round(packet.getY()));
+            f.outPoint = new Point(f.bin.x, f.bin.y);
+        } else {
+            // 从供给带上抓起料块，加工完钉到主干上的工件尾部
+            f.pickPoint = new Point(f.trunk.x, (int) Math.round(f.pickY));
+            f.outPoint = new Point((int) Math.round(packet.getX() + layerOffset(packet, f.layer)),
+                    (int) Math.round(packet.getY()));
+        }
     }
 
     public void setScale(double scale) {
@@ -400,7 +593,7 @@ public class GameCanvas extends JPanel {
 
         drawFloor(g2);
         drawBelts(g2);
-        drawFeederBelts(g2);
+        drawSupplyBelts(g2);
         drawMachines(g2);
         drawWorkpieces(g2);
         drawFeederStations(g2);
@@ -527,42 +720,67 @@ public class GameCanvas extends JPanel {
         g2.fillPolygon(arrow);
     }
 
-    // ===================== 支线传送带 =====================
+    // ===================== 供给传送带 C1 =====================
 
-    /** 分支产线的传送带：把头部块从生成机送到主干旁待命 */
-    private void drawFeederBelts(Graphics2D g2) {
+    /** 每种头部块一条专属供给带，把料从生成机送到组装机旁待取 */
+    private void drawSupplyBelts(Graphics2D g2) {
         for (Feeder f : feeders) {
             if (f.strip) {
                 continue;
             }
-            int x = f.trunk.x;
+            int x = f.supplyTop.x;
+            int top = f.supplyTop.y;
+            int bottom = f.supplyBottom.y;
 
-            g2.setPaint(new GradientPaint(x - FEEDER_BELT_W / 2, 0, BELT_TOP, x + FEEDER_BELT_W / 2, 0, BELT_BOTTOM));
-            g2.fillRoundRect(x - FEEDER_BELT_W / 2, f.beltTop, FEEDER_BELT_W,
-                    f.beltBottom - f.beltTop, 8, 8);
+            g2.setPaint(new GradientPaint(x - SUPPLY_BELT_W / 2, 0, BELT_TOP,
+                    x + SUPPLY_BELT_W / 2, 0, BELT_BOTTOM));
+            g2.fillRoundRect(x - SUPPLY_BELT_W / 2, top, SUPPLY_BELT_W, bottom - top, 8, 8);
 
-            // 横向滚动纹理（参考实现里的支线纹理）
+            // 横向滚动纹理（料块往下的方向）
             g2.setColor(new Color(BELT_TEX.getRed(), BELT_TEX.getGreen(), BELT_TEX.getBlue(), 95));
             g2.setStroke(new BasicStroke(2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
             double offset = (animTime * TEX_SPEED * 1.4) % 16;
-            for (double y = f.beltTop - 16; y < f.beltBottom + 16; y += 16) {
+            for (double y = top - 16; y < bottom + 16; y += 16) {
                 double sy = y + offset;
-                g2.drawLine(x - FEEDER_BELT_W / 2 + 2, (int) sy, x + FEEDER_BELT_W / 2 - 2, (int) sy);
+                g2.drawLine(x - SUPPLY_BELT_W / 2 + 2, (int) sy, x + SUPPLY_BELT_W / 2 - 2, (int) sy);
             }
 
             g2.setColor(BELT_RAIL);
             g2.setStroke(new BasicStroke(2f));
-            g2.drawLine(x - FEEDER_BELT_W / 2, f.beltTop, x - FEEDER_BELT_W / 2, f.beltBottom);
-            g2.drawLine(x + FEEDER_BELT_W / 2, f.beltTop, x + FEEDER_BELT_W / 2, f.beltBottom);
+            g2.drawLine(x - SUPPLY_BELT_W / 2, top, x - SUPPLY_BELT_W / 2, bottom);
+            g2.drawLine(x + SUPPLY_BELT_W / 2, top, x + SUPPLY_BELT_W / 2, bottom);
 
-            // 支线流向箭头（朝下，指向主干）
+            // 供给带的流向箭头（朝下，指向组装机）
             g2.setColor(new Color(0x95, 0xA5, 0xA6, 130));
             Polygon arrow = new Polygon();
-            arrow.addPoint(x, f.beltBottom - 6);
-            arrow.addPoint(x - 7, f.beltBottom - 18);
-            arrow.addPoint(x + 7, f.beltBottom - 18);
+            arrow.addPoint(x, bottom - 6);
+            arrow.addPoint(x - 7, bottom - 18);
+            arrow.addPoint(x + 7, bottom - 18);
             g2.fillPolygon(arrow);
+
+            // 供给带编号
+            g2.setFont(new Font("微软雅黑", Font.BOLD, 9));
+            g2.setColor(f.dark);
+            String label = f.layer + " 供给带";
+            FontMetrics fm = g2.getFontMetrics();
+            g2.drawString(label, x + SUPPLY_BELT_W / 2 + 6, top + 14);
         }
+    }
+
+    /** 组装机与主干之间的小滑槽 */
+    private void drawChute(Graphics2D g2, double cx, double top, double bottom) {
+        int w = 26;
+        g2.setPaint(new GradientPaint((int) cx - w / 2, 0, BELT_TOP, (int) cx + w / 2, 0, BELT_BOTTOM));
+        g2.fillRoundRect((int) cx - w / 2, (int) top, w, (int) (bottom - top), 6, 6);
+        g2.setColor(BELT_RAIL);
+        g2.setStroke(new BasicStroke(1.6f));
+        g2.drawRoundRect((int) cx - w / 2, (int) top, w, (int) (bottom - top), 6, 6);
+        g2.setColor(new Color(255, 255, 255, 70));
+        Polygon arrow = new Polygon();
+        arrow.addPoint((int) cx, (int) (bottom - 3));
+        arrow.addPoint((int) cx - 5, (int) (bottom - 12));
+        arrow.addPoint((int) cx + 5, (int) (bottom - 12));
+        g2.fillPolygon(arrow);
     }
 
     // ===================== 组装机 =====================
@@ -585,19 +803,43 @@ public class GameCanvas extends JPanel {
         }
     }
 
-    /** 俯视角度的一台组装机 */
+    /** 俯视角度的一台组装机：摆在主干传送带的外侧 */
     private void drawMachine(Graphics2D g2, String tag, double cx, double cy) {
         long now = System.currentTimeMillis();
+        boolean onLine = isOnLine(tag);
+
+        // 传送带上的工位 → 机器搬到传送带上方（外侧），并用滑槽连回传送带
+        double mx = cx;
+        double my = onLine ? cy + MACHINE_OFFSET : cy;
+
         Long busyUntil = machineBusyUntil.get(tag);
         boolean busy = busyUntil != null && now < busyUntil;
         double phase = busy ? (now - machineBusySince.getOrDefault(tag, now)) / 900.0 : 0;
 
+        // 头部产线的机器：加工窗口由机械臂动作决定
+        Feeder feeder = feederFor(tag);
+        boolean crafting = false;
+        if (feeder != null) {
+            double u = feederProgress(feeder, now);
+            // 料块在机器里面加工的那一段
+            crafting = u >= 0.28 && u < 0.52;
+            if (u > 0 && u < 1) {
+                busy = true;
+                phase = u;
+            }
+        }
+
         BuildingZone zone = mapManager.getZoneForBuilding(tag);
         Color accent = zone != null ? zone.borderColor : new Color(0x63, 0x6E, 0x72);
 
-        int w = 76, h = 56;
-        int x = (int) cx - w / 2;
-        int y = (int) cy - h / 2;
+        int w = MACHINE_W, h = MACHINE_H;
+        int x = (int) mx - w / 2;
+        int y = (int) my - h / 2;
+
+        if (onLine) {
+            // 机器下方的滑槽：把主干上的工件送进机器 / 把成品送回主干
+            drawChute(g2, mx, my + h / 2, cy - BELT_HALF_WIDTH);
+        }
 
         // 机体
         g2.setPaint(new GradientPaint(0, y, MACHINE_TOP, 0, y + h, MACHINE_BOTTOM));
@@ -606,9 +848,9 @@ public class GameCanvas extends JPanel {
         g2.setStroke(new BasicStroke(1.6f));
         g2.drawRoundRect(x, y, w, h, 8, 8);
 
-        // 加工发光区
+        // 加工发光区：料块在机器里面时最亮，其余时间随加工进度呼吸
         if (busy) {
-            double pulse = 0.2 + 0.5 * Math.abs(Math.sin(phase * Math.PI * 6));
+            double pulse = crafting ? 0.75 : 0.2 + 0.5 * Math.abs(Math.sin(phase * Math.PI * 6));
             g2.setColor(new Color(GLOW.getRed(), GLOW.getGreen(), GLOW.getBlue(), (int) (255 * pulse)));
             g2.fillRoundRect(x + 12, y + 14, w - 24, h - 26, 6, 6);
         }
@@ -628,173 +870,197 @@ public class GameCanvas extends JPanel {
         g2.setStroke(new BasicStroke(1.2f));
         g2.drawOval(x + 9, y + 13, 9, 9);
 
-        // 进出料口（传送带穿过机体的左右两侧）
-        g2.setColor(BELT_RAIL);
-        g2.fillRect(x - 8, (int) cy - BELT_HALF_WIDTH + 3, 10, BELT_HALF_WIDTH * 2 - 6);
-        g2.fillRect(x + w - 2, (int) cy - BELT_HALF_WIDTH + 3, 10, BELT_HALF_WIDTH * 2 - 6);
-
-        // 名称标签
+        // 名称标签（在机器内侧；不在主干上的设备则挂在机器下方）
         g2.setFont(new Font("微软雅黑", Font.BOLD, 9));
-        g2.setColor(new Color(0x7F, 0x8C, 0x8D));
+        g2.setColor(new Color(0x5F, 0x6B, 0x72));
         String label = tag;
         FontMetrics fm = g2.getFontMetrics();
-        g2.drawString(label, (int) cx - fm.stringWidth(label) / 2, (int) cy + h / 2 + 14);
+        if (onLine) {
+            g2.drawString(label, x + w - fm.stringWidth(label) - 8, y + h - 8);
+        } else {
+            g2.setColor(new Color(0x7F, 0x8C, 0x8D));
+            g2.drawString(label, (int) mx - fm.stringWidth(label) / 2, (int) my + h / 2 + 14);
+        }
 
         // 接收端服务器的缓冲区格子
         if ("RX_ST".equals(tag)) {
             g2.setColor(BUSY_RED);
             for (int i = 0; i < serverBufferCount; i++) {
-                g2.fillRect((int) cx - 20 + i * 8, (int) cy - 24, 5, 7);
+                g2.fillRect(x + 12 + i * 8, y + 12, 5, 7);
             }
+        }
+
+        // 机械臂等候队列：还有工件排队就挂个牌子
+        if (feeder != null && !feeder.waiting.isEmpty()) {
+            g2.setColor(BUSY_ORANGE);
+            g2.fillRoundRect(x + w - 26, y - 16, 24, 14, 4, 4);
+            g2.setFont(new Font("微软雅黑", Font.BOLD, 9));
+            g2.setColor(Color.WHITE);
+            String q = "等" + feeder.waiting.size();
+            FontMetrics qfm = g2.getFontMetrics();
+            g2.drawString(q, x + w - 26 + 12 - qfm.stringWidth(q) / 2, y - 5);
         }
     }
 
-    // ===================== 生成机 / 收纳箱 =====================
+    /** 找到某工位对应的头部产线 */
+    private Feeder feederFor(String tag) {
+        for (Feeder f : feeders) {
+            if (f.station.equals(tag)) {
+                return f;
+            }
+        }
+        return null;
+    }
+
+    /** 机械臂动作进度（0 表示空闲，>0 表示进行中） */
+    private double feederProgress(Feeder f, long now) {
+        if (f.cycleStart <= 0) {
+            return 0;
+        }
+        double u = (now - f.cycleStart) / (double) ARM_CYCLE_MS;
+        return u > 1 ? 0 : u;
+    }
+
+    // ===================== 生成机 / 收纳箱 / 排队料块 =====================
 
     private void drawFeederStations(Graphics2D g2) {
         long now = System.currentTimeMillis();
         for (Feeder f : feeders) {
-            int mx = f.machine.x;
-            int my = f.machine.y;
-            int x = mx - GEN_SIZE / 2;
-            int y = my - GEN_SIZE / 2;
-
-            // 产线标签
-            g2.setFont(new Font("微软雅黑", Font.BOLD, 11));
-            g2.setColor(f.dark);
-            String title = f.layer + (f.strip ? " 回收" : " 产线");
-            FontMetrics fm = g2.getFontMetrics();
-            g2.drawString(title, mx - fm.stringWidth(title) / 2, y - 12);
-
             if (f.strip) {
-                // 拆包工位：收纳箱
-                g2.setPaint(new GradientPaint(0, y, BIN_COLOR, 0, y + GEN_SIZE, MACHINE_BOTTOM));
-                g2.fillRoundRect(x, y, GEN_SIZE, GEN_SIZE, 6, 6);
-                g2.setColor(MACHINE_STROKE);
-                g2.setStroke(new BasicStroke(2f));
-                g2.drawRoundRect(x, y, GEN_SIZE, GEN_SIZE, 6, 6);
-                g2.setColor(f.color);
-                g2.fillRoundRect(x + 14, y + 16, GEN_SIZE - 28, GEN_SIZE - 32, 4, 4);
-                g2.setColor(f.dark);
-                g2.fillOval(mx - 4, y - 9, 8, 8);
-                continue;
+                drawBin(g2, f);
+            } else {
+                drawGenerator(g2, f, now);
+                // 供给带上排队的料块
+                for (double y : f.queue) {
+                    drawHeaderBlock(g2, f.supplyTop.x, y, f);
+                }
             }
-
-            // 生成机：机壳
-            g2.setPaint(new GradientPaint(0, y, MACHINE_TOP, 0, y + GEN_SIZE, MACHINE_BOTTOM));
-            g2.fillRoundRect(x, y, GEN_SIZE, GEN_SIZE, 6, 6);
-            g2.setColor(MACHINE_STROKE);
-            g2.setStroke(new BasicStroke(2f));
-            g2.drawRoundRect(x, y, GEN_SIZE, GEN_SIZE, 6, 6);
-
-            // 内部脉动块：空闲时呼吸，工作时保持高亮
-            boolean working = isFeederWorking(f, now);
-            double pulse = working ? 0.8 : 0.35 + 0.35 * Math.sin(animTime / 420.0 + f.trunk.x);
-            g2.setColor(new Color(f.color.getRed(), f.color.getGreen(), f.color.getBlue(),
-                    (int) (255 * Math.min(1, pulse))));
-            g2.fillRoundRect(x + 18, y + 24, GEN_SIZE - 36, GEN_SIZE - 40, 4, 4);
-
-            // 指示灯
-            g2.setColor(working ? BUSY_RED : f.dark);
-            int led = working ? 10 : 8;
-            g2.fillOval(mx - led / 2, y - 9, led, led);
-            g2.setColor(new Color(0x1A, 0x25, 0x2F));
-            g2.setStroke(new BasicStroke(1.2f));
-            g2.drawOval(mx - led / 2, y - 9, led, led);
         }
     }
 
-    private boolean isFeederWorking(Feeder f, long now) {
-        return f.cycleStart > 0 && now - f.cycleStart < ARM_CYCLE_MS;
+    /** 拆包工位上方的收纳箱：拆下来的头部块丢在这里 */
+    private void drawBin(Graphics2D g2, Feeder f) {
+        int mx = f.bin.x;
+        int my = f.bin.y;
+        int x = mx - GEN_SIZE / 2;
+        int y = my - GEN_SIZE / 2;
+
+        g2.setFont(new Font("微软雅黑", Font.BOLD, 11));
+        g2.setColor(f.dark);
+        String title = f.layer + " 回收箱";
+        FontMetrics fm = g2.getFontMetrics();
+        g2.drawString(title, mx - fm.stringWidth(title) / 2, y - 10);
+
+        g2.setPaint(new GradientPaint(0, y, BIN_COLOR, 0, y + GEN_SIZE, MACHINE_BOTTOM));
+        g2.fillRoundRect(x, y, GEN_SIZE, GEN_SIZE, 6, 6);
+        g2.setColor(MACHINE_STROKE);
+        g2.setStroke(new BasicStroke(2f));
+        g2.drawRoundRect(x, y, GEN_SIZE, GEN_SIZE, 6, 6);
+        g2.setColor(f.color);
+        g2.fillRoundRect(x + 14, y + 16, GEN_SIZE - 28, GEN_SIZE - 32, 4, 4);
+        g2.setColor(f.dark);
+        g2.fillOval(mx - 4, y - 9, 8, 8);
+    }
+
+    /** 供给带顶端的生成机：源源不断地生产头部块 */
+    private void drawGenerator(Graphics2D g2, Feeder f, long now) {
+        int mx = f.generator.x;
+        int my = f.generator.y;
+        int x = mx - GEN_SIZE / 2;
+        int y = my - GEN_SIZE / 2;
+
+        g2.setFont(new Font("微软雅黑", Font.BOLD, 11));
+        g2.setColor(f.dark);
+        String title = f.layer + " 生成机";
+        FontMetrics fm = g2.getFontMetrics();
+        g2.drawString(title, mx - fm.stringWidth(title) / 2, y - 12);
+
+        // 机壳
+        g2.setPaint(new GradientPaint(0, y, MACHINE_TOP, 0, y + GEN_SIZE, MACHINE_BOTTOM));
+        g2.fillRoundRect(x, y, GEN_SIZE, GEN_SIZE, 6, 6);
+        g2.setColor(MACHINE_STROKE);
+        g2.setStroke(new BasicStroke(2f));
+        g2.drawRoundRect(x, y, GEN_SIZE, GEN_SIZE, 6, 6);
+
+        // 内部脉动块：空闲时呼吸，供给带上排队越多越亮
+        boolean working = f.queue.size() >= 2;
+        double pulse = working ? 0.85 : 0.35 + 0.35 * Math.sin(animTime / 420.0 + f.trunk.x);
+        g2.setColor(new Color(f.color.getRed(), f.color.getGreen(), f.color.getBlue(),
+                (int) (255 * Math.min(1, pulse))));
+        g2.fillRoundRect(x + 18, y + 24, GEN_SIZE - 36, GEN_SIZE - 40, 4, 4);
+
+        // 指示灯
+        g2.setColor(working ? BUSY_RED : f.dark);
+        int led = working ? 10 : 8;
+        g2.fillOval(mx - led / 2, y - 9, led, led);
+        g2.setColor(new Color(0x1A, 0x25, 0x2F));
+        g2.setStroke(new BasicStroke(1.2f));
+        g2.drawOval(mx - led / 2, y - 9, led, led);
     }
 
     // ===================== 机械臂 =====================
 
     /**
-     * 机械臂：俯身从支线上抓起头部块 → 摆到主干上钉在工件尾部 → 复位。
-     * <p>封装工位：从支线抓块 → 放到工件尾部；拆包工位：从工件上抓块 → 放进收纳箱。</p>
+     * 机械臂一轮动作（ARM_CYCLE_MS）：
+     * <pre>
+     *   0.00-0.14  从待机位伸到取件点（供给带上排队的那块料）
+     *   0.14-0.28  抓起料块，送进组装机进料口
+     *   0.28-0.52  组装机加工（料块在机器里面，看不见）
+     *   0.52-0.68  从机器里取出成品，送到主干工件尾部 / 收纳箱
+     *   0.68-0.80  钉头 / 投料
+     *   0.80-1.00  空载复位
+     * </pre>
      */
     private void drawFeederArms(Graphics2D g2) {
         long now = System.currentTimeMillis();
         for (Feeder f : feeders) {
-            Point source = armSource(f);
-            Point target = armTarget(f);
-            double grip = 0;
-            boolean carrying = false;
-
-            if (f.cycleStart > 0) {
-                double u = (now - f.cycleStart) / (double) ARM_CYCLE_MS;
-                // 放件动作与帧率无关：即使某一帧掉帧越过放件点，头部也一定会被装上/拆掉
-                if (u >= 0.64 && !f.released) {
-                    f.released = true;
-                    applyRelease(f);
-                }
-                if (u <= 1) {
-                    double toDst = easeInOut(clamp01((u - 0.22) / 0.36));
-                    double back = easeInOut(clamp01((u - 0.70) / 0.30));
-
-                    double endX;
-                    double endY;
-                    if (u < 0.22) {
-                        endX = source.x;
-                        endY = source.y;
-                    } else if (u < 0.58) {
-                        endX = lerp(source.x, target.x, toDst);
-                        endY = lerp(source.y, target.y, toDst);
-                    } else if (u < 0.70) {
-                        endX = target.x;
-                        endY = target.y;
-                    } else {
-                        endX = lerp(target.x, source.x, back);
-                        endY = lerp(target.y, source.y, back);
-                    }
-
-                    // 0.22 抓起，0.64 放下
-                    if (u >= 0.22 && u < 0.64) {
-                        grip = 1;
-                        carrying = true;
-                    }
-                    drawArmLink(g2, f.armBase.x, f.armBase.y, endX, endY, ARM_L1, ARM_L2, grip);
-                    if (carrying) {
-                        drawHeaderBlock(g2, endX, endY, f);
-                    }
-                    continue;
-                }
-                f.cycleStart = -1;
-                f.packet = null;
+            double u = feederProgress(f, now);
+            if (u <= 0) {
+                // 空闲：机械臂停在待机位待命
+                drawArmLink(g2, f.armBase.x, f.armBase.y, f.home.x, f.home.y, ARM_L1, ARM_L2, 0);
+                continue;
             }
 
-            // 空闲：机械臂停在取件点待命
-            drawArmLink(g2, f.armBase.x, f.armBase.y, source.x, source.y, ARM_L1, ARM_L2, 0);
-            if (!f.strip) {
-                // 支带上循环下落的待命头部块
-                double cycle = (animTime % 2400) / 2400.0;
-                double by = lerp(f.beltTop + 20, source.y, cycle);
-                drawHeaderBlock(g2, source.x, by, f);
+            Point pick = f.pickPoint;
+            Point mouth = new Point(f.trunk.x, f.trunk.y + MACHINE_MOUTH_DY);
+            Point out = f.outPoint;
+
+            double x;
+            double y;
+            if (u < 0.14) {
+                double t = easeInOut(u / 0.14);
+                x = lerp(f.home.x, pick.x, t);
+                y = lerp(f.home.y, pick.y, t);
+            } else if (u < 0.28) {
+                double t = easeInOut((u - 0.14) / 0.14);
+                x = lerp(pick.x, mouth.x, t);
+                y = lerp(pick.y, mouth.y, t);
+            } else if (u < 0.52) {
+                x = mouth.x;
+                y = mouth.y;
+            } else if (u < 0.68) {
+                double t = easeInOut((u - 0.52) / 0.16);
+                x = lerp(mouth.x, out.x, t);
+                y = lerp(mouth.y, out.y, t);
+            } else if (u < 0.80) {
+                x = out.x;
+                y = out.y;
+            } else {
+                double t = easeInOut((u - 0.80) / 0.20);
+                x = lerp(out.x, f.home.x, t);
+                y = lerp(out.y, f.home.y, t);
+            }
+
+            // 夹爪：0.14 抓起，0.80 松开
+            double grip = (u >= 0.14 && u < 0.80) ? 1 : 0;
+
+            drawArmLink(g2, f.armBase.x, f.armBase.y, x, y, ARM_L1, ARM_L2, grip);
+            // 料块在机器内部时不可见
+            boolean hidden = u >= 0.28 && u < 0.52;
+            if (grip > 0 && !hidden) {
+                drawHeaderBlock(g2, x, y, f);
             }
         }
-    }
-
-    /** 取件点：封装工位在支线传送带下端，拆包工位在工件上 */
-    private Point armSource(Feeder f) {
-        if (f.strip) {
-            DataPacket p = f.packet;
-            double x = p != null ? p.getX() : f.trunk.x;
-            double y = p != null ? p.getY() : f.trunk.y;
-            return new Point((int) Math.round(x + layerOffset(p, f.layer)), (int) Math.round(y));
-        }
-        return new Point(f.trunk.x, f.beltBottom - 26);
-    }
-
-    /** 放件点：封装工位放在工件尾部，拆包工位放进收纳箱 */
-    private Point armTarget(Feeder f) {
-        if (f.strip) {
-            return new Point(f.machine.x, f.machine.y + GEN_SIZE / 2 - 10);
-        }
-        DataPacket p = f.packet;
-        double x = p != null ? p.getX() : f.trunk.x;
-        double y = p != null ? p.getY() : f.trunk.y;
-        return new Point((int) Math.round(x + layerOffset(p, f.layer)), (int) Math.round(y));
     }
 
     /**
@@ -814,7 +1080,31 @@ public class GameCanvas extends JPanel {
         return PAYLOAD_W / 2.0 + HEAD_W * index + HEAD_W / 2.0;
     }
 
-    /** 放件瞬间：给工件加上（或拆掉）这一层协议头 */
+    /** 工件已经离开工位时的兜底：直接补上/拆掉这一层协议头 */
+    private void serveStale(Feeder f, DataPacket packet) {
+        Set<String> layers = layersOf(packet);
+        if (f.strip) {
+            layers.remove(f.layer);
+        } else {
+            layers.add(f.layer);
+        }
+        packet.releaseFromArm();
+    }
+
+    /** 拆包：机械臂从工件上把这一层头部抓下来 */
+    private void applyGrab(Feeder f) {
+        DataPacket packet = f.packet;
+        if (packet == null) {
+            return;
+        }
+        Set<String> layers = packetLayers.computeIfAbsent(packet.getCartId(),
+                id -> new LinkedHashSet<>());
+        layers.remove(f.layer);
+        // 头已经拆下来了，工件可以继续往前走
+        packet.releaseFromArm();
+    }
+
+    /** 封装：机械臂把这一层协议头钉到工件尾部 */
     private void applyRelease(Feeder f) {
         DataPacket packet = f.packet;
         if (packet == null) {
@@ -827,9 +1117,11 @@ public class GameCanvas extends JPanel {
         } else {
             layers.add(f.layer);
         }
+        // 头已经装上了，工件可以继续往前走
+        packet.releaseFromArm();
     }
 
-    /** 支线上的头部块 */
+    /** 头部块 */
     private void drawHeaderBlock(Graphics2D g2, double x, double y, Feeder f) {
         int w = 20, h = 28;
         g2.setColor(f.color);
@@ -958,22 +1250,32 @@ public class GameCanvas extends JPanel {
         }
     }
 
+    /** 工件身上当前带着哪些协议头（供测试与调试查看封装进度） */
+    public Set<String> getPacketLayers(DataPacket packet) {
+        return Collections.unmodifiableSet(layersOf(packet));
+    }
+
     /** 取报文的协议层集合（首次出现时按报文自身状态初始化） */
     private Set<String> layersOf(DataPacket packet) {
+        if (packet == null) {
+            return new LinkedHashSet<>();
+        }
         Set<String> layers = packetLayers.get(packet.getCartId());
         if (layers != null) {
             return layers;
         }
         layers = new LinkedHashSet<>();
         int stage = packet.getStage();
-        // 已经走过的封装工位，头部直接算装上了
-        if (packet.isHasTcp() && stage > 13) {
+        // 已经走过封装工位的，头部直接算装上了。
+        // 注意：工件一抵达封装工位阶段号就会 +1，所以这里要用「已经离开该工位」的判断，
+        // 否则头部会在机械臂动手之前就凭空出现。
+        if (packet.isHasTcp() && stage > 14) {
             layers.add("TCP");
         }
-        if (packet.isHasIp() && stage > 14) {
+        if (packet.isHasIp() && stage > 15) {
             layers.add("IP");
         }
-        if (packet.isHasEther() && stage > 19) {
+        if (packet.isHasEther() && stage > 20) {
             layers.add("ETH");
         }
         packetLayers.put(packet.getCartId(), layers);
@@ -1046,15 +1348,19 @@ public class GameCanvas extends JPanel {
         drawLegendItem(g2, x, y + 128, new Color(0x1F, 0x8A, 0xC8), "链路层 (Ethernet/ARP)");
         drawLegendItem(g2, x, y + 144, new Color(0xA0, 0x5A, 0x2B), "路由协议");
 
-        // 头部产线说明
+        // 产线说明
         int bx = x + 110;
         int by = 26;
         g2.setColor(new Color(0x2C, 0x3E, 0x50));
-        g2.drawString("头部产线（机械臂自动封装）", bx, by);
+        g2.drawString("组装产线（节点在传送带外侧）", bx, by);
         by += 18;
         drawLegendItem(g2, bx, by, TCP_COLOR, "TCP 头（蓝色）");
         drawLegendItem(g2, bx, by + 16, IP_COLOR, "IP 头（绿色）");
         drawLegendItem(g2, bx, by + 32, ETH_COLOR, "ETH 头（紫色）");
+        by += 54;
+        g2.setColor(new Color(0x55, 0x5F, 0x66));
+        g2.drawString("每种料一条供给带 C1，机械臂抓料进组装机", bx, by);
+        g2.drawString("加工完成后再由机械臂送上主干 C2，抓不过来就在带上排队", bx, by + 16);
     }
 
     private void drawLegendItem(Graphics2D g2, int x, int y, Color color, String text) {

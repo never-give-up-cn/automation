@@ -1,6 +1,7 @@
 package com.never_give_up.automation.demo.engine;
 
 import com.never_give_up.automation.demo.adapter.FactoryManager;
+import com.never_give_up.automation.demo.ui.GameCanvas;
 import com.never_give_up.automation.demo.winModel.DataPacket;
 import com.never_give_up.automation.demo.winModel.TcpState;
 import org.junit.jupiter.api.BeforeEach;
@@ -298,6 +299,87 @@ class NetworkFlowAnimationTest {
         assertNotNull(fragment, "DATA 报文应该被拆成 IP 分片");
         assertTrue(fragment.isHasTcp(), "分片应该继承 TCP 头，否则产线上工件到不了接收端就没有头可拆");
         assertTrue(fragment.isHasIp(), "分片应该继承 IP 头");
+    }
+
+    @Test
+    @DisplayName("工件在头部工位上等机械臂，机械臂装好协议头才放行")
+    void workpieceWaitsForArmToStampHeader() throws Exception {
+        List<DataPacket> onCanvas = new ArrayList<>();
+        GameCanvas canvas = new GameCanvas(engine, callback.mapManager, onCanvas, new ArrayList<>());
+
+        Point tCore = callback.findBuildingCoords("T_CORE");
+        DataPacket packet = engine.createDataPacket(tCore.x, tCore.y, "DATA", 0);
+        packet.setStage(13);
+        packet.setHasTcp(true);
+        packet.setHasIp(true);
+        packet.setHasEther(true);
+        packet.setCurrentTag("T_CORE");
+        onCanvas.add(packet);
+
+        // 工件抵达封装工位 → 排进机械臂队列，停在工位上等
+        canvas.updateEffects();
+        assertTrue(packet.isWaitingForArm(), "工件应该停在工位上等机械臂装 TCP 头");
+        assertFalse(canvas.getPacketLayers(packet).contains("TCP"), "机械臂还没装头，TCP 头不该先出现");
+
+        // 等机械臂把料从供给带抓进机器、加工完再钉到工件上
+        long deadline = System.currentTimeMillis() + 5000;
+        while (System.currentTimeMillis() < deadline && packet.isWaitingForArm()) {
+            canvas.updateEffects();
+            Thread.sleep(20);
+        }
+
+        assertFalse(packet.isWaitingForArm(), "机械臂装完头之后工件应该被放行");
+        assertTrue(canvas.getPacketLayers(packet).contains("TCP"), "机械臂应该把 TCP 头装到工件上");
+    }
+
+    @Test
+    @DisplayName("拆包工位的机械臂把工件上的协议头抓走")
+    void armStripsHeaderAtReceiveSide() throws Exception {
+        List<DataPacket> onCanvas = new ArrayList<>();
+        GameCanvas canvas = new GameCanvas(engine, callback.mapManager, onCanvas, new ArrayList<>());
+
+        Point rxEth = callback.findBuildingCoords("RX_ETH");
+        DataPacket packet = engine.createDataPacket(rxEth.x, rxEth.y, "DATA", 0);
+        packet.setStage(37);
+        packet.setHasTcp(true);
+        packet.setHasIp(true);
+        packet.setHasEther(true);
+        packet.setCurrentTag("RX_ETH");
+        onCanvas.add(packet);
+
+        canvas.updateEffects();
+        assertTrue(canvas.getPacketLayers(packet).contains("ETH"), "工件应该带着 ETH 头进入拆包工位");
+
+        long deadline = System.currentTimeMillis() + 5000;
+        while (System.currentTimeMillis() < deadline && packet.isWaitingForArm()) {
+            canvas.updateEffects();
+            Thread.sleep(20);
+        }
+
+        assertFalse(canvas.getPacketLayers(packet).contains("ETH"), "机械臂应该把 ETH 头从工件上抓走");
+        assertTrue(canvas.getPacketLayers(packet).contains("TCP"), "TCP 头还没轮到拆，应该留着");
+    }
+
+    @Test
+    @DisplayName("等机械臂期间工件停在工位上不动，放行后才继续前进")
+    void heldWorkpieceStaysAtStation() {
+        Point pc = callback.getPcFactory();
+        DataPacket packet = engine.createDataPacket(pc.x, pc.y, "DATA", 0);
+        packet.setStage(1);
+        packet.waitForArm(30);
+
+        double x0 = packet.getX();
+        double y0 = packet.getY();
+        for (int i = 0; i < 20; i++) {
+            packet.update();
+        }
+        assertEquals(x0, packet.getX(), 0.001, "等机械臂期间工件不应该移动");
+        assertEquals(y0, packet.getY(), 0.001, "等机械臂期间工件不应该移动");
+        assertTrue(packet.isWaitingForArm(), "等待标记应该还在");
+
+        packet.releaseFromArm();
+        packet.update();
+        assertTrue(packet.getX() != x0 || packet.getY() != y0, "放行之后工件应该继续往前走");
     }
 
     /** 计算点到折线路径的最短距离（用于校验报文是否走在传送带上） */
