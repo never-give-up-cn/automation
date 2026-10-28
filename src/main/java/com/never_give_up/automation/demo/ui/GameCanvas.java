@@ -50,6 +50,9 @@ public class GameCanvas extends JPanel {
 
     private static final Color BELT_TOP = new Color(0x4A, 0x55, 0x68);
     private static final Color BELT_BOTTOM = new Color(0x2D, 0x37, 0x48);
+    /** 回程带的配色（蓝色系，和去程带区分开） */
+    private static final Color BELT_TOP_RET = new Color(0x3D, 0x5F, 0x7E);
+    private static final Color BELT_BOTTOM_RET = new Color(0x24, 0x3E, 0x55);
     private static final Color BELT_RAIL = new Color(0x1A, 0x20, 0x2C);
     private static final Color BELT_TEX = new Color(0x8F, 0xA3, 0xB0);
 
@@ -1293,17 +1296,21 @@ public class GameCanvas extends JPanel {
         }
         for (ProductionLine.Belt belt : line.getBelts()) {
             List<Point> pts = belt.getPoints();
+            boolean ret = belt.isReturn();
             for (int i = 1; i < pts.size(); i++) {
                 Point a = pts.get(i - 1);
                 Point b = pts.get(i);
                 if (a.x == b.x) {
-                    drawVerticalBelt(g2, a, b);
+                    drawVerticalBelt(g2, a, b, ret);
+                } else if (a.y == b.y) {
+                    drawHorizontalBelt(g2, a, b, ret);
                 } else {
-                    drawHorizontalBelt(g2, a, b);
+                    drawDiagonalBelt(g2, a, b, ret);
                 }
             }
         }
         drawTrunkBeltLabel(g2, line);
+        drawReturnLaneLabels(g2, line);
     }
 
     /**
@@ -1312,7 +1319,7 @@ public class GameCanvas extends JPanel {
      */
     private void drawTrunkBeltLabel(Graphics2D g2, ProductionLine line) {
         for (ProductionLine.Belt belt : line.getBelts()) {
-            if (!"PC_FACTORY".equals(belt.getFromTag())) {
+            if (!belt.isForward() || !"PC_FACTORY".equals(belt.getFromTag())) {
                 continue;
             }
             List<Point> pts = belt.getPoints();
@@ -1331,14 +1338,49 @@ public class GameCanvas extends JPanel {
         }
     }
 
-    private void drawHorizontalBelt(Graphics2D g2, Point a, Point b) {
+    /** 回程带的说明牌：回程带也是单向的，响应报文顺着它回到上游 */
+    private void drawReturnLaneLabels(Graphics2D g2, ProductionLine line) {
+        drawLaneLabel(g2, line, "RX_ST", "回程带 C3 · 单向回程");
+        drawLaneLabel(g2, line, "DHCP_OFFER", "DHCP 回程带 · 单向");
+    }
+
+    /** 在指定回程带最长的一段上贴个说明牌 */
+    private void drawLaneLabel(Graphics2D g2, ProductionLine line, String fromTag, String text) {
+        for (ProductionLine.Belt belt : line.getReturnBelts()) {
+            if (!belt.getFromTag().equals(fromTag)) {
+                continue;
+            }
+            List<Point> pts = belt.getPoints();
+            int best = 1;
+            double bestLen = -1;
+            for (int i = 1; i < pts.size(); i++) {
+                double l = pts.get(i).distance(pts.get(i - 1));
+                if (l > bestLen) {
+                    bestLen = l;
+                    best = i;
+                }
+            }
+            Point a = pts.get(best - 1);
+            Point b = pts.get(best);
+            double cx = (a.x + b.x) / 2.0;
+            double cy = (a.y + b.y) / 2.0;
+            g2.setFont(new Font("微软雅黑", Font.BOLD, 10));
+            g2.setColor(new Color(0x1F, 0x3B, 0x52));
+            g2.drawString(text, (int) cx + 8, (int) cy + BELT_HALF_WIDTH + 12);
+            return;
+        }
+    }
+
+    private void drawHorizontalBelt(Graphics2D g2, Point a, Point b, boolean ret) {
         int y = a.y;
         int x1 = Math.min(a.x, b.x);
         int x2 = Math.max(a.x, b.x);
         int dir = b.x >= a.x ? 1 : -1;
+        Color top = ret ? BELT_TOP_RET : BELT_TOP;
+        Color bottom = ret ? BELT_BOTTOM_RET : BELT_BOTTOM;
 
         // 带体
-        g2.setPaint(new GradientPaint(0, y - BELT_HALF_WIDTH, BELT_TOP, 0, y + BELT_HALF_WIDTH, BELT_BOTTOM));
+        g2.setPaint(new GradientPaint(0, y - BELT_HALF_WIDTH, top, 0, y + BELT_HALF_WIDTH, bottom));
         g2.fillRoundRect(x1, y - BELT_HALF_WIDTH, x2 - x1, BELT_HALF_WIDTH * 2, 12, 12);
 
         // 滚动的斜纹纹理
@@ -1356,22 +1398,25 @@ public class GameCanvas extends JPanel {
         g2.drawLine(x1, y - BELT_HALF_WIDTH, x2, y - BELT_HALF_WIDTH);
         g2.drawLine(x1, y + BELT_HALF_WIDTH, x2, y + BELT_HALF_WIDTH);
 
-        // 流向箭头（沿带身重复出现）
+        // 流向箭头（沿带身重复出现）：太短的接头不画箭头，免得和相邻带子打架
+        if (x2 - x1 < 60) {
+            return;
+        }
         for (int x = x1 + 46; x < x2 - 20; x += 96) {
             drawFlowArrow(g2, x, y, dir);
         }
-        if (x2 - x1 > 60) {
-            drawFlowArrow(g2, x2 - 24, y, dir);
-        }
+        drawFlowArrow(g2, x2 - 24, y, dir);
     }
 
-    private void drawVerticalBelt(Graphics2D g2, Point a, Point b) {
+    private void drawVerticalBelt(Graphics2D g2, Point a, Point b, boolean ret) {
         int x = a.x;
         int y1 = Math.min(a.y, b.y);
         int y2 = Math.max(a.y, b.y);
         int dir = b.y >= a.y ? 1 : -1;
+        Color top = ret ? BELT_TOP_RET : BELT_TOP;
+        Color bottom = ret ? BELT_BOTTOM_RET : BELT_BOTTOM;
 
-        g2.setPaint(new GradientPaint(x - BELT_HALF_WIDTH, 0, BELT_TOP, x + BELT_HALF_WIDTH, 0, BELT_BOTTOM));
+        g2.setPaint(new GradientPaint(x - BELT_HALF_WIDTH, 0, top, x + BELT_HALF_WIDTH, 0, bottom));
         g2.fillRoundRect(x - BELT_HALF_WIDTH, y1, BELT_HALF_WIDTH * 2, y2 - y1, 12, 12);
 
         g2.setColor(new Color(BELT_TEX.getRed(), BELT_TEX.getGreen(), BELT_TEX.getBlue(), 90));
@@ -1387,7 +1432,49 @@ public class GameCanvas extends JPanel {
         g2.drawLine(x - BELT_HALF_WIDTH, y1, x - BELT_HALF_WIDTH, y2);
         g2.drawLine(x + BELT_HALF_WIDTH, y1, x + BELT_HALF_WIDTH, y2);
 
+        // 太短的接头不画箭头，免得和相邻带子打架
+        if (y2 - y1 < 60) {
+            return;
+        }
         drawFlowArrow(g2, x, (y1 + y2) / 2, dir);
+    }
+
+    /** 斜着进站的传送带（回程带回源 PC 时会用到） */
+    private void drawDiagonalBelt(Graphics2D g2, Point a, Point b, boolean ret) {
+        double dx = b.x - a.x;
+        double dy = b.y - a.y;
+        double len = Math.hypot(dx, dy);
+        if (len < 2) {
+            return;
+        }
+        double ux = dx / len;
+        double uy = dy / len;
+        Color top = ret ? BELT_TOP_RET : BELT_TOP;
+        Color bottom = ret ? BELT_BOTTOM_RET : BELT_BOTTOM;
+
+        g2.setPaint(new GradientPaint(0, a.y - BELT_HALF_WIDTH, top, 0, a.y + BELT_HALF_WIDTH, bottom));
+        g2.setStroke(new BasicStroke(BELT_HALF_WIDTH * 2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        g2.drawLine(a.x, a.y, b.x, b.y);
+
+        g2.setColor(new Color(BELT_TEX.getRed(), BELT_TEX.getGreen(), BELT_TEX.getBlue(), 90));
+        g2.setStroke(new BasicStroke(2.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        double offset = (animTime * TEX_SPEED) % TEX_PERIOD;
+        for (double t = -TEX_PERIOD; t < len + TEX_PERIOD; t += TEX_PERIOD) {
+            double s = t + offset;
+            double px = a.x + ux * s;
+            double py = a.y + uy * s;
+            g2.drawLine((int) px, (int) py, (int) (px - ux * 15), (int) (py - uy * 15));
+        }
+
+        // 流向箭头
+        g2.setColor(new Color(255, 255, 255, 70));
+        double cx = (a.x + b.x) / 2.0;
+        double cy = (a.y + b.y) / 2.0;
+        Polygon arrow = new Polygon();
+        arrow.addPoint((int) (cx + ux * 9), (int) (cy + uy * 9));
+        arrow.addPoint((int) (cx - ux * 4 - uy * 6), (int) (cy - uy * 4 + ux * 6));
+        arrow.addPoint((int) (cx - ux * 4 + uy * 6), (int) (cy - uy * 4 - ux * 6));
+        g2.fillPolygon(arrow);
     }
 
     /** 传送带上的流向箭头 */
@@ -2061,6 +2148,13 @@ public class GameCanvas extends JPanel {
     // ===================== 图例 =====================
 
     private void drawLegend(Graphics2D g2) {
+        // 图例垫一层半透明底板，免得和厂区里的机械臂叠在一起看不清
+        g2.setColor(new Color(255, 255, 255, 242));
+        g2.fillRoundRect(8, 8, 470, 184, 12, 12);
+        g2.setColor(new Color(0xD5, 0xDD, 0xE1));
+        g2.setStroke(new BasicStroke(1f));
+        g2.drawRoundRect(8, 8, 470, 184, 12, 12);
+
         g2.setFont(new Font("微软雅黑", Font.PLAIN, 11));
         int x = 16;
         int y = 26;
@@ -2094,8 +2188,10 @@ public class GameCanvas extends JPanel {
         g2.drawString("加工完成后再由机械臂送上主干 C2，抓不过来就在带上排队", bx, by + 16);
         g2.drawString("通用机械臂：数据过每个节点都要被抓进机器加工一遍", bx, by + 32);
         g2.drawString("机器上的牌子 = 这台设备需要的原料（工件 / TCP / IP / ETH）", bx, by + 48);
+        g2.setColor(BELT_TOP_RET);
+        g2.drawString("回程带 C3 也是单向的：响应报文顺着回程带返回上游", bx, by + 64);
         g2.setColor(BUSY_ORANGE);
-        g2.drawString("右键工位可给机械臂设置筛选器（白名单 / 黑名单）", bx, by + 64);
+        g2.drawString("右键工位可给机械臂设置筛选器（白名单 / 黑名单）", bx, by + 80);
     }
 
     private void drawLegendItem(Graphics2D g2, int x, int y, Color color, String text) {
